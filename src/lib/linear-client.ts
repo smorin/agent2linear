@@ -190,6 +190,37 @@ export async function getAllInitiatives(): Promise<Initiative[]> {
 }
 
 /**
+ * Get a single initiative by ID
+ */
+export async function getInitiativeById(
+  initiativeId: string
+): Promise<{ id: string; name: string; description?: string; url: string } | null> {
+  try {
+    const client = getLinearClient();
+    const initiative = await client.initiative(initiativeId);
+
+    if (!initiative) {
+      return null;
+    }
+
+    return {
+      id: initiative.id,
+      name: initiative.name,
+      description: initiative.description || undefined,
+      url: initiative.url,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch initiative: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
  * Project creation input
  */
 export interface ProjectCreateInput {
@@ -308,6 +339,71 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
 
     throw new Error(
       `Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get a single project by ID
+ */
+export async function getProjectById(
+  projectId: string
+): Promise<ProjectResult | null> {
+  try {
+    const client = getLinearClient();
+    const project = await client.project(projectId);
+
+    if (!project) {
+      return null;
+    }
+
+    // Fetch initiative details if linked
+    let initiative;
+    try {
+      const projectInitiatives = await project.initiatives();
+      const initiativesList = await projectInitiatives.nodes;
+      if (initiativesList && initiativesList.length > 0) {
+        const firstInitiative = initiativesList[0];
+        initiative = {
+          id: firstInitiative.id,
+          name: firstInitiative.name,
+        };
+      }
+    } catch {
+      // Initiative fetch failed or not linked
+    }
+
+    // Fetch team details if set
+    let team;
+    try {
+      const teams = await project.teams();
+      const teamsList = await teams.nodes;
+      if (teamsList && teamsList.length > 0) {
+        const firstTeam = teamsList[0];
+        team = {
+          id: firstTeam.id,
+          name: firstTeam.name,
+        };
+      }
+    } catch {
+      // Team fetch failed or not set
+    }
+
+    return {
+      id: project.id,
+      name: project.name,
+      url: project.url,
+      state: project.state,
+      initiative,
+      team,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch project: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }

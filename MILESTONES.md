@@ -339,13 +339,293 @@ $ linear-create project create \
 
 ---
 
+## [x] Milestone M05: GitHub CLI Pattern Alignment (v0.5.0)
+**Goal**: Align linear-create with GitHub CLI (gh) patterns while maintaining non-interactive-first philosophy for better scripting/CI-CD compatibility
+
+**Requirements**:
+- Add `view <id>` commands for viewing single resources (initiatives, projects)
+- Add action aliases (`new`→`create`, `ls`→`list`) for familiarity
+- Add `--web` flag for browser fallback on commands
+- Standardize config commands (`show`→`list`, add `get`)
+- Update CMD.md with gh comparison and new patterns
+
+**Out of Scope**:
+- Edit/update commands (deferred to M06)
+- Delete commands (deferred to M07)
+- Custom alias system like `gh alias` (future)
+
+### Tests & Tasks
+- [x] [M05-T01] Update MILESTONES.md with M05, M06, M07 structure
+      - Add detailed milestone descriptions
+      - Document implementation phases
+      - Update backlog section
+
+- [x] [M05-T02] Add `initiatives view <id>` command
+      - Create commands/initiatives/view.ts
+      - Add getInitiativeById() to linear-client.ts
+      - Display initiative details (name, description, status, URL)
+      - Add help text and examples
+
+- [x] [M05-T03] Add `project view <id>` command
+      - Create commands/project/view.ts
+      - Add getProjectById() to linear-client.ts
+      - Display project details (name, description, state, initiative, team, URL)
+      - Add help text and examples
+
+- [x] [M05-T04] Add `config get <key>` command
+      - Create commands/config/get.ts
+      - Retrieve single config value
+      - Display value source (env/project/global)
+      - Add help text and examples
+
+- [x] [M05-T05] Rename `config show` to `config list`
+      - Update commands/config/show.ts → list.ts
+      - Add 'show' as alias for backward compatibility
+      - Update cli.ts command definitions
+      - Update help text
+
+- [x] [M05-T06] Add action aliases (new, ls) to all commands
+      - Add .alias('new') to all 'create' commands
+      - Add .alias('ls') to all 'list' commands
+      - Update help text to show both forms
+      - Test that both aliases work identically
+
+- [x] [M05-T07] Add `--web` flag to `project create`
+      - Add -w, --web option to command
+      - Open Linear project creation in browser when flag is used
+      - Use open package or platform-specific command
+      - Add help text and examples
+
+- [x] [M05-T08] Add `--web` flag to `initiatives list`
+      - Add -w, --web option to command
+      - Open Linear initiatives page in browser
+      - Add help text and examples
+
+- [x] [M05-T09] Update CMD.md with gh comparison
+      - Add detailed comparison table (command structure, CRUD operations, flags)
+      - Document hybrid approach philosophy
+      - Add examples for all new commands
+      - Update implementation checklist
+
+- [x] [M05-TS01] Test all new view commands
+      - Build succeeds with new commands
+      - View commands display correct data
+      - Error handling for invalid IDs
+      - Help text displays correctly
+
+- [x] [M05-TS02] Test action aliases
+      - 'new' alias works for all create commands
+      - 'ls' alias works for all list commands
+      - Help output shows both forms
+      - Both forms behave identically
+
+- [x] [M05-TS03] Test --web flag functionality
+      - Browser opens with correct URL
+      - Works on different platforms (macOS, Linux, Windows)
+      - Error handling if browser can't be opened
+
+- [x] [M05-TS04] Regression test all existing commands
+      - All M04 commands still work
+      - Config loading still works
+      - Interactive mode still works
+      - No breaking changes
+
+### Deliverable
+```bash
+# View commands
+$ linear-create init view init_abc123
+📋 Initiative: Q1 2024
+   ID: init_abc123
+   Description: First quarter objectives
+   URL: https://linear.app/workspace/initiative/init_abc123
+
+$ linear-create proj view PRJ-123
+📋 Project: My Project
+   ID: PRJ-123
+   State: started
+   Initiative: Q1 2024 (init_abc123)
+   Team: Engineering (team_xyz789)
+   URL: https://linear.app/workspace/project/my-project-123
+
+# Config get
+$ linear-create cfg get defaultInitiative
+defaultInitiative: init_abc123 (from project config)
+
+# Action aliases
+$ linear-create proj new --title "Test"    # Same as 'create'
+$ linear-create init ls                     # Same as 'list'
+
+# Web integration
+$ linear-create proj create --web
+# Opens browser at Linear project creation page
+
+# Config standardization
+$ linear-create cfg list                    # Was 'show'
+$ linear-create cfg show                    # Still works (alias)
+```
+
+### Automated Verification
+- `npm run build` succeeds with all new commands
+- `npm run lint` and `npm run typecheck` pass
+- All help commands display correctly
+- Aliases registered and functional
+
+### Manual Verification
+- Test view commands with real Linear IDs
+- Verify --web opens correct URLs in browser
+- Test all aliases work identically to original commands
+- Verify backward compatibility with existing workflows
+
+---
+
+## [ ] Milestone M06: Extended CRUD Operations & Flags (v0.6.0)
+**Goal**: Add update (edit) operations and common flags from gh CLI pattern
+
+**Requirements**:
+- Add `edit <id>` commands for updating resources
+- Add common flags: `--body`, `--assignee`, `--label`
+- Enhanced field editing for projects and initiatives
+- Support partial updates (only specified fields changed)
+
+**Out of Scope**:
+- Delete operations (M07)
+- Bulk operations (M07)
+- Custom workflows (M07)
+
+### Tests & Tasks
+- [ ] [M06-T01] Add `project edit <id>` command
+      - Create commands/project/edit.ts
+      - Support flags: --title, --description, --state, --initiative, --team
+      - Partial updates (only change specified fields)
+      - Add help text and examples
+
+- [ ] [M06-T02] Add common flags to create commands
+      - Add --body as alias for --description
+      - Add --assignee flag (when Linear API supports)
+      - Add --label flag for tagging
+      - Maintain backward compatibility
+
+- [ ] [M06-T03] Add updateProject() to linear-client.ts
+      - Implement partial update logic
+      - Validate fields before update
+      - Return updated project details
+
+- [ ] [M06-TS01] Test edit commands with various field combinations
+      - Single field updates
+      - Multiple field updates
+      - Error handling for invalid values
+      - Verify unchanged fields remain intact
+
+### Deliverable
+```bash
+# Edit project
+$ linear-create proj edit PRJ-123 --state completed
+✓ Project updated: My Project (PRJ-123)
+
+$ linear-create proj edit PRJ-123 --title "New Title" --description "Updated"
+✓ Project updated: New Title (PRJ-123)
+
+# Create with new flags
+$ linear-create proj create --title "Test" --body "Description"
+```
+
+### Automated Verification
+- Build and lint pass
+- Edit command tests pass
+- Partial update logic works correctly
+
+### Manual Verification
+- Edit existing projects with different field combinations
+- Verify unchanged fields are not modified
+- Test with real Linear workspace
+
+---
+
+## [ ] Milestone M07: Delete Operations & Advanced Features (v0.7.0)
+**Goal**: Complete CRUD operations with delete commands and add advanced productivity features
+
+**Requirements**:
+- Add `delete <id>` commands with confirmation prompts
+- Add custom alias system (like `gh alias`)
+- Add tab completion support
+- Add output formatting options (--json, --format)
+
+**Out of Scope**:
+- Issue tracking (separate milestone)
+- Workflow automation (future)
+- Templates system (future)
+
+### Tests & Tasks
+- [ ] [M07-T01] Add `project delete <id>` command
+      - Create commands/project/delete.ts
+      - Add confirmation prompt (skip with --force)
+      - Display success/error messages
+      - Add help text
+
+- [ ] [M07-T02] Add custom alias system
+      - Create alias management commands
+      - Support alias create/list/delete
+      - Store aliases in config
+      - Expand aliases at runtime
+
+- [ ] [M07-T03] Add tab completion support
+      - Generate completion scripts for bash/zsh/fish
+      - Support command and flag completion
+      - Support ID completion from recent items
+
+- [ ] [M07-T04] Add output formatting options
+      - Add --json flag for machine-readable output
+      - Add --format for custom templates
+      - Support piping to other commands
+
+- [ ] [M07-TS01] Test delete operations
+      - Confirmation prompt works
+      - --force skips confirmation
+      - Proper error handling
+
+- [ ] [M07-TS02] Test alias system
+      - Aliases are created and stored
+      - Aliases expand correctly
+      - Alias conflicts are detected
+
+### Deliverable
+```bash
+# Delete with confirmation
+$ linear-create proj delete PRJ-123
+⚠️  Are you sure you want to delete "My Project" (PRJ-123)? (y/N): y
+✓ Project deleted: My Project (PRJ-123)
+
+# Force delete (no confirmation)
+$ linear-create proj delete PRJ-123 --force
+
+# Custom aliases
+$ linear-create alias set pc "project create --interactive"
+$ linear-create pc    # Runs: project create --interactive
+
+# JSON output
+$ linear-create init list --json
+[{"id":"init_abc123","name":"Q1 2024",...}]
+```
+
+### Automated Verification
+- All delete operations work correctly
+- Alias system stores and retrieves aliases
+- JSON output is valid and parseable
+
+### Manual Verification
+- Delete projects and verify they're removed from Linear
+- Create and use custom aliases
+- Test tab completion in various shells
+
+---
+
 ## Backlog (Future Milestones)
 
-### [ ] Milestone M05: Create Issues (v0.5.0)
-**Goal**: Add issue creation capability with project and initiative context
+### [ ] Milestone M08: Issue Creation & Management (v0.8.0)
+**Goal**: Add full issue creation and management capabilities
 
-### [ ] Milestone M06: List/Update Projects & Issues (v0.6.0)
-**Goal**: Add read and update operations for projects and issues
+### [ ] Milestone M09: Templates & Bulk Operations (v0.9.0)
+**Goal**: Templates for common patterns and bulk operation support
 
-### [ ] Milestone M07: Advanced Features (v0.7.0)
-**Goal**: Templates, bulk operations, and workflow automation
+### [ ] Milestone M10: Workflow Automation (v1.0.0)
+**Goal**: Automated workflows, hooks, and integrations

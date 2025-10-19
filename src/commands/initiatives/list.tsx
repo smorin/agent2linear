@@ -2,18 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import { InitiativeList } from '../../ui/components/InitiativeList.js';
 import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
-import { setConfigValue } from '../../lib/config.js';
+import { openInBrowser } from '../../lib/browser.js';
 
 interface ListOptions {
-  global?: boolean;
-  project?: boolean;
+  interactive?: boolean;
+  web?: boolean;
 }
 
-function App({ options }: { options: ListOptions }) {
+function App({ options: _options }: { options: ListOptions }) {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
     getAllInitiatives()
@@ -27,30 +26,16 @@ function App({ options }: { options: ListOptions }) {
       });
   }, []);
 
-  const handleSelect = (initiative: Initiative) => {
-    const scope: 'global' | 'project' = options.project ? 'project' : 'global';
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
-
-    try {
-      setConfigValue('defaultInitiative', initiative.id, scope);
-      console.log(`\n✅ Default initiative set to: ${initiative.name}`);
-      console.log(`   Saved to ${scopeLabel} config`);
-      console.log(`   Initiative ID: ${initiative.id}\n`);
-      setCompleted(true);
-      process.exit(0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save initiative');
-    }
-  };
-
-  const handleCancel = () => {
-    console.log('\n❌ Cancelled\n');
+  const handleSelect = (_initiative: Initiative) => {
+    // Interactive list mode doesn't save, just allows browsing
+    // Use 'initiatives select' for saving
+    console.log('\n💡 Tip: Use "linear-create init select" to save a default initiative\n');
     process.exit(0);
   };
 
-  if (completed) {
-    return null;
-  }
+  const handleCancel = () => {
+    process.exit(0);
+  };
 
   if (loading) {
     return (
@@ -81,5 +66,42 @@ function App({ options }: { options: ListOptions }) {
 }
 
 export async function listInitiatives(options: ListOptions = {}) {
-  render(<App options={options} />);
+  // Handle --web flag: open Linear in browser
+  if (options.web) {
+    try {
+      console.log('🌐 Opening Linear in your browser...');
+      await openInBrowser('https://linear.app/');
+      console.log('✓ Browser opened. View your initiatives in Linear.');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Error opening browser:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('   Please visit https://linear.app/ manually.');
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (options.interactive) {
+    // Interactive mode: browse with keyboard navigation
+    render(<App options={options} />);
+  } else {
+    // Non-interactive mode (default): print list to stdout
+    try {
+      const initiatives = await getAllInitiatives();
+
+      if (initiatives.length === 0) {
+        console.log('No initiatives found in your Linear workspace.');
+        console.log('Create one at linear.app to get started.');
+        return;
+      }
+
+      // Print tab-separated values for easy parsing
+      initiatives.forEach(initiative => {
+        console.log(`${initiative.id}\t${initiative.name}`);
+      });
+    } catch (error) {
+      console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch initiatives'}`);
+      process.exit(1);
+    }
+  }
 }

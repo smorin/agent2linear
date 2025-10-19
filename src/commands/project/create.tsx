@@ -10,6 +10,7 @@ import {
   type ProjectResult,
 } from '../../lib/linear-client.js';
 import { getConfig } from '../../lib/config.js';
+import { openInBrowser } from '../../lib/browser.js';
 
 interface CreateOptions {
   title?: string;
@@ -18,6 +19,7 @@ interface CreateOptions {
   initiative?: string;
   team?: string;
   interactive?: boolean;
+  web?: boolean;
 }
 
 // Non-interactive mode
@@ -25,7 +27,11 @@ async function createProjectNonInteractive(options: CreateOptions) {
   try {
     // Validate required fields
     if (!options.title) {
-      console.error('❌ Error: --title is required in non-interactive mode');
+      console.error('❌ Error: --title is required\n');
+      console.error('Provide the title:');
+      console.error('  linear-create proj create --title "My Project"\n');
+      console.error('Or use interactive mode:');
+      console.error('  linear-create proj create --interactive\n');
       process.exit(1);
     }
 
@@ -220,14 +226,29 @@ function displaySuccess(result: ProjectResult) {
 }
 
 export async function createProjectCommand(options: CreateOptions = {}) {
-  // Determine if interactive mode
-  const isInteractive = options.interactive !== false && !options.title;
+  // Handle --web flag: open Linear in browser
+  if (options.web) {
+    try {
+      console.log('🌐 Opening Linear in your browser...');
+      await openInBrowser('https://linear.app/');
+      console.log('✓ Browser opened. Create your project in Linear.');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Error opening browser:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('   Please visit https://linear.app/ manually.');
+      process.exit(1);
+    }
+    return;
+  }
+
+  // Determine if interactive mode (opt-in with --interactive flag)
+  const isInteractive = options.interactive === true;
 
   if (isInteractive) {
     // Interactive mode with Ink
     render(<App options={options} />);
   } else {
-    // Non-interactive mode
+    // Non-interactive mode (default)
     await createProjectNonInteractive(options);
   }
 }
