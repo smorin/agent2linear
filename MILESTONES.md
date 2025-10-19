@@ -478,6 +478,116 @@ $ linear-create cfg show                    # Still works (alias)
 
 ---
 
+## [x] Milestone M05.1: Team Requirement Fix (v0.5.1)
+**Goal**: Fix project creation to require team assignment and add teams list command
+
+**Requirements**:
+- Add `teams list` command to discover available teams
+- Require team when creating projects (via --team flag or defaultTeam config)
+- Show helpful error messages when team is missing
+- Add `teams select` for interactive team selection
+- Support setting defaultTeam in config
+
+**Out of Scope**:
+- Team management (create/edit/delete teams)
+- Team member management
+- Advanced team filtering
+
+### Tests & Tasks
+- [x] [M05.1-T01] Add getAllTeams() to linear-client.ts
+      - Query Linear API for teams
+      - Return team ID, name, and description
+      - Sort teams by name
+
+- [x] [M05.1-T02] Create teams list command
+      - Create commands/teams/list.tsx
+      - Display teams in table format
+      - Support --interactive flag for selection
+      - Support --web flag to open in browser
+
+- [x] [M05.1-T03] Create teams select command
+      - Create commands/teams/select.tsx
+      - Interactive team picker using Ink
+      - Save selection to config (--global or --project)
+      - Show current default team
+
+- [x] [M05.1-T04] Update project create to require team
+      - Validate team is provided (flag or config)
+      - Show helpful error with command to list teams
+      - Update error message to guide users
+
+- [x] [M05.1-T05] Add team commands to CLI
+      - Register teams command group
+      - Add list, select subcommands
+      - Add help text and examples
+      - Update README with team workflow
+
+- [x] [M05.1-TS01] Test teams list command
+      - Build succeeds
+      - Command fetches and displays teams
+      - Interactive mode works
+      - Error handling for API failures
+
+- [x] [M05.1-TS02] Test project creation with team requirement
+      - Error shown when no team provided
+      - Works with --team flag
+      - Works with defaultTeam config
+      - Helpful error message guides user
+
+- [x] [M05.1-TS03] Regression test existing commands
+      - All M05 commands still work
+      - No breaking changes to existing workflows
+
+### Deliverable
+```bash
+# List teams
+$ linear-create teams list
+Available teams:
+  team_abc123 - Engineering
+  team_def456 - Product
+  team_ghi789 - Design
+
+# Select default team
+$ linear-create teams select
+? Select default team:
+  > Engineering (team_abc123)
+    Product (team_def456)
+    Design (team_ghi789)
+✓ Default team set to: Engineering
+
+# Create project with team requirement
+$ linear-create proj new --title "REMOVEME1"
+❌ Error: Team is required for project creation
+
+Please specify a team using one of these options:
+  1. Use --team flag:
+     $ linear-create proj new --title "REMOVEME1" --team team_abc123
+
+  2. Set a default team:
+     $ linear-create teams select
+     $ linear-create config set defaultTeam team_abc123
+
+  3. List available teams:
+     $ linear-create teams list
+
+# Working project creation
+$ linear-create proj new --title "REMOVEME1" --team team_abc123
+✓ Project created successfully!
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- `npm run lint` and `npm run typecheck` pass
+- All commands show in help output
+
+### Manual Verification
+- Test teams list with real Linear workspace
+- Test project creation fails without team
+- Test project creation succeeds with team
+- Verify error messages are helpful and actionable
+
+---
+
 ## [ ] Milestone M06: Extended CRUD Operations & Flags (v0.6.0)
 **Goal**: Add update (edit) operations and common flags from gh CLI pattern
 

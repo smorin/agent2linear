@@ -9,13 +9,15 @@ import { selectInitiative } from './commands/initiatives/select.js';
 import { setInitiative } from './commands/initiatives/set.js';
 import { createProjectCommand } from './commands/project/create.js';
 import { viewProject } from './commands/project/view.js';
+import { listTeams } from './commands/teams/list.js';
+import { selectTeam } from './commands/teams/select.js';
 
 const cli = new Command();
 
 cli
   .name('linear-create')
   .description('Command-line tool for creating Linear issues and projects')
-  .version('0.5.0')
+  .version('0.5.1')
   .action(() => {
     cli.help();
   });
@@ -163,11 +165,11 @@ issues
     console.log('   See MILESTONES.md for planned features and timeline.');
   });
 
-// Teams commands (stub - future release)
+// Teams commands
 const teams = cli
   .command('teams')
   .alias('team')
-  .description('Manage Linear teams [Coming Soon]')
+  .description('Manage Linear teams')
   .action(() => {
     teams.help();
   });
@@ -175,10 +177,34 @@ const teams = cli
 teams
   .command('list')
   .alias('ls')
-  .description('List teams [Not yet implemented]')
-  .action(() => {
-    console.log('⚠️  This command is not yet implemented.');
-    console.log('   See MILESTONES.md for planned features and timeline.');
+  .description('List all teams')
+  .option('-I, --interactive', 'Use interactive mode for browsing')
+  .option('-w, --web', 'Open Linear in browser to view teams')
+  .addHelpText('after', `
+Examples:
+  $ linear-create teams list              # Print list to stdout
+  $ linear-create team ls                 # Same as 'list' (alias)
+  $ linear-create teams list --interactive # Browse interactively
+  $ linear-create teams list --web        # Open in browser
+`)
+  .action(async (options) => {
+    await listTeams(options);
+  });
+
+teams
+  .command('select')
+  .description('Select a default team interactively')
+  .option('-g, --global', 'Save to global config (default)')
+  .option('-p, --project', 'Save to project config')
+  .option('--id <id>', 'Team ID (non-interactive mode)')
+  .addHelpText('after', `
+Examples:
+  $ linear-create teams select                # Interactive selection
+  $ linear-create teams select --project      # Save to project config
+  $ linear-create teams select --id team_abc123  # Non-interactive
+`)
+  .action(async (options) => {
+    await selectTeam(options);
   });
 
 // Milestones commands (stub - future release)

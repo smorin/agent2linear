@@ -160,6 +160,16 @@ export interface Initiative {
 }
 
 /**
+ * Team data structure
+ */
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  key: string;
+}
+
+/**
  * Get all initiatives from Linear
  */
 export async function getAllInitiatives(): Promise<Initiative[]> {
@@ -216,6 +226,37 @@ export async function getInitiativeById(
 
     throw new Error(
       `Failed to fetch initiative: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get all teams from Linear
+ */
+export async function getAllTeams(): Promise<Team[]> {
+  try {
+    const client = getLinearClient();
+    const teams = await client.teams();
+
+    const result: Team[] = [];
+    for await (const team of teams.nodes) {
+      result.push({
+        id: team.id,
+        name: team.name,
+        description: team.description || undefined,
+        key: team.key,
+      });
+    }
+
+    // Sort by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch teams: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }

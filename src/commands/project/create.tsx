@@ -43,20 +43,24 @@ async function createProjectNonInteractive(options: CreateOptions) {
       process.exit(1);
     }
 
-    console.log('🔍 Checking for duplicate project name...');
-
-    // Check for duplicates
-    const exists = await getProjectByName(title);
-    if (exists) {
-      console.error(`❌ Error: A project named "${title}" already exists`);
-      console.error('   Please choose a different name');
-      process.exit(1);
-    }
-
     // Get config for defaults
     const config = getConfig();
     const initiativeId = options.initiative || config.defaultInitiative;
     const teamId = options.team || config.defaultTeam;
+
+    // Validate team is provided (REQUIRED) - check this before doing expensive API calls
+    if (!teamId) {
+      console.error('❌ Error: Team is required for project creation\n');
+      console.error('Please specify a team using one of these options:\n');
+      console.error('  1. Use --team flag:');
+      console.error(`     $ linear-create proj new --title "${title}" --team team_xxx\n`);
+      console.error('  2. Set a default team:');
+      console.error('     $ linear-create teams select');
+      console.error('     $ linear-create config set defaultTeam team_xxx\n');
+      console.error('  3. List available teams:');
+      console.error('     $ linear-create teams list\n');
+      process.exit(1);
+    }
 
     // Validate initiative if provided
     if (initiativeId) {
@@ -69,15 +73,23 @@ async function createProjectNonInteractive(options: CreateOptions) {
       console.log(`   ✓ Initiative found: ${initiativeCheck.name}`);
     }
 
-    // Validate team if provided
-    if (teamId) {
-      console.log(`🔍 Validating team: ${teamId}...`);
-      const teamCheck = await validateTeamExists(teamId);
-      if (!teamCheck.valid) {
-        console.error(`❌ ${teamCheck.error}`);
-        process.exit(1);
-      }
-      console.log(`   ✓ Team found: ${teamCheck.name}`);
+    // Validate team
+    console.log(`🔍 Validating team: ${teamId}...`);
+    const teamCheck = await validateTeamExists(teamId);
+    if (!teamCheck.valid) {
+      console.error(`❌ ${teamCheck.error}`);
+      process.exit(1);
+    }
+    console.log(`   ✓ Team found: ${teamCheck.name}`);
+
+    console.log('🔍 Checking for duplicate project name...');
+
+    // Check for duplicates
+    const exists = await getProjectByName(title);
+    if (exists) {
+      console.error(`❌ Error: A project named "${title}" already exists`);
+      console.error('   Please choose a different name');
+      process.exit(1);
     }
 
     console.log('\n🚀 Creating project...');
