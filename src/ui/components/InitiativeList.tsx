@@ -10,6 +10,7 @@ interface InitiativeListProps {
 }
 
 interface SelectItem {
+  key: string;
   label: string;
   value: Initiative;
 }
@@ -19,6 +20,7 @@ export function InitiativeList({ initiatives, onSelect, onCancel: _onCancel }: I
 
   // Convert initiatives to select items
   const items: SelectItem[] = initiatives.map(initiative => ({
+    key: initiative.id,
     label: `${initiative.name} (${initiative.id})`,
     value: initiative,
   }));
