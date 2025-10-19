@@ -76,3 +76,115 @@ export async function validateApiKey(apiKey: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Validate initiative ID exists and return its details
+ */
+export async function validateInitiativeExists(
+  initiativeId: string
+): Promise<{ valid: boolean; name?: string; error?: string }> {
+  try {
+    const client = getLinearClient();
+    const initiative = await client.initiative(initiativeId);
+
+    if (!initiative) {
+      return {
+        valid: false,
+        error: `Initiative with ID "${initiativeId}" not found`,
+      };
+    }
+
+    return {
+      valid: true,
+      name: initiative.name,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      return {
+        valid: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : 'Failed to validate initiative',
+    };
+  }
+}
+
+/**
+ * Validate team ID exists and return its details
+ */
+export async function validateTeamExists(
+  teamId: string
+): Promise<{ valid: boolean; name?: string; error?: string }> {
+  try {
+    const client = getLinearClient();
+    const team = await client.team(teamId);
+
+    if (!team) {
+      return {
+        valid: false,
+        error: `Team with ID "${teamId}" not found`,
+      };
+    }
+
+    return {
+      valid: true,
+      name: team.name,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      return {
+        valid: false,
+        error: error.message,
+      };
+    }
+
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : 'Failed to validate team',
+    };
+  }
+}
+
+/**
+ * Initiative data structure
+ */
+export interface Initiative {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+}
+
+/**
+ * Get all initiatives from Linear
+ */
+export async function getAllInitiatives(): Promise<Initiative[]> {
+  try {
+    const client = getLinearClient();
+    const initiatives = await client.initiatives();
+
+    const result: Initiative[] = [];
+    for await (const initiative of initiatives.nodes) {
+      result.push({
+        id: initiative.id,
+        name: initiative.name,
+        description: initiative.description,
+      });
+    }
+
+    // Sort by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch initiatives: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}

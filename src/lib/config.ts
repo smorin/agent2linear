@@ -153,3 +153,42 @@ export function maskApiKey(apiKey: string): string {
   }
   return `${apiKey.substring(0, 4)}***${apiKey.substring(apiKey.length - 3)}`;
 }
+
+/**
+ * Valid configuration keys
+ */
+const VALID_CONFIG_KEYS = ['apiKey', 'defaultInitiative', 'defaultTeam'] as const;
+export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
+
+/**
+ * Check if a key is a valid configuration key
+ */
+export function isValidConfigKey(key: string): key is ConfigKey {
+  return VALID_CONFIG_KEYS.includes(key as ConfigKey);
+}
+
+/**
+ * Set a configuration value
+ */
+export function setConfigValue(
+  key: ConfigKey,
+  value: string,
+  scope: 'global' | 'project' = 'global'
+): void {
+  const configFile = scope === 'global' ? GLOBAL_CONFIG_FILE : PROJECT_CONFIG_FILE;
+  const existingConfig = readConfigFile(configFile);
+
+  existingConfig[key] = value;
+  writeConfigFile(configFile, existingConfig);
+}
+
+/**
+ * Unset (remove) a configuration value
+ */
+export function unsetConfigValue(key: ConfigKey, scope: 'global' | 'project' = 'global'): void {
+  const configFile = scope === 'global' ? GLOBAL_CONFIG_FILE : PROJECT_CONFIG_FILE;
+  const existingConfig = readConfigFile(configFile);
+
+  delete existingConfig[key];
+  writeConfigFile(configFile, existingConfig);
+}
