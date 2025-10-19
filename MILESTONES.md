@@ -588,7 +588,591 @@ $ linear-create proj new --title "REMOVEME1" --team team_abc123
 
 ---
 
-## [ ] Milestone M06: Extended CRUD Operations & Flags (v0.6.0)
+## [x] Milestone M05.2: Interactive Config Management (v0.5.2)
+**Goal**: Add interactive config editing and enhance help documentation following GitHub CLI patterns
+
+**Requirements**:
+- Add `config edit` command for interactive multi-value configuration editing
+- Support both interactive (default) and non-interactive modes with flags
+- Ask for scope (global/project) once at session start
+- Integrate with existing initiative and team selectors
+- Enhance config help text to show available settings (following gh pattern)
+
+**Out of Scope**:
+- Encrypted config storage (future)
+- Config validation on startup (future)
+- Config migration tools (future)
+
+### Tests & Tasks
+- [x] [M05.2-T01] Create config edit command with interactive UI
+      - Create src/commands/config/edit.tsx
+      - Build multi-step Ink component
+      - Prompt for scope (global/project) if not specified via flag
+      - For each setting: show current value, offer keep/change/clear options
+      - Integrate with InitiativeList and TeamList components
+
+- [x] [M05.2-T02] Support non-interactive mode with flags
+      - Add --key and --value flags for direct editing
+      - Add --global and --project flags for scope selection
+      - Validate values before saving (reuse existing validation)
+      - Show appropriate error messages
+
+- [x] [M05.2-T03] Enhance config command help text
+      - Add "Current respected settings" section (gh style)
+      - Document configuration files and priority
+      - Add examples for all subcommands including edit
+      - Link to Linear API key page
+      - Add related commands section
+
+- [x] [M05.2-T04] Register command and update CLI
+      - Import editConfig in src/cli.ts
+      - Register config edit command with all flags
+      - Update config group help text
+      - Add comprehensive examples
+
+- [x] [M05.2-TS01] Test interactive mode
+      - Full multi-step flow works
+      - Scope selection (or skip with flag)
+      - API key editing with validation
+      - Initiative selection integration
+      - Team selection integration
+      - Changes saved correctly
+
+- [x] [M05.2-TS02] Test non-interactive mode
+      - --key and --value flags work
+      - Validation errors shown appropriately
+      - Works with --global and --project
+      - Error when --value missing with --key
+
+- [x] [M05.2-TS03] Regression test
+      - All existing config commands still work
+      - Build succeeds
+      - Lint and typecheck pass
+      - Help text displays correctly
+
+### Deliverable
+```bash
+# Interactive mode
+$ linear-create config edit
+? Configuration scope for this session: global
+? API Key [lin_***_xyz]:
+  > Keep current
+    Change API key
+    Clear API key
+? Default Initiative [Q1 2024]:
+  > Keep current
+    Change (select from list)
+    Clear
+? Default Team [Engineering]:
+  > Keep current
+    Change (select from list)
+    Clear
+✓ Configuration updated (global)
+
+# Non-interactive mode
+$ linear-create config edit --global --key apiKey --value lin_api_new123
+🔍 Validating apiKey...
+   Testing API connection...
+   ✓ API key is valid
+
+✅ API Key updated (global config)
+
+# Enhanced help
+$ linear-create config --help
+Manage configuration settings for linear-create.
+
+Current respected settings:
+- `apiKey`: Linear API authentication key (get yours at linear.app/settings/api)
+- `defaultInitiative`: Default initiative ID for project creation (format: init_xxx)
+- `defaultTeam`: Default team ID for project creation (format: team_xxx)
+...
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- `npm run lint` and `npm run typecheck` pass
+- config edit command shows in help
+
+### Manual Verification
+- Run interactive mode and edit multiple config values
+- Test scope selection
+- Test integration with initiative/team selectors
+- Test non-interactive mode with various flags
+- Verify help text matches gh style
+
+---
+
+## [x] Milestone M06: Entity Aliases System (v0.6.0)
+**Goal**: Add transparent aliasing system for initiatives, teams, and projects to simplify working with long Linear IDs
+
+**Requirements**:
+- Support both global (`~/.config/linear-create/aliases.json`) and project-level (`.linear-create/aliases.json`) alias storage
+- Create dedicated alias management commands (add, list, remove, get)
+- Aliases are scoped by entity type (same alias can be used for initiative and team)
+- Transparent resolution: aliases work wherever IDs are accepted, no special syntax required
+- Validation on alias creation to ensure target entities exist
+- Optional validation command to check for broken aliases
+
+**Out of Scope**:
+- Command aliases (like `gh alias`) - planned for M08
+- Auto-suggestion of aliases when using IDs
+- Bulk alias operations
+
+### Tests & Tasks
+- [x] [M06-T01] Create alias types and core infrastructure
+      - Add AliasEntityType, AliasMap, Aliases types to types.ts
+      - Create lib/aliases.ts with core functions
+      - Implement loadAliases() with precedence (project > global)
+      - Implement resolveAlias() for transparent resolution
+
+- [x] [M06-T02] Implement alias add command
+      - Create commands/alias/add.ts
+      - Validate entity exists via Linear API
+      - Support --global and --project flags
+      - Check for duplicate aliases
+      - Display success with entity name
+
+- [x] [M06-T03] Implement alias list command
+      - Create commands/alias/list.ts
+      - Display all aliases grouped by type
+      - Support filtering by entity type
+      - Show location (global vs project) for each alias
+      - Add --validate flag to check broken aliases
+
+- [x] [M06-T04] Implement alias remove and get commands
+      - Create commands/alias/remove.ts
+      - Create commands/alias/get.ts
+      - Support scope flags for removal
+      - Display helpful error messages
+
+- [x] [M06-T05] Register alias commands in CLI
+      - Add alias command group to cli.ts
+      - Register add, list, remove, get subcommands
+      - Add comprehensive help text with examples
+
+- [x] [M06-T06] Integrate resolver into initiatives commands
+      - Update initiatives/set.ts to resolve aliases
+      - Update initiatives/view.ts to resolve aliases
+      - Display message when alias is resolved
+
+- [x] [M06-T07] Integrate resolver into project and team commands
+      - Update project/create.tsx for --initiative and --team flags
+      - Update teams/select.tsx to resolve team aliases
+      - Handle alias resolution in both interactive and non-interactive modes
+
+- [x] [M06-TS01] Test alias creation and resolution
+      - Build succeeds with all new code
+      - Alias commands registered and functional
+      - Help text displays correctly
+      - List shows "no aliases" message when empty
+
+- [x] [M06-TS02] Test transparent resolution
+      - Aliases work in place of IDs
+      - Non-aliases (actual IDs) still work
+      - Resolution messages display correctly
+      - Both global and project aliases work
+
+- [x] [M06-TS03] Update documentation
+      - Add alias section to README.md
+      - Document all alias commands with examples
+      - Explain storage locations and precedence
+      - Show usage examples in various commands
+
+### Deliverable
+```bash
+# Add aliases
+$ linear-create alias add initiative backend init_abc123xyz
+✅ Alias added successfully!
+   Alias: backend
+   Initiative ID: init_abc123xyz
+   Name: Backend Infrastructure
+   Scope: global
+
+$ linear-create alias add team engineering team_def456uvw --project
+✅ Alias added successfully!
+
+# List aliases
+$ linear-create alias list
+Initiative Aliases (2):
+  [global]  backend              → init_abc123xyz
+  [project] frontend             → init_def456uvw
+
+Team Aliases (1):
+  [project] engineering          → team_ghi789rst
+
+Total: 3 alias(es)
+
+# Use aliases transparently
+$ linear-create initiatives set backend
+📎 Resolved alias "backend" to init_abc123xyz
+🔍 Validating initiative ID: init_abc123xyz...
+   ✓ Initiative found: Backend Infrastructure
+✅ Default initiative set to: Backend Infrastructure
+
+$ linear-create project create --title "Test" --team engineering --initiative backend
+📎 Resolved team alias "engineering" to team_ghi789rst
+📎 Resolved initiative alias "backend" to init_abc123xyz
+🚀 Creating project...
+✅ Project created successfully!
+
+# Validate aliases
+$ linear-create alias list --validate
+✅ All 3 aliases are valid!
+
+# Get alias details
+$ linear-create alias get initiative backend
+Alias: backend
+ID: init_abc123xyz
+Type: initiative
+Location: global
+```
+
+### Automated Verification
+- `npm run build` succeeds with all alias functionality
+- `npm run lint` and `npm run typecheck` pass
+- All alias commands registered in help output
+- Transparent resolution works in all integrated commands
+
+### Manual Verification
+- Create aliases for initiatives, teams, and projects
+- Use aliases in place of IDs in various commands
+- Test precedence: project aliases override global aliases
+- Verify validation catches non-existent entities
+- Test with AI agents to confirm simplified ID tracking
+
+---
+
+## [x] Milestone M06.1: Interactive Alias Edit Command (v0.6.1)
+**Goal**: Add interactive alias editing command for easier bulk management, mirroring config edit pattern
+
+**Requirements**:
+- Interactive-only command with multi-step flow for editing aliases
+- Support scope pre-selection with --global/--project flags
+- Actions: Keep / Change ID / Rename / Delete
+- Real-time validation with Linear API
+- Can edit multiple aliases in one session
+
+**Out of Scope**:
+- Non-interactive mode (use existing alias add/remove for that)
+- Bulk operations across multiple aliases simultaneously
+- Auto-migration of broken aliases
+
+### Tests & Tasks
+- [x] [M06.1-T01] Create src/commands/alias/edit.tsx with React/Ink components
+      - Implement AliasEditor component with multi-step flow
+      - Steps: scope selection → entity type → display aliases → select alias → choose action
+      - Show current alias name and ID when editing
+      - Actions: Keep / Change ID / Rename alias / Delete
+      - Real-time validation with Linear API
+
+- [x] [M06.1-T02] Add helper functions to lib/aliases.ts
+      - Add updateAliasId(type, alias, newId, scope) - change what an alias points to
+      - Add renameAlias(type, oldName, newName, scope) - change the alias name itself
+      - Both include validation
+
+- [x] [M06.1-T03] Register command in cli.ts
+      - Add edit subcommand to alias command group
+      - Support --global/--project flags for pre-selecting scope
+      - Add comprehensive help text with examples
+      - Note in help: For non-interactive use, use alias remove + alias add
+
+- [x] [M06.1-T04] Update documentation
+      - Add examples to README.md
+      - Update MILESTONES.md with completion
+
+- [x] [M06.1-TS01] Test interactive mode
+      - Build and lint succeed
+      - Can edit multiple aliases in one session
+      - Validation catches errors properly
+      - Scope pre-selection works with flags
+
+### Deliverable
+```bash
+# Interactive mode - edit multiple aliases
+$ linear-create alias edit
+Select alias scope to edit:
+> Global (~/.config/linear-create/aliases.json)
+  Project (.linear-create/aliases.json)
+
+Select entity type:
+> Initiative aliases
+  Team aliases
+  Project aliases
+
+Select alias to edit (global initiative):
+> backend → init_abc123xyz
+  frontend → init_def456uvw
+
+What would you like to do with "backend"?
+> Keep "backend" (edit another)
+  Change ID (currently: init_abc123xyz)
+  Rename alias (currently: backend)
+  Delete alias "backend"
+
+# Pre-select scope
+$ linear-create alias edit --project
+```
+
+### Automated Verification
+- `npm run build` succeeds with all alias edit functionality
+- `npm run lint` and `npm run typecheck` pass
+- Edit command registered in help output
+- Interactive flow works correctly
+
+### Manual Verification
+- Edit aliases interactively with all actions (change ID, rename, delete)
+- Edit multiple aliases in one session
+- Test scope pre-selection with flags
+- Verify validation catches errors properly
+
+---
+
+## [x] Milestone M07: Templates Management (v0.7.0)
+**Goal**: Add template browsing and configuration support for issues and projects
+
+**Requirements**:
+- List all templates from Linear API (issue templates)
+- View template details
+- Configure default templates for issue and project creation
+- Integration with config system for default templates
+- Support template filtering by type
+
+**Out of Scope**:
+- Template creation/editing (managed in Linear web app)
+- Project templates (not yet available in Linear SDK)
+- Custom local templates
+
+### Tests & Tasks
+- [x] [M07-T01] Add Template types to lib/types.ts
+      - Add Template interface with id, name, type, description
+      - Update Config interface with defaultIssueTemplate and defaultProjectTemplate
+      - Update ResolvedConfig with template location tracking
+
+- [x] [M07-T02] Add template API methods to linear-client.ts
+      - Implement getAllTemplates() to fetch templates from Linear
+      - Implement getTemplateById() to fetch single template
+      - Support type filtering (issue/project)
+      - Handle API differences between issue and project templates
+
+- [x] [M07-T03] Create templates list command
+      - Create commands/templates/list.tsx
+      - Support non-interactive, interactive, and web modes
+      - Filter by template type (issues/projects)
+      - Display template details in formatted output
+
+- [x] [M07-T04] Create templates view command
+      - Create commands/templates/view.ts
+      - Display template details (name, type, description)
+      - Show usage tips for setting as default
+
+- [x] [M07-T05] Update config system for templates
+      - Add defaultIssueTemplate and defaultProjectTemplate to config
+      - Update config get/set/unset commands
+      - Add validation for template types
+
+- [x] [M07-T06] Register templates command group
+      - Add templates command group with alias 'tmpl'
+      - Register list and view subcommands
+      - Add comprehensive help text with examples
+
+- [x] [M07-T07] Integrate templates with project create
+      - Add --template flag to project create command
+      - Support default template from config
+      - Validate template type matches
+
+- [x] [M07-TS01] Test build and verify functionality
+      - Build succeeds
+      - All template commands show in help
+      - Config commands support template keys
+
+### Deliverable
+```bash
+# List templates
+$ linear-create templates list
+Issue Templates (3):
+  template_abc123  - Bug Report - Standard bug report template
+  template_def456  - Feature Request - New feature template
+  template_ghi789  - Spike - Research spike template
+
+# View template
+$ linear-create templates view template_abc123
+📋 Template: Bug Report
+   ID: template_abc123
+   Type: issue
+   Description: Standard bug report template
+
+💡 Use this template:
+   $ linear-create issues create --template template_abc123
+
+   Set as default:
+   $ linear-create config set defaultIssueTemplate template_abc123
+
+# Set default template
+$ linear-create config set defaultProjectTemplate template_xyz789
+🔍 Validating defaultProjectTemplate...
+   ✓ Template found: Standard Project (project)
+✅ Default Project Template saved to global config
+
+# Create project with template
+$ linear-create project create --title "New API" --template template_xyz789 --team team_abc
+📎 Resolved team alias "team_abc" to team_123abc
+🔍 Validating template: template_xyz789...
+   ✓ Template found: Standard Project
+✅ Project created successfully!
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- Templates command registered and functional
+- Config commands support template keys
+- Help text displays correctly
+
+### Manual Verification
+- List templates from Linear workspace
+- View template details
+- Set default templates in config
+- Use templates when creating projects (when supported)
+
+### Notes
+- Project templates are not yet available in the Linear SDK (as of v61.0.0)
+- Template code includes placeholders for future project template support
+- Currently only issue templates are functional via the API
+
+---
+
+## [x] Milestone M07.1: Template Alias Support (v0.7.0)
+**Goal**: Add full alias support for issue and project templates with same capabilities as other entity types
+
+**Requirements**:
+- Support both issue-template and project-template as separate alias entity types
+- Full CRUD operations (add, remove, get, list, validate, update, rename)
+- Interactive edit support with entity selection
+- Template type validation (ensure issue templates only alias issue templates, etc.)
+- Complete parity with existing alias functionality
+
+**Out of Scope**:
+- Template creation/editing (managed in Linear web app)
+- Bulk alias operations
+- Alias import/export
+
+### Tests & Tasks
+- [x] [M07.1-T01] Update type definitions in src/lib/types.ts
+      - Add 'issue-template' and 'project-template' to AliasEntityType
+      - Add issueTemplates and projectTemplates to Aliases interface
+      - Update ResolvedAliases to include template alias locations
+
+- [x] [M07.1-T02] Update core alias library in src/lib/aliases.ts
+      - Update getEmptyAliases() to include template alias maps
+      - Extend normalizeEntityType() to handle template variants
+      - Add getAliasesKey() cases for both template types
+      - Update loadAliases() to merge and track template alias locations
+      - Extend looksLikeLinearId() to recognize template_ prefix
+      - Add template validation using getTemplateById()
+      - Validate template type matches alias type
+      - Update validateAllAliases() to check template aliases
+
+- [x] [M07.1-T03] Update CLI command definitions in src/cli.ts
+      - Add template types to alias add command choices
+      - Add template types to alias remove command choices
+      - Add template types to alias get command choices
+      - Update help text with template examples
+      - Update alias description to mention templates
+
+- [x] [M07.1-T04] Update interactive edit component in src/commands/alias/edit.tsx
+      - Import getAllTemplates and getTemplateById
+      - Add template state management (templates, loading, error)
+      - Add "Issue Template aliases" and "Project Template aliases" to type menu
+      - Update handleIdSubmit to validate template IDs
+      - Update handleNewAliasNameSubmit to fetch templates by type
+      - Update entity selection to display templates
+      - Update key resolution logic in all handlers
+      - Support all CRUD operations for template aliases
+
+- [x] [M07.1-TS01] Build and verify functionality
+      - Build succeeds without errors
+      - Help text displays template options
+      - All commands accept template types
+
+### Deliverable
+```bash
+# Add template aliases
+$ linear-create alias add issue-template bug-report template_abc123
+🔍 Adding alias "bug-report" for issue-template...
+   Validating issue-template ID: template_abc123...
+
+✅ Alias added successfully!
+   Alias: bug-report
+   Issue-template ID: template_abc123
+   Name: Bug Report Template
+   Scope: global
+
+💡 Use this alias in place of the issue-template ID in any command
+
+$ linear-create alias add project-template sprint template_xyz789 --project
+
+# List template aliases
+$ linear-create alias list issue-templates
+
+Issue Template Aliases (2):
+
+  bug-report → template_abc123
+    Bug Report Template (template_abc123) (from global)
+  feature → template_def456
+    Feature Template (template_def456) (from global)
+
+$ linear-create alias list project-templates
+
+Project Template Aliases (1):
+
+  sprint → template_xyz789
+    Sprint Template (template_xyz789) (from project)
+
+# Interactive edit
+$ linear-create alias edit
+Select alias scope to edit:
+  Global (~/.config/linear-create/aliases.json)
+  Project (.linear-create/aliases.json)
+
+Select entity type:
+  Initiative aliases
+  Team aliases
+  Project aliases
+  Issue Template aliases
+  Project Template aliases
+
+# Use template alias in commands
+$ linear-create config set defaultIssueTemplate bug-report
+📋 Resolved alias "bug-report" to template_abc123
+✅ Default Issue Template saved to global config
+
+$ linear-create config set defaultProjectTemplate sprint
+📋 Resolved alias "sprint" to template_xyz789
+✅ Default Project Template saved to project config
+```
+
+### Automated Verification
+- `npm run build` succeeds without errors
+- All alias commands support template types
+- Interactive edit includes template options
+- Template validation works correctly
+
+### Manual Verification
+- Add issue template aliases
+- Add project template aliases
+- List template aliases separately
+- Edit template aliases interactively
+- Validate template type matching
+- Use template aliases in config commands
+
+### Notes
+- Template aliases support both issue and project templates as separate types
+- Template type validation ensures issue templates only alias issue templates
+- All existing alias operations work seamlessly with templates
+- Template aliases can be used anywhere template IDs are accepted
+
+---
+
+## [ ] Milestone M08: Extended CRUD Operations & Flags (v0.8.0)
 **Goal**: Add update (edit) operations and common flags from gh CLI pattern
 
 **Requirements**:
@@ -598,29 +1182,29 @@ $ linear-create proj new --title "REMOVEME1" --team team_abc123
 - Support partial updates (only specified fields changed)
 
 **Out of Scope**:
-- Delete operations (M07)
-- Bulk operations (M07)
-- Custom workflows (M07)
+- Delete operations (M09)
+- Bulk operations (M09)
+- Custom workflows (M10)
 
 ### Tests & Tasks
-- [ ] [M06-T01] Add `project edit <id>` command
+- [ ] [M08-T01] Add `project edit <id>` command
       - Create commands/project/edit.ts
       - Support flags: --title, --description, --state, --initiative, --team
       - Partial updates (only change specified fields)
       - Add help text and examples
 
-- [ ] [M06-T02] Add common flags to create commands
+- [ ] [M08-T02] Add common flags to create commands
       - Add --body as alias for --description
       - Add --assignee flag (when Linear API supports)
       - Add --label flag for tagging
       - Maintain backward compatibility
 
-- [ ] [M06-T03] Add updateProject() to linear-client.ts
+- [ ] [M08-T03] Add updateProject() to linear-client.ts
       - Implement partial update logic
       - Validate fields before update
       - Return updated project details
 
-- [ ] [M06-TS01] Test edit commands with various field combinations
+- [ ] [M08-TS01] Test edit commands with various field combinations
       - Single field updates
       - Multiple field updates
       - Error handling for invalid values
@@ -651,7 +1235,7 @@ $ linear-create proj create --title "Test" --body "Description"
 
 ---
 
-## [ ] Milestone M07: Delete Operations & Advanced Features (v0.7.0)
+## [ ] Milestone M09: Delete Operations & Advanced Features (v0.9.0)
 **Goal**: Complete CRUD operations with delete commands and add advanced productivity features
 
 **Requirements**:
@@ -666,34 +1250,35 @@ $ linear-create proj create --title "Test" --body "Description"
 - Templates system (future)
 
 ### Tests & Tasks
-- [ ] [M07-T01] Add `project delete <id>` command
+- [ ] [M08-T01] Add `project delete <id>` command
       - Create commands/project/delete.ts
       - Add confirmation prompt (skip with --force)
       - Display success/error messages
       - Add help text
 
-- [ ] [M07-T02] Add custom alias system
-      - Create alias management commands
+- [ ] [M08-T02] Add command alias system (like gh alias)
+      - Create command alias management commands
       - Support alias create/list/delete
-      - Store aliases in config
+      - Store command aliases in config
       - Expand aliases at runtime
+      - Note: Different from entity aliases in M06
 
-- [ ] [M07-T03] Add tab completion support
+- [ ] [M08-T03] Add tab completion support
       - Generate completion scripts for bash/zsh/fish
       - Support command and flag completion
       - Support ID completion from recent items
 
-- [ ] [M07-T04] Add output formatting options
+- [ ] [M08-T04] Add output formatting options
       - Add --json flag for machine-readable output
       - Add --format for custom templates
       - Support piping to other commands
 
-- [ ] [M07-TS01] Test delete operations
+- [ ] [M08-TS01] Test delete operations
       - Confirmation prompt works
       - --force skips confirmation
       - Proper error handling
 
-- [ ] [M07-TS02] Test alias system
+- [ ] [M08-TS02] Test command alias system
       - Aliases are created and stored
       - Aliases expand correctly
       - Alias conflicts are detected
@@ -731,11 +1316,11 @@ $ linear-create init list --json
 
 ## Backlog (Future Milestones)
 
-### [ ] Milestone M08: Issue Creation & Management (v0.8.0)
+### [ ] Milestone M10: Issue Creation & Management (v0.10.0)
 **Goal**: Add full issue creation and management capabilities
 
-### [ ] Milestone M09: Templates & Bulk Operations (v0.9.0)
-**Goal**: Templates for common patterns and bulk operation support
+### [ ] Milestone M11: Bulk Operations & Advanced Filtering (v0.11.0)
+**Goal**: Bulk operations and advanced filtering support
 
-### [ ] Milestone M10: Workflow Automation (v1.0.0)
+### [ ] Milestone M12: Workflow Automation (v1.0.0)
 **Goal**: Automated workflows, hooks, and integrations
