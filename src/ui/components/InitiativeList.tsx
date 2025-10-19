@@ -10,7 +10,7 @@ interface InitiativeListProps {
 }
 
 interface SelectItem {
-  key: string;
+  key?: string;
   label: string;
   value: Initiative;
 }

@@ -4,13 +4,14 @@ import { setConfig } from './commands/config/set.js';
 import { unsetConfig } from './commands/config/unset.js';
 import { listInitiatives } from './commands/initiatives/list.js';
 import { setInitiative } from './commands/initiatives/set.js';
+import { createProjectCommand } from './commands/project/create.js';
 
 const cli = new Command();
 
 cli
   .name('linear-create')
   .description('Command-line tool for creating Linear issues and projects')
-  .version('0.3.0');
+  .version('0.4.0');
 
 // Initiatives commands
 const initiatives = cli.command('initiatives').description('Manage Linear initiatives');
@@ -43,10 +44,10 @@ project
   .option('-d, --description <description>', 'Project description')
   .option('-s, --state <state>', 'Project state (planned, started, paused, completed, canceled)')
   .option('-i, --initiative <id>', 'Initiative ID to link project to')
+  .option('--team <id>', 'Team ID to assign project to')
   .option('--no-interactive', 'Disable interactive mode')
-  .action(options => {
-    console.log('Project create command - Coming soon in M04');
-    console.log('Options:', options);
+  .action(async options => {
+    await createProjectCommand(options);
   });
 
 // Config commands
