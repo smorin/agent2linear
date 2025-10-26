@@ -8,6 +8,7 @@ import {
   getProjectById,
   getProjectStatusById,
   getTemplateById,
+  getMemberById,
 } from './linear-client.js';
 
 const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'linear-create');
@@ -26,6 +27,10 @@ function getEmptyAliases(): Aliases {
     projectStatuses: {},
     issueTemplates: {},
     projectTemplates: {},
+    members: {},
+    issueLabels: {},
+    projectLabels: {},
+    workflowStates: {},
   };
 }
 
@@ -48,6 +53,10 @@ function readAliasesFile(path: string): Aliases {
       projectStatuses: parsed.projectStatuses || {},
       issueTemplates: parsed.issueTemplates || {},
       projectTemplates: parsed.projectTemplates || {},
+      members: parsed.members || {},
+      issueLabels: parsed.issueLabels || {},
+      projectLabels: parsed.projectLabels || {},
+      workflowStates: parsed.workflowStates || {},
     };
   } catch {
     return getEmptyAliases();
@@ -88,6 +97,18 @@ function normalizeEntityType(type: string): AliasEntityType | null {
   if (normalized === 'project-template' || normalized === 'project-templates' || normalized === 'projecttemplate' || normalized === 'projecttemplates') {
     return 'project-template';
   }
+  if (normalized === 'member' || normalized === 'members' || normalized === 'user' || normalized === 'users') {
+    return 'member';
+  }
+  if (normalized === 'issue-label' || normalized === 'issue-labels' || normalized === 'issuelabel' || normalized === 'issuelabels') {
+    return 'issue-label';
+  }
+  if (normalized === 'project-label' || normalized === 'project-labels' || normalized === 'projectlabel' || normalized === 'projectlabels') {
+    return 'project-label';
+  }
+  if (normalized === 'workflow-state' || normalized === 'workflow-states' || normalized === 'workflowstate' || normalized === 'workflowstates') {
+    return 'workflow-state';
+  }
   return null;
 }
 
@@ -101,6 +122,10 @@ function getAliasesKey(type: AliasEntityType): keyof Aliases {
   if (type === 'project-status') return 'projectStatuses';
   if (type === 'issue-template') return 'issueTemplates';
   if (type === 'project-template') return 'projectTemplates';
+  if (type === 'member') return 'members';
+  if (type === 'issue-label') return 'issueLabels';
+  if (type === 'project-label') return 'projectLabels';
+  if (type === 'workflow-state') return 'workflowStates';
   return 'projects'; // fallback
 }
 
@@ -119,6 +144,10 @@ export function loadAliases(): ResolvedAliases {
     'project-status': {},
     'issue-template': {},
     'project-template': {},
+    member: {},
+    'issue-label': {},
+    'project-label': {},
+    'workflow-state': {},
   };
 
   // Merge and track locations for initiatives
@@ -181,6 +210,46 @@ export function loadAliases(): ResolvedAliases {
     locations['project-template'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
   });
 
+  // Merge and track locations for members
+  const members = { ...globalAliases.members };
+  Object.keys(globalAliases.members).forEach((alias) => {
+    locations.member[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+  });
+  Object.keys(projectAliases.members).forEach((alias) => {
+    members[alias] = projectAliases.members[alias];
+    locations.member[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+  });
+
+  // Merge and track locations for issue labels
+  const issueLabels = { ...globalAliases.issueLabels };
+  Object.keys(globalAliases.issueLabels).forEach((alias) => {
+    locations['issue-label'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+  });
+  Object.keys(projectAliases.issueLabels).forEach((alias) => {
+    issueLabels[alias] = projectAliases.issueLabels[alias];
+    locations['issue-label'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+  });
+
+  // Merge and track locations for project labels
+  const projectLabels = { ...globalAliases.projectLabels };
+  Object.keys(globalAliases.projectLabels).forEach((alias) => {
+    locations['project-label'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+  });
+  Object.keys(projectAliases.projectLabels).forEach((alias) => {
+    projectLabels[alias] = projectAliases.projectLabels[alias];
+    locations['project-label'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+  });
+
+  // Merge and track locations for workflow states
+  const workflowStates = { ...globalAliases.workflowStates };
+  Object.keys(globalAliases.workflowStates).forEach((alias) => {
+    locations['workflow-state'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+  });
+  Object.keys(projectAliases.workflowStates).forEach((alias) => {
+    workflowStates[alias] = projectAliases.workflowStates[alias];
+    locations['workflow-state'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+  });
+
   return {
     initiatives,
     teams,
@@ -188,6 +257,10 @@ export function loadAliases(): ResolvedAliases {
     projectStatuses,
     issueTemplates,
     projectTemplates,
+    members,
+    issueLabels,
+    projectLabels,
+    workflowStates,
     locations,
   };
 }
@@ -221,6 +294,13 @@ function looksLikeLinearId(input: string, type: AliasEntityType): boolean {
       case 'issue-template':
       case 'project-template':
         return lowerInput.startsWith('template_');
+      case 'member':
+        return lowerInput.startsWith('user_');
+      case 'issue-label':
+      case 'project-label':
+        return lowerInput.startsWith('label_');
+      case 'workflow-state':
+        return lowerInput.startsWith('state_') || lowerInput.startsWith('workflow_');
       default:
         return true; // Accept any prefix format for unknown types
     }
@@ -292,6 +372,13 @@ async function validateEntity(
           };
         }
         return { valid: true, name: template.name };
+      }
+      case 'member': {
+        const member = await getMemberById(id);
+        if (!member) {
+          return { valid: false, error: `Member with ID "${id}" not found` };
+        }
+        return { valid: true, name: member.name };
       }
       default:
         return { valid: false, error: 'Invalid entity type' };
@@ -536,6 +623,21 @@ export async function validateAllAliases(): Promise<{
     }
   }
 
+  // Check members
+  for (const [alias, id] of Object.entries(aliases.members)) {
+    total++;
+    const validation = await validateEntity('member', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'member',
+        alias,
+        id,
+        location: aliases.locations.member[alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
   return { broken, total };
 }
 
@@ -656,6 +758,27 @@ export function hasGlobalAliases(): boolean {
  */
 export function hasProjectAliases(): boolean {
   return existsSync(PROJECT_ALIASES_FILE);
+}
+
+/**
+ * Get all aliases that point to a given ID (reverse lookup)
+ * @param type - The entity type to search
+ * @param id - The Linear ID to find aliases for
+ * @returns Array of alias names (without @ prefix) that point to this ID
+ */
+export function getAliasesForId(type: AliasEntityType, id: string): string[] {
+  const aliases = loadAliases();
+  const key = getAliasesKey(type);
+  const aliasMap = aliases[key];
+
+  const matchingAliases: string[] = [];
+  for (const [alias, aliasId] of Object.entries(aliasMap)) {
+    if (aliasId === id) {
+      matchingAliases.push(alias);
+    }
+  }
+
+  return matchingAliases;
 }
 
 /**

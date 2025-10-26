@@ -3,6 +3,7 @@ import { render, Box, Text } from 'ink';
 import { getAllProjectStatuses, type ProjectStatus } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { formatListTSV, formatListJSON } from '../../lib/output.js';
+import { getAliasesForId } from '../../lib/aliases.js';
 
 interface ListOptions {
   interactive?: boolean;
@@ -65,17 +66,26 @@ function App({ options: _options }: { options: ListOptions }) {
     <Box flexDirection="column">
       <Text bold>Available project statuses:</Text>
       <Box marginTop={1} flexDirection="column">
-        {statuses.map(status => (
-          <Box key={status.id}>
-            <Text>
-              <Text color="cyan">{status.id}</Text>
-              {' - '}
-              <Text bold>{status.name}</Text>
-              {' '}
-              <Text dimColor>({status.type})</Text>
-            </Text>
-          </Box>
-        ))}
+        {statuses.map(status => {
+          const aliases = getAliasesForId('project-status', status.id);
+          return (
+            <Box key={status.id}>
+              <Text>
+                <Text color="cyan">{status.id}</Text>
+                {' - '}
+                <Text bold>{status.name}</Text>
+                {' '}
+                <Text dimColor>({status.type})</Text>
+                {aliases.length > 0 && (
+                  <>
+                    {' '}
+                    <Text dimColor>[aliases: {aliases.map(a => `@${a}`).join(', ')}]</Text>
+                  </>
+                )}
+              </Text>
+            </Box>
+          );
+        })}
       </Box>
       <Box marginTop={1}>
         <Text dimColor>💡 Tip: Use "linear-create project-status sync-aliases" to create aliases for all statuses</Text>
@@ -114,16 +124,26 @@ export async function listProjectStatuses(options: ListOptions = {}) {
         return;
       }
 
+      // Add aliases to each status
+      const statusesWithAliases = statuses.map(status => ({
+        ...status,
+        aliases: getAliasesForId('project-status', status.id)
+      }));
+
       // Handle format option
       if (options.format === 'json') {
-        console.log(formatListJSON(statuses));
+        console.log(formatListJSON(statusesWithAliases));
       } else if (options.format === 'tsv') {
-        console.log(formatListTSV(statuses, ['id', 'name', 'type']));
+        console.log(formatListTSV(statusesWithAliases, ['id', 'name', 'type', 'aliases']));
       } else {
-        // Default behavior (backward compatible): formatted output with labels
+        // Default behavior: formatted output with aliases column
         console.log('Available project statuses:');
-        statuses.forEach(status => {
-          console.log(`  ${status.id}\t${status.name}\t(${status.type})`);
+        console.log('ID\t\tName\t\t\tType\t\tAliases');
+        statusesWithAliases.forEach(status => {
+          const aliasDisplay = status.aliases.length > 0
+            ? status.aliases.map(a => `@${a}`).join(', ')
+            : '(none)';
+          console.log(`${status.id}\t${status.name}\t\t${status.type}\t\t${aliasDisplay}`);
         });
         console.log('\n💡 Tip: Use "linear-create project-status sync-aliases" to create aliases for all statuses');
       }

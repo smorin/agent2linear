@@ -65,6 +65,30 @@ export async function testConnection(): Promise<{
 }
 
 /**
+ * Get current user information
+ */
+export async function getCurrentUser(): Promise<{
+  id: string;
+  name: string;
+  email: string;
+}> {
+  try {
+    const client = getLinearClient();
+    const viewer = await client.viewer;
+
+    return {
+      id: viewer.id,
+      name: viewer.name,
+      email: viewer.email,
+    };
+  } catch (error) {
+    throw new LinearClientError(
+      `Failed to get current user: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
  * Validate API key by testing connection
  */
 export async function validateApiKey(apiKey: string): Promise<boolean> {
@@ -176,6 +200,19 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+}
+
+/**
+ * Member/User data structure
+ */
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  admin: boolean;
+  avatarUrl?: string;
+  displayName?: string;
 }
 
 /**
@@ -298,6 +335,199 @@ export async function getTeamById(
 
     throw new Error(
       `Failed to fetch team: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get all members from Linear organization
+ * @param options - Optional filtering options
+ */
+export async function getAllMembers(options?: {
+  teamId?: string;
+  activeOnly?: boolean;
+  inactiveOnly?: boolean;
+  adminOnly?: boolean;
+  nameFilter?: string;
+  emailFilter?: string;
+}): Promise<Member[]> {
+  try {
+    const client = getLinearClient();
+
+    // If team filter is specified, get team members
+    if (options?.teamId) {
+      const team = await client.team(options.teamId);
+      if (!team) {
+        throw new Error(`Team with ID "${options.teamId}" not found`);
+      }
+      const teamMembers = await team.members();
+
+      const result: Member[] = [];
+      for await (const member of teamMembers.nodes) {
+        result.push({
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          active: member.active,
+          admin: member.admin,
+          avatarUrl: member.avatarUrl || undefined,
+          displayName: member.displayName || undefined,
+        });
+      }
+
+      // Apply additional filters
+      return applyMemberFilters(result, options);
+    }
+
+    // Otherwise get all organization users
+    const users = await client.users();
+
+    const result: Member[] = [];
+    for await (const user of users.nodes) {
+      result.push({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        active: user.active,
+        admin: user.admin,
+        avatarUrl: user.avatarUrl || undefined,
+        displayName: user.displayName || undefined,
+      });
+    }
+
+    // Apply filters and sort
+    const filtered = applyMemberFilters(result, options);
+    return filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch members: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Apply filters to member list
+ */
+function applyMemberFilters(
+  members: Member[],
+  options?: {
+    activeOnly?: boolean;
+    inactiveOnly?: boolean;
+    adminOnly?: boolean;
+    nameFilter?: string;
+    emailFilter?: string;
+  }
+): Member[] {
+  let filtered = members;
+
+  // Filter by active status
+  if (options?.activeOnly) {
+    filtered = filtered.filter(m => m.active);
+  } else if (options?.inactiveOnly) {
+    filtered = filtered.filter(m => !m.active);
+  }
+
+  // Filter by admin status
+  if (options?.adminOnly) {
+    filtered = filtered.filter(m => m.admin);
+  }
+
+  // Filter by name (case-insensitive partial match)
+  if (options?.nameFilter) {
+    const nameLower = options.nameFilter.toLowerCase();
+    filtered = filtered.filter(m =>
+      m.name.toLowerCase().includes(nameLower) ||
+      (m.displayName && m.displayName.toLowerCase().includes(nameLower))
+    );
+  }
+
+  // Filter by email (case-insensitive partial match)
+  if (options?.emailFilter) {
+    const emailLower = options.emailFilter.toLowerCase();
+    filtered = filtered.filter(m => m.email.toLowerCase().includes(emailLower));
+  }
+
+  return filtered;
+}
+
+/**
+ * Get a single member by ID
+ */
+export async function getMemberById(
+  userId: string
+): Promise<{ id: string; name: string; email: string; active: boolean; admin: boolean } | null> {
+  try {
+    const client = getLinearClient();
+    const user = await client.user(userId);
+
+    if (!user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      active: user.active,
+      admin: user.admin,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch member: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get member by exact email match (case-insensitive)
+ */
+export async function getMemberByEmail(email: string): Promise<Member | null> {
+  try {
+    const members = await getAllMembers({ emailFilter: email });
+    // Find exact match (case-insensitive)
+    const exactMatch = members.find(m => m.email.toLowerCase() === email.toLowerCase());
+    return exactMatch || null;
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to search member by email: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Search members by email or name filter
+ * Returns array of matching members (active members only by default)
+ */
+export async function searchMembers(options: {
+  emailFilter?: string;
+  nameFilter?: string;
+  activeOnly?: boolean;
+}): Promise<Member[]> {
+  try {
+    return await getAllMembers({
+      emailFilter: options.emailFilter,
+      nameFilter: options.nameFilter,
+      activeOnly: options.activeOnly !== false, // Default to true
+    });
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to search members: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }
@@ -1121,6 +1351,588 @@ export async function getProjectMilestones(projectId: string): Promise<ProjectMi
 
     throw new Error(
       `Failed to fetch project milestones: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Workflow State (Issue Status) API Methods
+ */
+
+export interface WorkflowStateCreateInput {
+  name: string;
+  teamId: string;
+  type: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+  color: string;
+  description?: string;
+  position?: number;
+}
+
+export interface WorkflowStateUpdateInput {
+  name?: string;
+  type?: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+  color?: string;
+  description?: string;
+  position?: number;
+}
+
+/**
+ * Get all workflow states for a team (or all teams)
+ */
+export async function getAllWorkflowStates(teamId?: string): Promise<import('./types.js').WorkflowState[]> {
+  try {
+    const client = getLinearClient();
+    const result: import('./types.js').WorkflowState[] = [];
+
+    if (teamId) {
+      // Get workflow states for a specific team
+      const team = await client.team(teamId);
+      if (!team) {
+        throw new Error(`Team not found: ${teamId}`);
+      }
+
+      const states = await team.states();
+      for (const state of states.nodes) {
+        result.push({
+          id: state.id,
+          name: state.name,
+          type: state.type as any,
+          color: state.color,
+          description: state.description || undefined,
+          position: state.position,
+          teamId: team.id,
+        });
+      }
+    } else {
+      // Get workflow states for all teams
+      const teams = await client.teams();
+      for (const team of teams.nodes) {
+        const states = await team.states();
+        for (const state of states.nodes) {
+          result.push({
+            id: state.id,
+            name: state.name,
+            type: state.type as any,
+            color: state.color,
+            description: state.description || undefined,
+            position: state.position,
+            teamId: team.id,
+          });
+        }
+      }
+    }
+
+    // Sort by team, then position
+    return result.sort((a, b) => {
+      if (a.teamId !== b.teamId) {
+        return a.teamId.localeCompare(b.teamId);
+      }
+      return a.position - b.position;
+    });
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch workflow states: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get a single workflow state by ID
+ */
+export async function getWorkflowStateById(id: string): Promise<import('./types.js').WorkflowState | null> {
+  try {
+    const client = getLinearClient();
+    const state = await client.workflowState(id);
+
+    if (!state) {
+      return null;
+    }
+
+    const team = await state.team;
+
+    return {
+      id: state.id,
+      name: state.name,
+      type: state.type as any,
+      color: state.color,
+      description: state.description || undefined,
+      position: state.position,
+      teamId: team?.id || '',
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch workflow state: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Create a new workflow state
+ */
+export async function createWorkflowState(input: WorkflowStateCreateInput): Promise<import('./types.js').WorkflowState> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.createWorkflowState({
+      name: input.name,
+      teamId: input.teamId,
+      type: input.type,
+      color: input.color,
+      description: input.description,
+      position: input.position,
+    });
+
+    const state = await payload.workflowState;
+    if (!state) {
+      throw new Error('Failed to create workflow state: No state returned from API');
+    }
+
+    return {
+      id: state.id,
+      name: state.name,
+      type: state.type as any,
+      color: state.color,
+      description: state.description || undefined,
+      position: state.position,
+      teamId: input.teamId,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to create workflow state: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Update a workflow state
+ */
+export async function updateWorkflowState(id: string, input: WorkflowStateUpdateInput): Promise<import('./types.js').WorkflowState> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.updateWorkflowState(id, {
+      name: input.name,
+      type: input.type,
+      color: input.color,
+      description: input.description,
+      position: input.position,
+    });
+
+    const state = await payload.workflowState;
+    if (!state) {
+      throw new Error('Failed to update workflow state: No state returned from API');
+    }
+
+    const team = await state.team;
+
+    return {
+      id: state.id,
+      name: state.name,
+      type: state.type as any,
+      color: state.color,
+      description: state.description || undefined,
+      position: state.position,
+      teamId: team?.id || '',
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to update workflow state: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Delete a workflow state
+ */
+export async function deleteWorkflowState(id: string): Promise<boolean> {
+  try {
+    const client = getLinearClient();
+    const payload = await client.deleteWorkflowState(id);
+    return payload.success;
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to delete workflow state: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Issue Label API Methods
+ */
+
+export interface IssueLabelCreateInput {
+  name: string;
+  color: string;
+  description?: string;
+  teamId?: string; // undefined for workspace-level labels
+}
+
+export interface IssueLabelUpdateInput {
+  name?: string;
+  color?: string;
+  description?: string;
+}
+
+/**
+ * Get all issue labels (workspace-level and/or team-level)
+ */
+export async function getAllIssueLabels(teamId?: string): Promise<import('./types.js').IssueLabel[]> {
+  try {
+    const client = getLinearClient();
+    const result: import('./types.js').IssueLabel[] = [];
+
+    if (teamId) {
+      // Get labels for a specific team
+      const team = await client.team(teamId);
+      if (!team) {
+        throw new Error(`Team not found: ${teamId}`);
+      }
+
+      const labels = await team.labels();
+      for (const label of labels.nodes) {
+        result.push({
+          id: label.id,
+          name: label.name,
+          color: label.color,
+          description: label.description || undefined,
+          teamId: team.id,
+        });
+      }
+    } else {
+      // Get all labels (workspace + all teams)
+      const labels = await client.issueLabels();
+      for (const label of labels.nodes) {
+        const team = await label.team;
+        result.push({
+          id: label.id,
+          name: label.name,
+          color: label.color,
+          description: label.description || undefined,
+          teamId: team?.id,
+        });
+      }
+    }
+
+    // Sort by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch issue labels: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get a single issue label by ID
+ */
+export async function getIssueLabelById(id: string): Promise<import('./types.js').IssueLabel | null> {
+  try {
+    const client = getLinearClient();
+    const label = await client.issueLabel(id);
+
+    if (!label) {
+      return null;
+    }
+
+    const team = await label.team;
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+      teamId: team?.id,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch issue label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Create a new issue label
+ */
+export async function createIssueLabel(input: IssueLabelCreateInput): Promise<import('./types.js').IssueLabel> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.createIssueLabel({
+      name: input.name,
+      color: input.color,
+      description: input.description,
+      teamId: input.teamId,
+    });
+
+    const label = await payload.issueLabel;
+    if (!label) {
+      throw new Error('Failed to create issue label: No label returned from API');
+    }
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+      teamId: input.teamId,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to create issue label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Update an issue label
+ */
+export async function updateIssueLabel(id: string, input: IssueLabelUpdateInput): Promise<import('./types.js').IssueLabel> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.updateIssueLabel(id, {
+      name: input.name,
+      color: input.color,
+      description: input.description,
+    });
+
+    const label = await payload.issueLabel;
+    if (!label) {
+      throw new Error('Failed to update issue label: No label returned from API');
+    }
+
+    const team = await label.team;
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+      teamId: team?.id,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to update issue label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Delete an issue label
+ */
+export async function deleteIssueLabel(id: string): Promise<boolean> {
+  try {
+    const client = getLinearClient();
+    const payload = await client.deleteIssueLabel(id);
+    return payload.success;
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to delete issue label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Project Label API Methods
+ */
+
+export interface ProjectLabelCreateInput {
+  name: string;
+  color: string;
+  description?: string;
+}
+
+export interface ProjectLabelUpdateInput {
+  name?: string;
+  color?: string;
+  description?: string;
+}
+
+/**
+ * Get all project labels (workspace-level only)
+ */
+export async function getAllProjectLabels(): Promise<import('./types.js').ProjectLabel[]> {
+  try {
+    const client = getLinearClient();
+    const labels = await client.organization.then(org => org.projectLabels());
+    const result: import('./types.js').ProjectLabel[] = [];
+
+    for (const label of labels.nodes) {
+      result.push({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+        description: label.description || undefined,
+      });
+    }
+
+    // Sort by name
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch project labels: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get a single project label by ID
+ */
+export async function getProjectLabelById(id: string): Promise<import('./types.js').ProjectLabel | null> {
+  try {
+    const client = getLinearClient();
+    const label = await client.projectLabel(id);
+
+    if (!label) {
+      return null;
+    }
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch project label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Create a new project label
+ */
+export async function createProjectLabel(input: ProjectLabelCreateInput): Promise<import('./types.js').ProjectLabel> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.createProjectLabel({
+      name: input.name,
+      color: input.color,
+      description: input.description,
+    });
+
+    const label = await payload.projectLabel;
+    if (!label) {
+      throw new Error('Failed to create project label: No label returned from API');
+    }
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to create project label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Update a project label
+ */
+export async function updateProjectLabel(id: string, input: ProjectLabelUpdateInput): Promise<import('./types.js').ProjectLabel> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.updateProjectLabel(id, {
+      name: input.name,
+      color: input.color,
+      description: input.description,
+    });
+
+    const label = await payload.projectLabel;
+    if (!label) {
+      throw new Error('Failed to update project label: No label returned from API');
+    }
+
+    return {
+      id: label.id,
+      name: label.name,
+      color: label.color,
+      description: label.description || undefined,
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to update project label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Delete a project label
+ */
+export async function deleteProjectLabel(id: string): Promise<boolean> {
+  try {
+    const client = getLinearClient();
+    const payload = await client.deleteProjectLabel(id);
+    return payload.success;
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to delete project label: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }

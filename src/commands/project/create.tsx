@@ -7,12 +7,15 @@ import {
   validateInitiativeExists,
   validateTeamExists,
   getTemplateById,
+  getCurrentUser,
+  getMemberById,
   type ProjectCreateInput,
   type ProjectResult,
 } from '../../lib/linear-client.js';
 import { getConfig } from '../../lib/config.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { resolveAlias } from '../../lib/aliases.js';
+import { resolveProjectStatusId } from '../../lib/status-cache.js';
 
 interface CreateOptions {
   title?: string;
@@ -29,6 +32,7 @@ interface CreateOptions {
   icon?: string;
   color?: string;
   lead?: string;
+  noLead?: boolean;
   labels?: string;
   convertedFrom?: string;
   startDate?: string;
@@ -49,6 +53,8 @@ async function createProjectNonInteractive(options: CreateOptions) {
       console.error('  linear-create proj create --title "My Project"\n');
       console.error('Or use interactive mode:');
       console.error('  linear-create proj create --interactive\n');
+      console.error('For all options, see:');
+      console.error('  linear-create project create --help\n');
       process.exit(1);
     }
 
@@ -108,6 +114,36 @@ async function createProjectNonInteractive(options: CreateOptions) {
       console.log(`   ✓ Template found: ${template.name}`);
     }
 
+    // Resolve status if provided
+    let statusId = options.status;
+    if (statusId) {
+      console.log(`🔍 Resolving status "${statusId}"...`);
+
+      // Try alias first
+      const aliasResolved = resolveAlias('project-status', statusId);
+
+      if (aliasResolved !== statusId) {
+        // Alias was found
+        statusId = aliasResolved;
+        console.log(`   ✓ Resolved alias: ${options.status} → ${statusId}`);
+      } else {
+        // Try name or ID lookup
+        const resolved = await resolveProjectStatusId(statusId);
+        if (resolved) {
+          if (resolved === statusId) {
+            console.log(`   ✓ Using status ID: ${statusId}`);
+          } else {
+            statusId = resolved;
+            console.log(`   ✓ Found status by name: "${options.status}"`);
+          }
+        } else {
+          console.error(`❌ Status not found: "${statusId}"`);
+          console.error('   Use "linear-create project-status list" to see available statuses');
+          process.exit(1);
+        }
+      }
+    }
+
     // Validate team is provided (REQUIRED) - check this before doing expensive API calls
     if (!teamId) {
       console.error('❌ Error: Team is required for project creation\n');
@@ -159,9 +195,87 @@ async function createProjectNonInteractive(options: CreateOptions) {
       ? options.labels.split(',').map(id => id.trim()).filter(id => id.length > 0)
       : undefined;
 
-    const memberIds = options.members
-      ? options.members.split(',').map(id => id.trim()).filter(id => id.length > 0)
-      : undefined;
+    // Resolve and validate member aliases
+    let memberIds: string[] | undefined;
+    if (options.members) {
+      const rawMembers = options.members.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+      // Resolve all aliases
+      const resolvedMembers = rawMembers.map(id => {
+        const resolved = resolveAlias('member', id);
+        if (resolved !== id) {
+          console.log(`📎 Resolved member alias "${id}" to ${resolved}`);
+        }
+        return resolved;
+      });
+
+      // Validate all members exist
+      console.log(`🔍 Validating ${resolvedMembers.length} project member(s)...`);
+      for (const memberId of resolvedMembers) {
+        try {
+          const member = await getMemberById(memberId);
+          if (!member) {
+            console.error(`❌ Member not found: ${memberId}`);
+            process.exit(1);
+          }
+          console.log(`   ✓ Member found: ${member.name}`);
+        } catch (error) {
+          console.error(`❌ Member not found: ${memberId}`);
+          if (error instanceof Error && error.message) {
+            console.error(`   Error: ${error.message}`);
+          }
+          process.exit(1);
+        }
+      }
+
+      memberIds = resolvedMembers;
+    }
+
+    // Determine project lead
+    let leadId: string | undefined;
+
+    if (options.lead) {
+      // Explicit lead specified - resolve alias and validate
+      const resolvedLead = resolveAlias('member', options.lead);
+      if (resolvedLead !== options.lead) {
+        console.log(`📎 Resolved member alias "${options.lead}" to ${resolvedLead}`);
+      }
+
+      // Validate member exists
+      console.log(`🔍 Validating lead member: ${resolvedLead}...`);
+      try {
+        const member = await getMemberById(resolvedLead);
+        if (!member) {
+          console.error(`❌ Member not found: ${resolvedLead}`);
+          process.exit(1);
+        }
+        console.log(`   ✓ Member found: ${member.name}`);
+        leadId = resolvedLead;
+      } catch (error) {
+        console.error(`❌ Member not found: ${resolvedLead}`);
+        if (error instanceof Error && error.message) {
+          console.error(`   Error: ${error.message}`);
+        }
+        process.exit(1);
+      }
+    } else if (options.noLead === true) {
+      // Explicit no-lead specified - don't assign a lead
+      leadId = undefined;
+    } else {
+      // Check config setting for auto-assign
+      const config = getConfig();
+      if (config.defaultAutoAssignLead !== false) {  // Default is true
+        try {
+          const currentUser = await getCurrentUser();
+          leadId = currentUser.id;
+          console.log(`👤 Auto-assigning lead to: ${currentUser.name}`);
+        } catch (error) {
+          console.warn(`⚠️  Warning: Could not auto-assign lead: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.warn('   Continuing without lead assignment.');
+          leadId = undefined;
+        }
+      }
+    }
 
     // Create the project
     const projectData: ProjectCreateInput = {
@@ -172,11 +286,11 @@ async function createProjectNonInteractive(options: CreateOptions) {
       teamId,
       templateId,
       // Additional fields
-      statusId: options.status,
+      statusId,
       content: options.content,
       icon: options.icon,
       color: options.color,
-      leadId: options.lead,
+      leadId,
       labelIds,
       convertedFromIssueId: options.convertedFrom,
       startDate: options.startDate,
@@ -231,8 +345,19 @@ function App({ options: _options }: { options: CreateOptions }) {
           return;
         }
 
+        // Auto-assign lead if not already set and config allows
+        const finalProjectData = { ...projectData };
+        if (!finalProjectData.leadId && config.defaultAutoAssignLead !== false) {
+          try {
+            const currentUser = await getCurrentUser();
+            finalProjectData.leadId = currentUser.id;
+          } catch {
+            // Silently continue without lead if user fetch fails
+          }
+        }
+
         // Create the project
-        const projectResult = await createProject(projectData);
+        const projectResult = await createProject(finalProjectData);
         setResult(projectResult);
         setChecking(false);
 

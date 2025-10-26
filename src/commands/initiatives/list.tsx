@@ -4,6 +4,7 @@ import { InitiativeList } from '../../ui/components/InitiativeList.js';
 import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { formatListTSV, formatListJSON } from '../../lib/output.js';
+import { getAliasesForId } from '../../lib/aliases.js';
 
 interface ListOptions {
   interactive?: boolean;
@@ -97,15 +98,25 @@ export async function listInitiatives(options: ListOptions = {}) {
         return;
       }
 
+      // Add aliases to each initiative
+      const initiativesWithAliases = initiatives.map(initiative => ({
+        ...initiative,
+        aliases: getAliasesForId('initiative', initiative.id)
+      }));
+
       // Handle format option
       if (options.format === 'json') {
-        console.log(formatListJSON(initiatives));
+        console.log(formatListJSON(initiativesWithAliases));
       } else if (options.format === 'tsv') {
-        console.log(formatListTSV(initiatives, ['id', 'name']));
+        console.log(formatListTSV(initiativesWithAliases, ['id', 'name', 'aliases']));
       } else {
-        // Default behavior (backward compatible): tab-separated values
-        initiatives.forEach(initiative => {
-          console.log(`${initiative.id}\t${initiative.name}`);
+        // Default behavior: tab-separated values with aliases column
+        console.log('ID\t\t\t\tName\t\t\t\tAliases');
+        initiativesWithAliases.forEach(initiative => {
+          const aliasDisplay = initiative.aliases.length > 0
+            ? initiative.aliases.map(a => `@${a}`).join(', ')
+            : '(none)';
+          console.log(`${initiative.id}\t${initiative.name}\t\t${aliasDisplay}`);
         });
       }
     } catch (error) {

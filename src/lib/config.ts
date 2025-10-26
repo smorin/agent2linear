@@ -56,6 +56,7 @@ export function getConfig(): ResolvedConfig {
     defaultProjectTemplate: { type: 'none' },
     defaultMilestoneTemplate: { type: 'none' },
     projectCacheMinTTL: { type: 'none' },
+    defaultAutoAssignLead: { type: 'none' },
   };
 
   // API Key location (env has highest priority for security)
@@ -107,6 +108,13 @@ export function getConfig(): ResolvedConfig {
     locations.projectCacheMinTTL = { type: 'project', path: PROJECT_CONFIG_FILE };
   } else if (globalConfig.projectCacheMinTTL) {
     locations.projectCacheMinTTL = { type: 'global', path: GLOBAL_CONFIG_FILE };
+  }
+
+  // Default Auto Assign Lead location
+  if (projectConfig.defaultAutoAssignLead !== undefined) {
+    locations.defaultAutoAssignLead = { type: 'project', path: PROJECT_CONFIG_FILE };
+  } else if (globalConfig.defaultAutoAssignLead !== undefined) {
+    locations.defaultAutoAssignLead = { type: 'global', path: GLOBAL_CONFIG_FILE };
   }
 
   // Merge configs with priority: project > global for most settings, but env > all for API key
@@ -189,7 +197,7 @@ export function maskApiKey(apiKey: string): string {
 /**
  * Valid configuration keys
  */
-const VALID_CONFIG_KEYS = ['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL'] as const;
+const VALID_CONFIG_KEYS = ['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultAutoAssignLead'] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 
 /**
@@ -223,6 +231,16 @@ export function setConfigValue(
       throw new Error('projectCacheMinTTL must not exceed 1440 minutes (24 hours)');
     }
     existingConfig[key] = ttl;
+  } else if (key === 'defaultAutoAssignLead') {
+    // Parse boolean value
+    const lowerValue = value.toLowerCase();
+    if (lowerValue === 'true' || lowerValue === '1' || lowerValue === 'yes') {
+      existingConfig[key] = true;
+    } else if (lowerValue === 'false' || lowerValue === '0' || lowerValue === 'no') {
+      existingConfig[key] = false;
+    } else {
+      throw new Error('defaultAutoAssignLead must be true or false');
+    }
   } else {
     existingConfig[key] = value;
   }

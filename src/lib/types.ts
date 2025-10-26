@@ -6,6 +6,7 @@ export interface Config {
   defaultProjectTemplate?: string;
   defaultMilestoneTemplate?: string;
   projectCacheMinTTL?: number; // Cache TTL in minutes (default: 60)
+  defaultAutoAssignLead?: boolean; // Auto-assign project lead to creator (default: true)
 }
 
 export interface ConfigLocation {
@@ -22,10 +23,11 @@ export interface ResolvedConfig extends Config {
     defaultProjectTemplate: ConfigLocation;
     defaultMilestoneTemplate: ConfigLocation;
     projectCacheMinTTL: ConfigLocation;
+    defaultAutoAssignLead: ConfigLocation;
   };
 }
 
-export type AliasEntityType = 'initiative' | 'team' | 'project' | 'project-status' | 'issue-template' | 'project-template';
+export type AliasEntityType = 'initiative' | 'team' | 'project' | 'project-status' | 'issue-template' | 'project-template' | 'member' | 'issue-label' | 'project-label' | 'workflow-state';
 
 export interface AliasMap {
   [alias: string]: string; // alias -> Linear ID
@@ -38,6 +40,10 @@ export interface Aliases {
   projectStatuses: AliasMap;
   issueTemplates: AliasMap;
   projectTemplates: AliasMap;
+  members: AliasMap;
+  issueLabels: AliasMap;
+  projectLabels: AliasMap;
+  workflowStates: AliasMap;
 }
 
 export interface AliasLocation {
@@ -82,4 +88,57 @@ export interface MilestoneTemplates {
   templates: {
     [templateName: string]: MilestoneTemplate;
   };
+}
+
+/**
+ * Workflow State (Issue Status) data structure
+ */
+export interface WorkflowState {
+  id: string;
+  name: string;
+  type: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+  color: string;
+  description?: string;
+  position: number;
+  teamId: string;
+}
+
+/**
+ * Issue Label data structure
+ */
+export interface IssueLabel {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  teamId?: string; // undefined for workspace-level labels
+}
+
+/**
+ * Project Label data structure
+ */
+export interface ProjectLabel {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+}
+
+/**
+ * Color definition
+ */
+export interface Color {
+  hex: string;
+  name?: string;
+  usageCount?: number; // For extracted colors
+}
+
+/**
+ * Icon definition
+ */
+export interface Icon {
+  name: string;
+  emoji?: string;
+  unicode?: string;
+  category?: string;
 }

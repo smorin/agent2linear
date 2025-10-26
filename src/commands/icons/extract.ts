@@ -1,0 +1,43 @@
+import { Command } from 'commander';
+import { extractIconsFromEntities } from '../../lib/icons.js';
+
+export function extractIcons(program: Command) {
+  program
+    .command('extract')
+    .description('Extract icons from workspace entities')
+    .option('--type <type>', 'Entity type (labels|workflow-states|projects)')
+    .option('-f, --format <format>', 'Output format (json|tsv)', 'default')
+    .action(async (options) => {
+      try {
+        console.log('🔍 Extracting icons from workspace...');
+        const icons = await extractIconsFromEntities(options.type as any);
+        console.log(`   Found ${icons.length} unique icons`);
+        console.log('');
+
+        if (options.format === 'json') {
+          console.log(JSON.stringify(icons, null, 2));
+          return;
+        }
+
+        if (options.format === 'tsv') {
+          console.log('Emoji\tUsage\tEntities');
+          for (const icon of icons) {
+            console.log(`${icon.emoji}\t${icon.usageCount}\t${icon.entities.join(', ')}`);
+          }
+          return;
+        }
+
+        console.log('Icon  Usage  Entities');
+        console.log('────  ─────  ────────');
+        for (const icon of icons) {
+          const entities = icon.entities.slice(0, 3).join(', ');
+          const more = icon.entities.length > 3 ? `, +${icon.entities.length - 3} more` : '';
+          console.log(`${icon.emoji}     ${icon.usageCount.toString().padStart(5)}  ${entities}${more}`);
+        }
+        console.log('');
+      } catch (error) {
+        console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
+        process.exit(1);
+      }
+    });
+}

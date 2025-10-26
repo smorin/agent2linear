@@ -3,6 +3,7 @@ import { render, Box, Text } from 'ink';
 import { getAllTemplates, type Template } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { formatListTSV, formatListJSON } from '../../lib/output.js';
+import { getAliasesForId } from '../../lib/aliases.js';
 
 interface ListOptions {
   interactive?: boolean;
@@ -71,16 +72,25 @@ function App({ options: _options, typeFilter }: { options: ListOptions; typeFilt
         <>
           <Text bold>Issue Templates ({issueTemplates.length}):</Text>
           <Box marginTop={1} flexDirection="column">
-            {issueTemplates.map(template => (
-              <Box key={template.id}>
-                <Text>
-                  <Text color="cyan">{template.id}</Text>
-                  {' - '}
-                  <Text bold>{template.name}</Text>
-                  {template.description && <Text dimColor> - {template.description}</Text>}
-                </Text>
-              </Box>
-            ))}
+            {issueTemplates.map(template => {
+              const aliases = getAliasesForId('issue-template', template.id);
+              return (
+                <Box key={template.id}>
+                  <Text>
+                    <Text color="cyan">{template.id}</Text>
+                    {' - '}
+                    <Text bold>{template.name}</Text>
+                    {template.description && <Text dimColor> - {template.description}</Text>}
+                    {aliases.length > 0 && (
+                      <>
+                        {' '}
+                        <Text dimColor>[aliases: {aliases.map(a => `@${a}`).join(', ')}]</Text>
+                      </>
+                    )}
+                  </Text>
+                </Box>
+              );
+            })}
           </Box>
         </>
       )}
@@ -91,16 +101,25 @@ function App({ options: _options, typeFilter }: { options: ListOptions; typeFilt
             <Text bold>Project Templates ({projectTemplates.length}):</Text>
           </Box>
           <Box marginTop={1} flexDirection="column">
-            {projectTemplates.map(template => (
-              <Box key={template.id}>
-                <Text>
-                  <Text color="cyan">{template.id}</Text>
-                  {' - '}
-                  <Text bold>{template.name}</Text>
-                  {template.description && <Text dimColor> - {template.description}</Text>}
-                </Text>
-              </Box>
-            ))}
+            {projectTemplates.map(template => {
+              const aliases = getAliasesForId('project-template', template.id);
+              return (
+                <Box key={template.id}>
+                  <Text>
+                    <Text color="cyan">{template.id}</Text>
+                    {' - '}
+                    <Text bold>{template.name}</Text>
+                    {template.description && <Text dimColor> - {template.description}</Text>}
+                    {aliases.length > 0 && (
+                      <>
+                        {' '}
+                        <Text dimColor>[aliases: {aliases.map(a => `@${a}`).join(', ')}]</Text>
+                      </>
+                    )}
+                  </Text>
+                </Box>
+              );
+            })}
           </Box>
         </>
       )}
@@ -157,30 +176,47 @@ export async function listTemplates(typeFilter?: string, options: ListOptions = 
         return;
       }
 
+      // Add aliases to each template
+      const templatesWithAliases = templates.map(template => {
+        const aliasType = template.type === 'issue' ? 'issue-template' : 'project-template';
+        return {
+          ...template,
+          aliases: getAliasesForId(aliasType as 'issue-template' | 'project-template', template.id)
+        };
+      });
+
       // Handle format option
       if (options.format === 'json') {
         // JSON format: flat list with all fields
-        console.log(formatListJSON(templates));
+        console.log(formatListJSON(templatesWithAliases));
       } else if (options.format === 'tsv') {
         // TSV format: flat list with standardized fields
-        console.log(formatListTSV(templates, ['id', 'name', 'type', 'description']));
+        console.log(formatListTSV(templatesWithAliases, ['id', 'name', 'type', 'description', 'aliases']));
       } else {
-        // Default behavior (backward compatible): grouped by type
-        const issueTemplates = templates.filter(t => t.type === 'issue');
-        const projectTemplates = templates.filter(t => t.type === 'project');
+        // Default behavior: grouped by type with aliases
+        const issueTemplates = templatesWithAliases.filter(t => t.type === 'issue');
+        const projectTemplates = templatesWithAliases.filter(t => t.type === 'project');
 
         if (issueTemplates.length > 0) {
           console.log(`Issue Templates (${issueTemplates.length}):`);
+          console.log('ID\t\t\t\tName\t\t\tDescription\t\tAliases');
           issueTemplates.forEach(template => {
-            console.log(`  ${template.id}\t${template.name}${template.description ? ` - ${template.description}` : ''}`);
+            const aliasDisplay = template.aliases.length > 0
+              ? template.aliases.map(a => `@${a}`).join(', ')
+              : '(none)';
+            console.log(`${template.id}\t${template.name}\t${template.description || ''}\t\t${aliasDisplay}`);
           });
           console.log('');
         }
 
         if (projectTemplates.length > 0) {
           console.log(`Project Templates (${projectTemplates.length}):`);
+          console.log('ID\t\t\t\tName\t\t\tDescription\t\tAliases');
           projectTemplates.forEach(template => {
-            console.log(`  ${template.id}\t${template.name}${template.description ? ` - ${template.description}` : ''}`);
+            const aliasDisplay = template.aliases.length > 0
+              ? template.aliases.map(a => `@${a}`).join(', ')
+              : '(none)';
+            console.log(`${template.id}\t${template.name}\t${template.description || ''}\t\t${aliasDisplay}`);
           });
           console.log('');
         }

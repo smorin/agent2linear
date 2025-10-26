@@ -3,6 +3,7 @@ import { render, Box, Text } from 'ink';
 import { getAllTeams, type Team } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { formatListTSV, formatListJSON } from '../../lib/output.js';
+import { getAliasesForId } from '../../lib/aliases.js';
 
 interface ListOptions {
   interactive?: boolean;
@@ -65,16 +66,25 @@ function App({ options: _options }: { options: ListOptions }) {
     <Box flexDirection="column">
       <Text bold>Available teams:</Text>
       <Box marginTop={1} flexDirection="column">
-        {teams.map(team => (
-          <Box key={team.id}>
-            <Text>
-              <Text color="cyan">{team.id}</Text>
-              {' - '}
-              <Text bold>{team.name}</Text>
-              {team.key && <Text dimColor> ({team.key})</Text>}
-            </Text>
-          </Box>
-        ))}
+        {teams.map(team => {
+          const aliases = getAliasesForId('team', team.id);
+          return (
+            <Box key={team.id}>
+              <Text>
+                <Text color="cyan">{team.id}</Text>
+                {' - '}
+                <Text bold>{team.name}</Text>
+                {team.key && <Text dimColor> ({team.key})</Text>}
+                {aliases.length > 0 && (
+                  <>
+                    {' '}
+                    <Text dimColor>[aliases: {aliases.map(a => `@${a}`).join(', ')}]</Text>
+                  </>
+                )}
+              </Text>
+            </Box>
+          );
+        })}
       </Box>
       <Box marginTop={1}>
         <Text dimColor>💡 Tip: Use "linear-create teams select" to save a default team</Text>
@@ -113,16 +123,26 @@ export async function listTeams(options: ListOptions = {}) {
         return;
       }
 
+      // Add aliases to each team
+      const teamsWithAliases = teams.map(team => ({
+        ...team,
+        aliases: getAliasesForId('team', team.id)
+      }));
+
       // Handle format option
       if (options.format === 'json') {
-        console.log(formatListJSON(teams));
+        console.log(formatListJSON(teamsWithAliases));
       } else if (options.format === 'tsv') {
-        console.log(formatListTSV(teams, ['id', 'name', 'key']));
+        console.log(formatListTSV(teamsWithAliases, ['id', 'name', 'key', 'aliases']));
       } else {
-        // Default behavior (backward compatible): formatted output with labels
+        // Default behavior: formatted output with aliases column
         console.log('Available teams:');
-        teams.forEach(team => {
-          console.log(`  ${team.id}\t${team.name}${team.key ? ` (${team.key})` : ''}`);
+        console.log('ID\t\tName\t\t\tKey\tAliases');
+        teamsWithAliases.forEach(team => {
+          const aliasDisplay = team.aliases.length > 0
+            ? team.aliases.map(a => `@${a}`).join(', ')
+            : '(none)';
+          console.log(`${team.id}\t${team.name}\t\t${team.key || ''}\t${aliasDisplay}`);
         });
         console.log('\n💡 Tip: Use "linear-create teams select" to save a default team');
       }

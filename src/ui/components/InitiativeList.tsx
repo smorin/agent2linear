@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
 import type { Initiative } from '../../lib/linear-client.js';
+import { getAliasesForId } from '../../lib/aliases.js';
 
 interface InitiativeListProps {
   initiatives: Initiative[];
@@ -19,11 +20,15 @@ export function InitiativeList({ initiatives, onSelect, onCancel: _onCancel }: I
   const [searchTerm] = useState('');
 
   // Convert initiatives to select items
-  const items: SelectItem[] = initiatives.map(initiative => ({
-    key: initiative.id,
-    label: `${initiative.name} (${initiative.id})`,
-    value: initiative,
-  }));
+  const items: SelectItem[] = initiatives.map(initiative => {
+    const aliases = getAliasesForId('initiative', initiative.id);
+    const aliasText = aliases.length > 0 ? ` [aliases: ${aliases.map(a => `@${a}`).join(', ')}]` : '';
+    return {
+      key: initiative.id,
+      label: `${initiative.name} (${initiative.id})${aliasText}`,
+      value: initiative,
+    };
+  });
 
   // Filter items based on search term
   const filteredItems = searchTerm
