@@ -3,10 +3,12 @@ import { render, Box, Text } from 'ink';
 import { InitiativeList } from '../../ui/components/InitiativeList.js';
 import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { formatListTSV, formatListJSON } from '../../lib/output.js';
 
 interface ListOptions {
   interactive?: boolean;
   web?: boolean;
+  format?: 'tsv' | 'json';
 }
 
 function App({ options: _options }: { options: ListOptions }) {
@@ -95,10 +97,17 @@ export async function listInitiatives(options: ListOptions = {}) {
         return;
       }
 
-      // Print tab-separated values for easy parsing
-      initiatives.forEach(initiative => {
-        console.log(`${initiative.id}\t${initiative.name}`);
-      });
+      // Handle format option
+      if (options.format === 'json') {
+        console.log(formatListJSON(initiatives));
+      } else if (options.format === 'tsv') {
+        console.log(formatListTSV(initiatives, ['id', 'name']));
+      } else {
+        // Default behavior (backward compatible): tab-separated values
+        initiatives.forEach(initiative => {
+          console.log(`${initiative.id}\t${initiative.name}`);
+        });
+      }
     } catch (error) {
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch initiatives'}`);
       process.exit(1);

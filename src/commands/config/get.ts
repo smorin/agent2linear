@@ -22,7 +22,7 @@ export async function getConfigValue(key: ConfigKey) {
     }
 
     // Mask API key for security
-    const displayValue = key === 'apiKey' ? maskApiKey(value) : value;
+    const displayValue = key === 'apiKey' ? maskApiKey(String(value)) : String(value);
 
     console.log(`${key}: ${displayValue}${locationStr}`);
   } catch (error) {

@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import { getAllTeams, type Team } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { formatListTSV, formatListJSON } from '../../lib/output.js';
 
 interface ListOptions {
   interactive?: boolean;
   web?: boolean;
+  format?: 'tsv' | 'json';
 }
 
 function App({ options: _options }: { options: ListOptions }) {
@@ -111,13 +113,19 @@ export async function listTeams(options: ListOptions = {}) {
         return;
       }
 
-      console.log('Available teams:');
-      // Print tab-separated values for easy parsing
-      teams.forEach(team => {
-        console.log(`  ${team.id}\t${team.name}${team.key ? ` (${team.key})` : ''}`);
-      });
-
-      console.log('\n💡 Tip: Use "linear-create teams select" to save a default team');
+      // Handle format option
+      if (options.format === 'json') {
+        console.log(formatListJSON(teams));
+      } else if (options.format === 'tsv') {
+        console.log(formatListTSV(teams, ['id', 'name', 'key']));
+      } else {
+        // Default behavior (backward compatible): formatted output with labels
+        console.log('Available teams:');
+        teams.forEach(team => {
+          console.log(`  ${team.id}\t${team.name}${team.key ? ` (${team.key})` : ''}`);
+        });
+        console.log('\n💡 Tip: Use "linear-create teams select" to save a default team');
+      }
     } catch (error) {
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch teams'}`);
       process.exit(1);

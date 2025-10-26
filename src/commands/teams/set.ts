@@ -1,43 +1,43 @@
-import { validateInitiativeExists } from '../../lib/linear-client.js';
+import { validateTeamExists } from '../../lib/linear-client.js';
 import { setConfigValue } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import { showResolvedAlias, showValidating, showValidated, showSuccess, showError, showInfo } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
-interface SetInitiativeOptions {
+interface SetTeamOptions {
   global?: boolean;
   project?: boolean;
 }
 
-export async function setInitiative(initiativeId: string, options: SetInitiativeOptions = {}) {
+export async function setTeam(teamId: string, options: SetTeamOptions = {}) {
   // Resolve alias to ID if needed
-  const resolvedId = resolveAlias('initiative', initiativeId);
-  if (resolvedId !== initiativeId) {
-    showResolvedAlias(initiativeId, resolvedId);
+  const resolvedId = resolveAlias('team', teamId);
+  if (resolvedId !== teamId) {
+    showResolvedAlias(teamId, resolvedId);
   }
 
-  showValidating('initiative', resolvedId);
+  showValidating('team', resolvedId);
 
   try {
-    // Validate initiative exists
-    const result = await validateInitiativeExists(resolvedId);
+    // Validate team exists
+    const result = await validateTeamExists(resolvedId);
 
     if (!result.valid) {
-      showError(result.error ?? 'Initiative validation failed');
+      showError(result.error ?? 'Team validation failed');
       process.exit(1);
     }
 
-    showValidated('initiative', result.name ?? 'Unknown');
+    showValidated('team', result.name ?? 'Unknown');
 
     // Determine scope
     const { scope, label: scopeLabel } = getScopeInfo(options);
 
     // Save to config
-    setConfigValue('defaultInitiative', resolvedId, scope);
+    setConfigValue('defaultTeam', resolvedId, scope);
 
-    showSuccess(`Default initiative set to: ${result.name ?? 'Unknown'}`, {
+    showSuccess(`Default team set to: ${result.name ?? 'Unknown'}`, {
       'Saved to': `${scopeLabel} config`,
-      'Initiative ID': resolvedId
+      'Team ID': resolvedId
     });
 
     showInfo(`Use 'linear-create config show' to view your configuration`);

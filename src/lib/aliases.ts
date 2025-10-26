@@ -6,6 +6,7 @@ import {
   validateInitiativeExists,
   validateTeamExists,
   getProjectById,
+  getProjectStatusById,
   getTemplateById,
 } from './linear-client.js';
 
@@ -22,6 +23,7 @@ function getEmptyAliases(): Aliases {
     initiatives: {},
     teams: {},
     projects: {},
+    projectStatuses: {},
     issueTemplates: {},
     projectTemplates: {},
   };
@@ -43,6 +45,7 @@ function readAliasesFile(path: string): Aliases {
       initiatives: parsed.initiatives || {},
       teams: parsed.teams || {},
       projects: parsed.projects || {},
+      projectStatuses: parsed.projectStatuses || {},
       issueTemplates: parsed.issueTemplates || {},
       projectTemplates: parsed.projectTemplates || {},
     };
@@ -76,6 +79,9 @@ function normalizeEntityType(type: string): AliasEntityType | null {
   if (normalized === 'project' || normalized === 'projects') {
     return 'project';
   }
+  if (normalized === 'project-status' || normalized === 'project-statuses' || normalized === 'projectstatus' || normalized === 'projectstatuses') {
+    return 'project-status';
+  }
   if (normalized === 'issue-template' || normalized === 'issue-templates' || normalized === 'issuetemplate' || normalized === 'issuetemplates') {
     return 'issue-template';
   }
@@ -92,6 +98,7 @@ function getAliasesKey(type: AliasEntityType): keyof Aliases {
   if (type === 'initiative') return 'initiatives';
   if (type === 'team') return 'teams';
   if (type === 'project') return 'projects';
+  if (type === 'project-status') return 'projectStatuses';
   if (type === 'issue-template') return 'issueTemplates';
   if (type === 'project-template') return 'projectTemplates';
   return 'projects'; // fallback
@@ -109,6 +116,7 @@ export function loadAliases(): ResolvedAliases {
     initiative: {},
     team: {},
     project: {},
+    'project-status': {},
     'issue-template': {},
     'project-template': {},
   };
@@ -143,6 +151,16 @@ export function loadAliases(): ResolvedAliases {
     locations.project[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
   });
 
+  // Merge and track locations for project statuses
+  const projectStatuses = { ...globalAliases.projectStatuses };
+  Object.keys(globalAliases.projectStatuses).forEach((alias) => {
+    locations['project-status'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+  });
+  Object.keys(projectAliases.projectStatuses).forEach((alias) => {
+    projectStatuses[alias] = projectAliases.projectStatuses[alias];
+    locations['project-status'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+  });
+
   // Merge and track locations for issue templates
   const issueTemplates = { ...globalAliases.issueTemplates };
   Object.keys(globalAliases.issueTemplates).forEach((alias) => {
@@ -167,6 +185,7 @@ export function loadAliases(): ResolvedAliases {
     initiatives,
     teams,
     projects,
+    projectStatuses,
     issueTemplates,
     projectTemplates,
     locations,
@@ -197,6 +216,8 @@ function looksLikeLinearId(input: string, type: AliasEntityType): boolean {
         return lowerInput.startsWith('team_');
       case 'project':
         return lowerInput.startsWith('proj_');
+      case 'project-status':
+        return lowerInput.startsWith('status_');
       case 'issue-template':
       case 'project-template':
         return lowerInput.startsWith('template_');
@@ -248,6 +269,13 @@ async function validateEntity(
           return { valid: false, error: `Project with ID "${id}" not found` };
         }
         return { valid: true, name: project.name };
+      }
+      case 'project-status': {
+        const status = await getProjectStatusById(id);
+        if (!status) {
+          return { valid: false, error: `Project status with ID "${id}" not found` };
+        }
+        return { valid: true, name: status.name };
       }
       case 'issue-template':
       case 'project-template': {
@@ -458,6 +486,21 @@ export async function validateAllAliases(): Promise<{
         alias,
         id,
         location: aliases.locations.project[alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
+  // Check project statuses
+  for (const [alias, id] of Object.entries(aliases.projectStatuses)) {
+    total++;
+    const validation = await validateEntity('project-status', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'project-status',
+        alias,
+        id,
+        location: aliases.locations['project-status'][alias],
         error: validation.error || 'Unknown error',
       });
     }

@@ -7,6 +7,7 @@ import {
   getProjectConfigPath,
   type ConfigKey,
 } from '../../lib/config.js';
+import { getScopeInfo } from '../../lib/scope.js';
 
 interface UnsetConfigOptions {
   global?: boolean;
@@ -17,12 +18,12 @@ export async function unsetConfig(key: string, options: UnsetConfigOptions) {
   // Validate key
   if (!isValidConfigKey(key)) {
     console.error(`❌ Invalid configuration key: ${key}`);
-    console.error(`Valid keys are: apiKey, defaultInitiative, defaultTeam`);
+    console.error(`Valid keys are: apiKey, defaultInitiative, defaultTeam, defaultIssueTemplate, defaultProjectTemplate`);
     process.exit(1);
   }
 
   // Determine scope (default to global)
-  const scope: 'global' | 'project' = options.project ? 'project' : 'global';
+  const { scope, label: scopeLabel } = getScopeInfo(options);
 
   // Check if config file exists
   const configExists = scope === 'global' ? hasGlobalConfig() : hasProjectConfig();
@@ -37,16 +38,19 @@ export async function unsetConfig(key: string, options: UnsetConfigOptions) {
     unsetConfigValue(key as ConfigKey, scope);
 
     // Success message
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
     const keyLabel =
       key === 'apiKey'
         ? 'API Key'
         : key === 'defaultInitiative'
           ? 'Default Initiative'
-          : 'Default Team';
+          : key === 'defaultTeam'
+            ? 'Default Team'
+            : key === 'defaultIssueTemplate'
+              ? 'Default Issue Template'
+              : 'Default Project Template';
 
     console.log(`✅ ${keyLabel} removed from ${scopeLabel} config`);
-    console.log(`   Use 'linear-create config show' to view your configuration`);
+    console.log(`   Use 'linear-create config list' to view your configuration`);
   } catch (error) {
     console.error(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);

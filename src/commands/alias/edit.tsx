@@ -8,8 +8,8 @@ import {
   renameAlias,
   removeAlias,
   addAlias,
-  type AliasEntityType,
 } from '../../lib/aliases.js';
+import type { AliasEntityType } from '../../lib/types.js';
 import {
   validateInitiativeExists,
   validateTeamExists,
@@ -337,7 +337,7 @@ function AliasEditor({ options }: { options: EditOptions }) {
       entityType === 'project-template' ? 'projectTemplates' :
       'projects'; // fallback
     const scopedAliases = Object.entries(aliases[key]).filter(([alias]) => {
-      const location = aliases.locations[entityType][alias];
+      const location = aliases.locations[entityType as AliasEntityType]?.[alias];
       return location && location.type === scope;
     });
 
@@ -583,11 +583,11 @@ function AliasEditor({ options }: { options: EditOptions }) {
       entityType === 'project-template' ? 'projectTemplates' :
       'projects'; // fallback
     const typeAliases = aliases[key];
-    const locations = aliases.locations[entityType];
+    const locations = aliases.locations[entityType as AliasEntityType];
 
     // Filter by scope
     const scopedAliases = Object.entries(typeAliases).filter(([alias]) => {
-      const location = locations[alias];
+      const location = locations?.[alias];
       return location && location.type === scope;
     });
 

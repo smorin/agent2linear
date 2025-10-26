@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import { InitiativeList } from '../../ui/components/InitiativeList.js';
-import { getAllInitiatives, validateInitiativeExists, type Initiative } from '../../lib/linear-client.js';
+import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
 import { setConfigValue } from '../../lib/config.js';
+import { getScopeInfo } from '../../lib/scope.js';
 
 interface SelectOptions {
   global?: boolean;
   project?: boolean;
-  id?: string;
 }
 
 function App({ options }: { options: SelectOptions }) {
@@ -29,8 +29,7 @@ function App({ options }: { options: SelectOptions }) {
   }, []);
 
   const handleSelect = (initiative: Initiative) => {
-    const scope: 'global' | 'project' = options.project ? 'project' : 'global';
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
+    const { scope, label: scopeLabel } = getScopeInfo(options);
 
     try {
       setConfigValue('defaultInitiative', initiative.id, scope);
@@ -81,43 +80,7 @@ function App({ options }: { options: SelectOptions }) {
   return <InitiativeList initiatives={initiatives} onSelect={handleSelect} onCancel={handleCancel} />;
 }
 
-// Non-interactive select with --id flag
-async function selectNonInteractive(initiativeId: string, options: SelectOptions) {
-  console.log(`🔍 Validating initiative ID: ${initiativeId}...`);
-
-  try {
-    // Validate initiative exists
-    const result = await validateInitiativeExists(initiativeId);
-
-    if (!result.valid) {
-      console.error(`❌ ${result.error}`);
-      process.exit(1);
-    }
-
-    console.log(`   ✓ Initiative found: ${result.name}`);
-
-    // Determine scope
-    const scope: 'global' | 'project' = options.project ? 'project' : 'global';
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
-
-    // Save to config
-    setConfigValue('defaultInitiative', initiativeId, scope);
-
-    console.log(`\n✅ Default initiative set to: ${result.name}`);
-    console.log(`   Saved to ${scopeLabel} config`);
-    console.log(`   Initiative ID: ${initiativeId}\n`);
-  } catch (error) {
-    console.error(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    process.exit(1);
-  }
-}
-
 export async function selectInitiative(options: SelectOptions = {}) {
-  if (options.id) {
-    // Non-interactive mode with --id flag
-    await selectNonInteractive(options.id, options);
-  } else {
-    // Interactive mode (default for select commands)
-    render(<App options={options} />);
-  }
+  // Always interactive mode
+  render(<App options={options} />);
 }

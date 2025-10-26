@@ -52,6 +52,10 @@ export function getConfig(): ResolvedConfig {
     apiKey: { type: 'none' },
     defaultInitiative: { type: 'none' },
     defaultTeam: { type: 'none' },
+    defaultIssueTemplate: { type: 'none' },
+    defaultProjectTemplate: { type: 'none' },
+    defaultMilestoneTemplate: { type: 'none' },
+    projectCacheMinTTL: { type: 'none' },
   };
 
   // API Key location (env has highest priority for security)
@@ -75,6 +79,34 @@ export function getConfig(): ResolvedConfig {
     locations.defaultTeam = { type: 'project', path: PROJECT_CONFIG_FILE };
   } else if (globalConfig.defaultTeam) {
     locations.defaultTeam = { type: 'global', path: GLOBAL_CONFIG_FILE };
+  }
+
+  // Default Issue Template location
+  if (projectConfig.defaultIssueTemplate) {
+    locations.defaultIssueTemplate = { type: 'project', path: PROJECT_CONFIG_FILE };
+  } else if (globalConfig.defaultIssueTemplate) {
+    locations.defaultIssueTemplate = { type: 'global', path: GLOBAL_CONFIG_FILE };
+  }
+
+  // Default Project Template location
+  if (projectConfig.defaultProjectTemplate) {
+    locations.defaultProjectTemplate = { type: 'project', path: PROJECT_CONFIG_FILE };
+  } else if (globalConfig.defaultProjectTemplate) {
+    locations.defaultProjectTemplate = { type: 'global', path: GLOBAL_CONFIG_FILE };
+  }
+
+  // Default Milestone Template location
+  if (projectConfig.defaultMilestoneTemplate) {
+    locations.defaultMilestoneTemplate = { type: 'project', path: PROJECT_CONFIG_FILE };
+  } else if (globalConfig.defaultMilestoneTemplate) {
+    locations.defaultMilestoneTemplate = { type: 'global', path: GLOBAL_CONFIG_FILE };
+  }
+
+  // Project Cache Min TTL location
+  if (projectConfig.projectCacheMinTTL) {
+    locations.projectCacheMinTTL = { type: 'project', path: PROJECT_CONFIG_FILE };
+  } else if (globalConfig.projectCacheMinTTL) {
+    locations.projectCacheMinTTL = { type: 'global', path: GLOBAL_CONFIG_FILE };
   }
 
   // Merge configs with priority: project > global for most settings, but env > all for API key
@@ -157,7 +189,7 @@ export function maskApiKey(apiKey: string): string {
 /**
  * Valid configuration keys
  */
-const VALID_CONFIG_KEYS = ['apiKey', 'defaultInitiative', 'defaultTeam'] as const;
+const VALID_CONFIG_KEYS = ['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL'] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 
 /**
@@ -178,7 +210,23 @@ export function setConfigValue(
   const configFile = scope === 'global' ? GLOBAL_CONFIG_FILE : PROJECT_CONFIG_FILE;
   const existingConfig = readConfigFile(configFile);
 
-  existingConfig[key] = value;
+  // Validate projectCacheMinTTL
+  if (key === 'projectCacheMinTTL') {
+    const ttl = parseInt(value, 10);
+    if (isNaN(ttl)) {
+      throw new Error('projectCacheMinTTL must be a number');
+    }
+    if (ttl < 1) {
+      throw new Error('projectCacheMinTTL must be at least 1 minute');
+    }
+    if (ttl > 1440) {
+      throw new Error('projectCacheMinTTL must not exceed 1440 minutes (24 hours)');
+    }
+    existingConfig[key] = ttl;
+  } else {
+    existingConfig[key] = value;
+  }
+
   writeConfigFile(configFile, existingConfig);
 }
 

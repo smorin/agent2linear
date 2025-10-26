@@ -6,11 +6,13 @@ import {
   getProjectByName,
   validateInitiativeExists,
   validateTeamExists,
+  getTemplateById,
   type ProjectCreateInput,
   type ProjectResult,
 } from '../../lib/linear-client.js';
 import { getConfig } from '../../lib/config.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { resolveAlias } from '../../lib/aliases.js';
 
 interface CreateOptions {
   title?: string;
@@ -18,8 +20,23 @@ interface CreateOptions {
   state?: 'planned' | 'started' | 'paused' | 'completed' | 'canceled';
   initiative?: string;
   team?: string;
+  template?: string;
   interactive?: boolean;
   web?: boolean;
+  // Additional fields
+  status?: string;
+  content?: string;
+  icon?: string;
+  color?: string;
+  lead?: string;
+  labels?: string;
+  convertedFrom?: string;
+  startDate?: string;
+  startDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year';
+  targetDate?: string;
+  targetDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year';
+  priority?: number;
+  members?: string;
 }
 
 // Non-interactive mode
@@ -45,8 +62,51 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     // Get config for defaults
     const config = getConfig();
-    const initiativeId = options.initiative || config.defaultInitiative;
-    const teamId = options.team || config.defaultTeam;
+    let initiativeId = options.initiative || config.defaultInitiative;
+    let teamId = options.team || config.defaultTeam;
+    let templateId = options.template || config.defaultProjectTemplate;
+
+    // Resolve aliases if provided
+    if (initiativeId) {
+      const resolvedInitiative = resolveAlias('initiative', initiativeId);
+      if (resolvedInitiative !== initiativeId) {
+        console.log(`📎 Resolved initiative alias "${initiativeId}" to ${resolvedInitiative}`);
+        initiativeId = resolvedInitiative;
+      }
+    }
+
+    if (teamId) {
+      const resolvedTeam = resolveAlias('team', teamId);
+      if (resolvedTeam !== teamId) {
+        console.log(`📎 Resolved team alias "${teamId}" to ${resolvedTeam}`);
+        teamId = resolvedTeam;
+      }
+    }
+
+    // Resolve template alias if provided
+    if (templateId) {
+      const resolvedTemplate = resolveAlias('project-template', templateId);
+      if (resolvedTemplate !== templateId) {
+        console.log(`📎 Resolved project template alias "${templateId}" to ${resolvedTemplate}`);
+        templateId = resolvedTemplate;
+      }
+    }
+
+    // Validate template if provided
+    if (templateId) {
+      console.log(`🔍 Validating template: ${templateId}...`);
+      const template = await getTemplateById(templateId);
+      if (!template) {
+        console.error(`❌ Template not found: ${templateId}`);
+        console.error('   Use "linear-create templates list projects" to see available templates');
+        process.exit(1);
+      }
+      if (template.type !== 'project') {
+        console.error(`❌ Template type mismatch: "${template.name}" is a ${template.type} template, not a project template`);
+        process.exit(1);
+      }
+      console.log(`   ✓ Template found: ${template.name}`);
+    }
 
     // Validate team is provided (REQUIRED) - check this before doing expensive API calls
     if (!teamId) {
@@ -94,6 +154,15 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     console.log('\n🚀 Creating project...');
 
+    // Parse comma-separated fields
+    const labelIds = options.labels
+      ? options.labels.split(',').map(id => id.trim()).filter(id => id.length > 0)
+      : undefined;
+
+    const memberIds = options.members
+      ? options.members.split(',').map(id => id.trim()).filter(id => id.length > 0)
+      : undefined;
+
     // Create the project
     const projectData: ProjectCreateInput = {
       name: title,
@@ -101,6 +170,21 @@ async function createProjectNonInteractive(options: CreateOptions) {
       state: options.state || 'planned',
       initiativeId,
       teamId,
+      templateId,
+      // Additional fields
+      statusId: options.status,
+      content: options.content,
+      icon: options.icon,
+      color: options.color,
+      leadId: options.lead,
+      labelIds,
+      convertedFromIssueId: options.convertedFrom,
+      startDate: options.startDate,
+      startDateResolution: options.startDateResolution,
+      targetDate: options.targetDate,
+      targetDateResolution: options.targetDateResolution,
+      priority: options.priority,
+      memberIds,
     };
 
     const result = await createProject(projectData);

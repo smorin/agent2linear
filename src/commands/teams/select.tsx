@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import { TeamList } from '../../ui/components/TeamList.js';
-import { getAllTeams, validateTeamExists, type Team } from '../../lib/linear-client.js';
+import { getAllTeams, type Team } from '../../lib/linear-client.js';
 import { setConfigValue } from '../../lib/config.js';
+import { getScopeInfo } from '../../lib/scope.js';
 
 interface SelectOptions {
   global?: boolean;
   project?: boolean;
-  id?: string;
 }
 
 function App({ options }: { options: SelectOptions }) {
@@ -29,8 +29,7 @@ function App({ options }: { options: SelectOptions }) {
   }, []);
 
   const handleSelect = (team: Team) => {
-    const scope: 'global' | 'project' = options.project ? 'project' : 'global';
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
+    const { scope, label: scopeLabel } = getScopeInfo(options);
 
     try {
       setConfigValue('defaultTeam', team.id, scope);
@@ -81,43 +80,7 @@ function App({ options }: { options: SelectOptions }) {
   return <TeamList teams={teams} onSelect={handleSelect} onCancel={handleCancel} />;
 }
 
-// Non-interactive select with --id flag
-async function selectNonInteractive(teamId: string, options: SelectOptions) {
-  console.log(`🔍 Validating team ID: ${teamId}...`);
-
-  try {
-    // Validate team exists
-    const result = await validateTeamExists(teamId);
-
-    if (!result.valid) {
-      console.error(`❌ ${result.error}`);
-      process.exit(1);
-    }
-
-    console.log(`   ✓ Team found: ${result.name}`);
-
-    // Determine scope
-    const scope: 'global' | 'project' = options.project ? 'project' : 'global';
-    const scopeLabel = scope === 'global' ? 'global' : 'project';
-
-    // Save to config
-    setConfigValue('defaultTeam', teamId, scope);
-
-    console.log(`\n✅ Default team set to: ${result.name}`);
-    console.log(`   Saved to ${scopeLabel} config`);
-    console.log(`   Team ID: ${teamId}\n`);
-  } catch (error) {
-    console.error(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    process.exit(1);
-  }
-}
-
 export async function selectTeam(options: SelectOptions = {}) {
-  if (options.id) {
-    // Non-interactive mode with --id flag
-    await selectNonInteractive(options.id, options);
-  } else {
-    // Interactive mode (default for select commands)
-    render(<App options={options} />);
-  }
+  // Always interactive mode
+  render(<App options={options} />);
 }

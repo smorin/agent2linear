@@ -4,6 +4,8 @@ export interface Config {
   defaultTeam?: string;
   defaultIssueTemplate?: string;
   defaultProjectTemplate?: string;
+  defaultMilestoneTemplate?: string;
+  projectCacheMinTTL?: number; // Cache TTL in minutes (default: 60)
 }
 
 export interface ConfigLocation {
@@ -18,10 +20,12 @@ export interface ResolvedConfig extends Config {
     defaultTeam: ConfigLocation;
     defaultIssueTemplate: ConfigLocation;
     defaultProjectTemplate: ConfigLocation;
+    defaultMilestoneTemplate: ConfigLocation;
+    projectCacheMinTTL: ConfigLocation;
   };
 }
 
-export type AliasEntityType = 'initiative' | 'team' | 'project' | 'issue-template' | 'project-template';
+export type AliasEntityType = 'initiative' | 'team' | 'project' | 'project-status' | 'issue-template' | 'project-template';
 
 export interface AliasMap {
   [alias: string]: string; // alias -> Linear ID
@@ -31,6 +35,7 @@ export interface Aliases {
   initiatives: AliasMap;
   teams: AliasMap;
   projects: AliasMap;
+  projectStatuses: AliasMap;
   issueTemplates: AliasMap;
   projectTemplates: AliasMap;
 }
@@ -56,4 +61,25 @@ export interface Template {
   name: string;
   type: 'issue' | 'project';
   description?: string;
+}
+
+/**
+ * Milestone template data structures
+ */
+export interface MilestoneDefinition {
+  name: string;
+  description?: string;
+  targetDate?: string; // Relative format: "+7d", "+2w", "+1m" or ISO date
+}
+
+export interface MilestoneTemplate {
+  name: string;
+  description?: string;
+  milestones: MilestoneDefinition[];
+}
+
+export interface MilestoneTemplates {
+  templates: {
+    [templateName: string]: MilestoneTemplate;
+  };
 }

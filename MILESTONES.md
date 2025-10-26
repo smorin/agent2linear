@@ -1172,6 +1172,327 @@ $ linear-create config set defaultProjectTemplate sprint
 
 ---
 
+## [x] Milestone M07.2: Milestone Templates System (v0.7.2)
+**Goal**: Add milestone template support to automatically create project milestones from local template definitions
+
+**Requirements**:
+- Define milestone templates in JSON config files (global and project-level)
+- List and view available milestone templates
+- Apply templates to projects via `project add-milestones` command
+- Support template precedence (project overrides global)
+- Configure default milestone template
+- Support markdown descriptions for milestones
+- Relative date offsets (+1d, +2w, +1m) for milestone dates
+
+**Out of Scope**:
+- Creating templates via CLI (M07.3)
+- Template variables/substitution
+- Milestone editing after creation
+- Applying templates during project creation (deferred)
+
+### Tests & Tasks
+- [x] [M07.2-T01] Add milestone template types to src/lib/types.ts
+      - Add MilestoneDefinition interface
+      - Add MilestoneTemplate and MilestoneTemplates interfaces
+      - Update Config to include defaultMilestoneTemplate
+      - Update ResolvedConfig for milestone template location tracking
+
+- [x] [M07.2-T02] Create src/lib/milestone-templates.ts with core functions
+      - Implement loadMilestoneTemplates() with precedence
+      - Implement getMilestoneTemplate(name)
+      - Implement listMilestoneTemplateNames()
+      - Implement validateMilestoneTemplate()
+      - Implement parseDateOffset() for relative dates
+      - Implement resolveMilestoneDates()
+
+- [x] [M07.2-T03] Add milestone API methods to src/lib/linear-client.ts
+      - Add validateProjectExists()
+      - Add createProjectMilestone()
+      - Add getProjectMilestones()
+      - Define MilestoneCreateInput interface
+
+- [x] [M07.2-T04] Create src/commands/milestone-templates/list.ts
+      - List templates grouped by source (global vs project)
+      - Support --format tsv and json
+      - Show milestone count and descriptions
+
+- [x] [M07.2-T05] Create src/commands/milestone-templates/view.ts
+      - Display template details with all milestones
+      - Show usage examples
+      - Include helpful tips
+
+- [x] [M07.2-T06] Create src/commands/project/add-milestones.ts
+      - Accept project ID and template name
+      - Support alias resolution for both
+      - Load template and create milestones sequentially
+      - Display progress and results
+
+- [x] [M07.2-T07] Update config system for defaultMilestoneTemplate
+      - Add to config/set.ts with validation
+      - Add to config/list.ts for display
+      - Update all config commands with new key
+
+- [x] [M07.2-T08] Register milestone-templates command group in cli.ts
+      - Add milestone-templates group with alias 'mtmpl'
+      - Register list and view subcommands
+      - Register project add-milestones command
+      - Add comprehensive help text
+
+- [x] [M07.2-TS01] Test template loading and precedence
+      - Create sample templates in global config
+      - Test list command with all formats
+      - Test view command
+      - Test config set/get for milestone templates
+
+- [x] [M07.2-TS02] Build and verify functionality
+      - Build succeeds
+      - All commands show in help
+      - Lint passes (no errors, only pre-existing warnings)
+
+### Deliverable
+```bash
+# Create global template file
+$ cat ~/.config/linear-create/milestone-templates.json
+{
+  "templates": {
+    "basic-sprint": {
+      "name": "Basic Sprint Template",
+      "description": "Simple 2-week sprint structure",
+      "milestones": [
+        {
+          "name": "Sprint Planning",
+          "description": "Define sprint goals and tasks",
+          "targetDate": "+1d"
+        },
+        {
+          "name": "Development",
+          "description": "Implementation phase",
+          "targetDate": "+10d"
+        },
+        {
+          "name": "Review & Deploy",
+          "description": "Code review and deployment",
+          "targetDate": "+14d"
+        }
+      ]
+    }
+  }
+}
+
+# List templates
+$ linear-create milestone-templates list
+Global Templates (1):
+  basic-sprint         - 3 milestones - Simple 2-week sprint structure
+
+# View template
+$ linear-create mtmpl view basic-sprint
+📋 Milestone Template: Basic Sprint Template
+   Description: Simple 2-week sprint structure
+   Source: global
+
+   Milestones (3):
+   1. Sprint Planning (+1d)
+      Define sprint goals and tasks
+   2. Development (+10d)
+      Implementation phase
+   3. Review & Deploy (+14d)
+      Code review and deployment
+
+# Set default
+$ linear-create config set defaultMilestoneTemplate basic-sprint
+🔍 Validating defaultMilestoneTemplate...
+   ✓ Milestone template found: Basic Sprint Template (global)
+✅ Default Milestone Template saved to global config
+
+# Add milestones to project
+$ linear-create project add-milestones PRJ-123 --template basic-sprint
+🔍 Validating project: PRJ-123...
+   ✓ Project found: My Project
+🔍 Loading milestone template: basic-sprint...
+   ✓ Template loaded (3 milestones)
+🚀 Creating milestones...
+   ✓ Created: Sprint Planning
+   ✓ Created: Development
+   ✓ Created: Review & Deploy
+✅ Successfully created 3 milestones for project: My Project
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- `npm run lint` passes (no errors)
+- Template loading with precedence works
+- All commands registered and functional
+
+### Manual Verification
+- Create template JSON files manually
+- List and view templates
+- Set default template in config
+- Test with Linear API when available
+
+### Notes
+- Templates are stored in local JSON files (not in Linear)
+- Template precedence: project overrides global by name
+- Milestone `description` field supports full markdown
+
+---
+
+## [x] Milestone M07.3: Template Creation Commands (v0.7.3)
+**Goal**: Add commands to create, edit, and manage milestone templates programmatically
+
+**Requirements**:
+- Create milestone templates via CLI (interactive and non-interactive)
+- Edit existing milestone templates interactively
+- Remove milestone templates with confirmation
+- Auto-create config directories when needed
+- Support markdown descriptions for milestones
+- Validate template structure before saving
+
+**Out of Scope**:
+- Template variables/substitution
+- Template import/export
+- Bulk template operations
+- Template versioning
+
+### Tests & Tasks
+- [x] [M07.3-T01] Add writeTemplatesFile() with auto-create directories to lib/milestone-templates.ts
+      - Create parent directories if they don't exist
+      - Use mkdirSync with recursive option
+      - Write formatted JSON with 2-space indentation
+
+- [x] [M07.3-T02] Add createMilestoneTemplate() function
+      - Check for duplicate template names
+      - Validate template structure
+      - Save to specified scope (global/project)
+      - Return success/error result
+
+- [x] [M07.3-T03] Add updateMilestoneTemplate() function
+      - Check template exists
+      - Validate new template structure
+      - Update and save template
+      - Return success/error result
+
+- [x] [M07.3-T04] Add removeMilestoneTemplate() function
+      - Check template exists
+      - Delete from templates object
+      - Save updated file
+      - Return success/error result
+
+- [x] [M07.3-T05] Create src/commands/milestone-templates/create.ts (non-interactive)
+      - Accept template name as argument
+      - Parse --description flag
+      - Parse multiple --milestone flags (name:date:description format)
+      - Validate and create template
+      - Show success message
+
+- [x] [M07.3-T06] Create src/commands/milestone-templates/remove.ts
+      - Accept template name as argument
+      - Show confirmation unless --yes flag
+      - Delete template from specified scope
+      - Show success message
+
+- [x] [M07.3-T07] Update src/commands/milestone-templates/view.ts for better markdown display
+      - Already implemented in M07.2
+      - Milestone descriptions display correctly
+      - Shows source (global/project)
+
+- [x] [M07.3-T08] Create src/commands/milestone-templates/create-interactive.tsx (interactive)
+      - Multi-step React/Ink wizard
+      - Prompt for template name and description
+      - Scope inherited from flags (--global/--project)
+      - Add milestones interactively (name, date, description)
+      - Preview template before saving
+      - Save and show confirmation
+
+- [x] [M07.3-T09] Create src/commands/milestone-templates/edit-interactive.tsx (interactive)
+      - Load existing template
+      - Allow modifying template description
+      - Allow adding/editing milestones
+      - Menu-driven interface
+      - Save and show confirmation
+
+- [x] [M07.3-T10] Register commands in cli.ts
+      - Add create command with --interactive flag
+      - Add remove command with --yes flag
+      - Add edit command (interactive only)
+      - Update help text with examples
+
+- [x] [M07.3-T11] Update README.md with template creation examples
+      - Document non-interactive creation with flags
+      - Document interactive creation workflow
+      - Show example milestone format with markdown
+
+- [x] [M07.3-TS01] Test template creation
+      - Non-interactive mode creates templates
+      - Milestones parsed correctly from spec format
+      - Templates validated before saving
+      - Directories auto-created
+
+- [x] [M07.3-TS02] Test template usage
+      - Created template appears in list
+      - View command shows details
+      - Remove command deletes template
+      - Build succeeds with all changes
+
+### Deliverable
+```bash
+# Non-interactive creation
+$ linear-create milestone-templates create basic-sprint \
+    --description "Simple 2-week sprint" \
+    --milestone "Sprint Planning:+1d:Define goals and scope" \
+    --milestone "Development:+10d:Build features and tests" \
+    --milestone "Review & Deploy:+14d:Code review and deployment"
+📝 Creating milestone template: basic-sprint...
+✅ Milestone template created successfully!
+   Name: basic-sprint
+   Location: global
+   Milestones: 3
+
+# With markdown
+$ linear-create mtmpl create detailed-sprint \
+    --milestone "Planning:+1d:## Goals\n- Set objectives\n- Estimate effort"
+
+# Interactive creation
+$ linear-create milestone-templates create --interactive
+Create Milestone Template
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Template name: agile-sprint
+Description (optional): Standard 2-week agile sprint
+Save to: Global
+
+Milestone 1:
+Name: Sprint Planning
+Target date: +1d
+Description (markdown): ## Planning\n- Review backlog\n- Set goals
+✓ Added: Sprint Planning
+
+Add another milestone? Yes
+...
+
+# Remove template
+$ linear-create mtmpl remove old-template --force
+✅ Template "old-template" removed from global config
+
+# Edit template interactively
+$ linear-create mtmpl edit basic-sprint
+[Interactive wizard to modify template]
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- All template creation commands work
+- Templates validate before saving
+- Directories auto-create
+
+### Manual Verification
+- Create templates via CLI
+- Edit templates interactively
+- Remove templates
+- Use created templates with add-milestones
+- Verify markdown renders in Linear
+
+---
+
 ## [ ] Milestone M08: Extended CRUD Operations & Flags (v0.8.0)
 **Goal**: Add update (edit) operations and common flags from gh CLI pattern
 
@@ -1311,6 +1632,330 @@ $ linear-create init list --json
 - Delete projects and verify they're removed from Linear
 - Create and use custom aliases
 - Test tab completion in various shells
+
+---
+
+## [x] Milestone M08: Configurable Cache & Project Status Management (v0.8.0)
+**Goal**: Make project cache configurable and add org-wide project status caching
+
+**Requirements**:
+- Configurable cache TTL in minutes (default: 60)
+- Flat org-wide project status cache
+- Status resolution by name, ID, or alias
+
+**Out of Scope**:
+- Team-scoped caching
+- Multiple cache backends
+- Cache warming strategies
+
+### Tests & Tasks
+- [x] [M08-T01] Add projectCacheMinTTL to Config type in types.ts
+      - Add `projectCacheMinTTL?: number` to Config interface
+      - Add to ResolvedConfig locations
+      - Document default value (60 minutes)
+
+- [x] [M08-T02] Update config.ts to handle projectCacheMinTTL
+      - Add to VALID_CONFIG_KEYS array
+      - Add location tracking in getConfig()
+      - Implement default value (60)
+
+- [x] [M08-T03] Modify project-resolver.ts to use configurable TTL
+      - Replace CACHE_TTL_MS constant with dynamic config lookup
+      - Convert minutes to milliseconds: `getConfig().projectCacheMinTTL * 60 * 1000`
+      - Fallback to 60 minutes if not configured
+
+- [x] [M08-T04] Add validation for projectCacheMinTTL in setConfig
+      - Minimum: 1 minute
+      - Maximum: 1440 minutes (24 hours)
+      - Must be positive integer
+      - Show error for invalid values
+
+- [x] [M08-T05] Update CLI config commands to include projectCacheMinTTL
+      - Add to config get/set/unset choices
+      - Update help text documentation
+      - Add examples in addHelpText
+
+- [x] [M08-T06] Update config list to display TTL in human-readable format
+      - Show as "60 minutes" not just "60"
+      - Include in config list output
+
+- [x] [M08-T07] Create status-cache.ts with flat array structure
+      - Define ProjectStatusCacheEntry interface
+      - Implement load/save functions
+      - Implement findByName (case-insensitive)
+      - Implement findById
+      - Use projectCacheMinTTL for expiry
+
+- [x] [M08-T08] Add getAllProjectStatuses() to linear-client.ts
+      - Query: organization.projectStatuses
+      - Return: id, name, type, color, position
+      - Handle pagination if needed
+
+- [x] [M08-T09] Implement resolveProjectStatus() function
+      - Check if input is ID → return as-is
+      - Check aliases → return resolved ID
+      - Check cache by name → return ID
+      - Refresh cache if expired
+      - Return null if not found
+
+- [x] [M08-TS01] Test cache uses configured TTL
+- [x] [M08-TS02] Test validation rejects invalid TTL values
+- [x] [M08-TS03] Test default is 60 minutes
+- [x] [M08-TS04] Test status cache flat structure
+- [x] [M08-TS05] Test case-insensitive name lookup
+
+### Deliverable
+```bash
+$ linear-create config set projectCacheMinTTL 120
+✅ projectCacheMinTTL updated (global config)
+
+$ linear-create config list
+📋 Configuration (merged from all sources)
+
+   projectCacheMinTTL: 120 minutes (global)
+   apiKey: lin_***_xyz (env)
+   defaultTeam: team_abc123 (project)
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- `npm run lint` passes
+- Config validation works
+
+### Manual Verification
+- Set cache TTL and verify it's used
+- Test status cache stores flat array
+- Verify case-insensitive lookup works
+
+---
+
+## [x] Milestone M09: Project Update Command (v0.9.0)
+**Goal**: Add project update command with status resolution
+
+**Requirements**:
+- Update project properties (status, name, description, priority, dates)
+- Resolve project by name, ID, or alias
+- Resolve status by name, ID, or alias
+- Show before/after summary
+
+**Out of Scope**:
+- Bulk project updates
+- Transaction rollback
+- Update history tracking
+
+### Tests & Tasks
+- [x] [M09-T01] Create src/commands/project/update.ts
+      - Resolve project using resolveProject()
+      - Resolve status using resolveProjectStatus()
+      - Validate at least one field provided
+      - Call updateProject() with changes
+      - Show before/after summary
+
+- [x] [M09-T02] Add updateProject() to linear-client.ts
+      - Define ProjectUpdateInput interface
+      - Implement projectUpdate mutation
+      - Support: statusId, name, description, priority, startDate, targetDate
+      - Return updated project details
+
+- [x] [M09-T03] Add project update CLI command
+      - Command: `project update <name-or-id>`
+      - Options: --status, --name, --description, --priority, --target-date, --start-date
+      - Follow existing CLI patterns
+      - Add comprehensive help text with examples
+
+- [x] [M09-T04] Validate priority range (0-4)
+- [x] [M09-T05] Show confirmation of changes
+
+- [x] [M09-TS01] Test update status by name
+- [x] [M09-TS02] Test update status by ID
+- [x] [M09-TS03] Test update multiple fields
+- [x] [M09-TS04] Test error when no fields provided
+- [x] [M09-TS05] Test priority validation
+
+### Deliverable
+```bash
+$ linear-create proj update "Q1 Goals" --status "In Progress" --priority 2
+
+🔍 Resolving project "Q1 Goals"...
+   ✓ Found project by name
+
+🔍 Resolving status "In Progress"...
+   ✓ Found status by name
+
+📝 Updating project...
+   Status: Backlog → In Progress
+   Priority: 0 → 2
+
+✅ Project updated successfully!
+```
+
+### Automated Verification
+- `npm run build` succeeds
+- Command appears in help text
+- Validation works correctly
+
+### Manual Verification
+- Update various project properties
+- Test status resolution by name
+- Verify changes persist in Linear
+
+---
+
+## [x] Milestone M10: Project Status Resource Group (v0.9.0)
+**Goal**: Add project-status commands following existing CLI patterns
+
+**Requirements**:
+- List all project statuses
+- View specific status details
+- Support --web, --format flags
+- Follow teams/initiatives command structure
+
+**Out of Scope**:
+- Creating custom statuses (Linear UI only)
+- Deleting statuses
+- Reordering statuses
+
+### Tests & Tasks
+- [x] [M10-T01] Create src/commands/project-status/list.ts
+      - Fetch via getAllProjectStatuses()
+      - Display table: Name, Type, ID
+      - Support --format tsv/json
+      - Support --web to open settings
+
+- [x] [M10-T02] Create src/commands/project-status/view.ts
+      - Resolve status by ID or alias
+      - Display full status details
+      - Support --web flag
+
+- [x] [M10-T03] Add project-status CLI group to cli.ts
+      - Resource group: `project-status` (alias: `pstatus`)
+      - Commands: list, view
+      - Follow teams/initiatives pattern exactly
+      - Add comprehensive help text
+
+- [x] [M10-TS01] Test listing shows all statuses
+- [x] [M10-TS02] Test JSON output format
+- [x] [M10-TS03] Test TSV output format
+- [x] [M10-TS04] Test view command
+
+### Deliverable
+```bash
+$ linear-create project-status list
+
+📋 Project Statuses (5)
+
+   NAME            TYPE        ID
+   Backlog         planned     status_abc123
+   In Progress     started     status_def456
+   In Review       started     status_ghi789
+   Done            completed   status_jkl012
+   Canceled        canceled    status_mno345
+
+$ linear-create pstatus ls --format json | jq '.[0]'
+{
+  "id": "status_abc123",
+  "name": "Backlog",
+  "type": "planned"
+}
+```
+
+### Automated Verification
+- Commands appear in help
+- Format options work
+- Build succeeds
+
+### Manual Verification
+- List matches Linear UI
+- View shows correct details
+- Web flag opens Linear settings
+
+---
+
+## [x] Milestone M11: Sync Project Status Aliases (v0.10.0)
+**Goal**: Auto-create aliases for all org project statuses
+
+**Requirements**:
+- Sync all statuses to aliases
+- Default to dry-run preview
+- Support --global, --project, --force flags
+- Follow existing alias command patterns
+
+**Out of Scope**:
+- Selective sync (all or nothing)
+- Custom alias naming rules
+- Auto-sync on status changes
+
+### Tests & Tasks
+- [x] [M11-T01] Add projectStatuses to Aliases type
+      - Add `projectStatuses: AliasMap` to types.ts
+      - Update ResolvedAliases to include projectStatuses locations
+
+- [x] [M11-T02] Update aliases.ts to handle project-status
+      - Add 'project-status' to AliasEntityType
+      - Update normalizeEntityType()
+      - Update getAliasesKey() to map to 'projectStatuses'
+      - Update loadAliases() to merge projectStatuses
+
+- [x] [M11-T03] Create src/commands/project-status/sync-aliases.ts
+      - Fetch all statuses via getAllProjectStatuses()
+      - Generate slug: lowercase, spaces→hyphens
+      - Check for existing aliases (warn unless --force)
+      - Default to --dry-run if neither --global nor --project specified
+      - Create aliases for each status
+      - Show summary of created aliases
+
+- [x] [M11-T04] Add sync-aliases CLI command
+      - Add to project-status group
+      - Options: --global, --project, --dry-run, --force
+      - Comprehensive help with examples
+
+- [x] [M11-T05] Update alias commands to include project-status
+      - Add to all alias command type choices
+      - Update help text
+      - Update validation
+
+- [x] [M11-TS01] Test slug generation
+- [x] [M11-TS02] Test conflict detection
+- [x] [M11-TS03] Test dry-run doesn't create
+- [x] [M11-TS04] Test force overwrites
+- [x] [M11-TS05] Test aliases work in project update
+
+### Deliverable
+```bash
+$ linear-create pstatus sync-aliases
+
+🔍 Fetching project statuses...
+   Found 5 statuses
+
+📋 Preview: The following aliases would be created
+   (specify --global or --project to create):
+
+   backlog      → status_abc123 (Backlog)
+   in-progress  → status_def456 (In Progress)
+   in-review    → status_ghi789 (In Review)
+   done         → status_jkl012 (Done)
+   canceled     → status_mno345 (Canceled)
+
+⚠️  No conflicts detected
+
+$ linear-create pstatus sync-aliases --global
+✅ Created 5 project status aliases (global)
+
+$ linear-create proj update "My Project" --status in-progress
+🔍 Resolving status "in-progress"...
+   ✓ Resolved alias: in-progress → status_def456
+✅ Project updated
+```
+
+### Automated Verification
+- Build succeeds
+- Aliases created correctly
+- Validation works
+
+### Manual Verification
+- Sync creates correct slugs
+- Conflicts detected properly
+- Aliases work in commands
 
 ---
 
