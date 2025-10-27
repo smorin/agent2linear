@@ -121,6 +121,13 @@ export async function syncAliasesCore<T extends SyncableEntity>(
 
     for (const entity of entities) {
       const slug = slugGenerator(entity.name);
+
+      // Skip entities with empty slugs (names with only special characters)
+      if (!slug) {
+        console.warn(`   ⚠️  Skipping "${entity.name}" - name contains only special characters`);
+        continue;
+      }
+
       const conflict = !!(existingAliases[slug] && existingAliases[slug] !== entity.id);
       const duplicate = detectDuplicates && (slugMap.get(slug)?.length || 0) > 1;
       const displayName = formatEntityDisplay ? formatEntityDisplay(entity) : entity.name;

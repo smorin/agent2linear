@@ -425,7 +425,10 @@ export async function addAlias(
   scope: 'global' | 'project' = 'global',
   options: { skipValidation?: boolean } = {}
 ): Promise<{ success: boolean; error?: string; entityName?: string }> {
-  // Validate alias format (no spaces, lowercase recommended)
+  // Validate alias format (no spaces, not empty)
+  if (!alias || alias.trim() === '') {
+    return { success: false, error: 'Alias cannot be empty' };
+  }
   if (alias.includes(' ')) {
     return { success: false, error: 'Alias cannot contain spaces' };
   }
