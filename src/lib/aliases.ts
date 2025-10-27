@@ -61,7 +61,13 @@ function readAliasesFile(path: string): Aliases {
       projectLabels: parsed.projectLabels || {},
       workflowStates: parsed.workflowStates || {},
     };
-  } catch {
+  } catch (error) {
+    // Only warn if file exists (not just missing)
+    if (existsSync(path)) {
+      console.warn('⚠️  Warning: Could not read aliases file:', path);
+      console.warn('   ', error instanceof Error ? error.message : 'Unknown error');
+      console.warn('   Continuing with empty aliases. File will be recreated on next write.\n');
+    }
     return getEmptyAliases();
   }
 }
