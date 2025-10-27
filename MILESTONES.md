@@ -444,6 +444,95 @@ Hex       Usage  States
 
 ---
 
+## [-] Milestone M13: Bug Fixes from Analysis (v0.13.1)
+**Goal**: Fix all bugs identified in BUGS.md to improve reliability and user experience
+
+**Requirements**:
+- Fix high-priority alias resolution bug
+- Add proper error tracking and reporting
+- Improve validation for edge cases
+- Maintain backward compatibility
+- No breaking changes
+
+**Out of Scope**:
+- New features or functionality
+- Performance optimizations beyond bug fixes
+- API changes
+
+### Tests & Tasks
+- [x] [M13-T01] Fix Bug #1: Add alias resolution for team filter in issue-labels
+      - Update src/commands/issue-labels/sync-aliases.ts to resolve team aliases
+      - Follow pattern from workflow-states/sync-aliases.ts (lines 19-21)
+      - Add resolveAlias('team', teamId) call before getAllIssueLabels()
+      - Test with team alias to verify resolution works
+      - Committed: 9d2f0e9
+
+- [x] [M13-T02] Fix Bug #2: Track and report failures in sync summary
+      - Add `failed` counter in src/lib/sync-aliases.ts
+      - Increment counter when alias creation fails (excluding "already points to")
+      - Update summary message to show failures with warning emoji
+      - Show success only when failed === 0
+      - Test with simulated failure to verify counter
+      - Committed: 44515a2
+
+- [x] [M13-T03] Fix Bug #3: Add duplicate detection for labels
+      - Add detectDuplicates: true in issue-labels/sync-aliases.ts
+      - Add detectDuplicates: true in project-labels/sync-aliases.ts
+      - Test by creating labels with duplicate names
+      - Verify duplicates are detected and skipped
+      - Committed: 87f4003
+
+- [x] [M13-T04] Fix Bug #4: Validate empty slugs
+      - Add empty slug check in sync-aliases.ts after generateSlug()
+      - Skip entities with empty slugs and show warning
+      - Add empty alias validation in aliases.ts addAlias() function
+      - Return error if alias is empty or whitespace-only
+      - Test with entity name containing only special characters
+      - Committed: c6f27eb
+
+- [x] [M13-T05] Fix Bug #5: Warn users about corrupted aliases file
+      - Update readAliasesFile() catch block in aliases.ts
+      - Add console.warn when file exists but cannot be parsed
+      - Include error message and recovery guidance
+      - Only warn if file exists (not just missing)
+      - Test by corrupting aliases.json and running command
+      - Committed: 6659614
+
+- [ ] [M13-TS01] Regression test: Verify existing functionality
+      - Test team sync-aliases with valid team ID
+      - Test workflow-state sync-aliases
+      - Test issue-label sync-aliases with --team flag
+      - Test project-label sync-aliases
+      - Verify npm run build succeeds
+      - Verify npm run lint passes
+      - Verify npm run typecheck passes
+
+### Deliverable
+All 5 bugs fixed with individual commits:
+```bash
+git log --oneline
+fix: warn users about corrupted aliases file
+fix: validate empty slugs and reject empty aliases
+fix: add duplicate detection for issue/project labels
+fix: track and report failures in sync-aliases summary
+fix: resolve team aliases in issue-labels sync-aliases
+```
+
+### Automated Verification
+- `npm run build` succeeds without errors
+- `npm run lint` passes (no new errors)
+- `npm run typecheck` passes
+- All existing commands continue to work
+
+### Manual Verification
+- Team aliases resolve correctly in issue-labels sync
+- Failed alias creations are reported in summary
+- Duplicate label names are detected and skipped
+- Empty slugs are rejected with clear warnings
+- Corrupted aliases.json shows helpful warning
+
+---
+
 ## Backlog (Future Milestones)
 
 ### [ ] Milestone M14: Issue Creation & Management (v0.14.0)
