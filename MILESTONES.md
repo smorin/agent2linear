@@ -533,157 +533,761 @@ fix: resolve team aliases in issue-labels sync-aliases
 
 ---
 
-## [ ] Milestone M14: Foundation - Shared Utilities (v0.13.0)
-
-**Goal**: Extract duplicated code into reusable utilities before adding new features
+## [-] Milestone M14.5: Cache & Resolution Bug Fixes (v0.13.2)
+**Goal**: Fix critical caching bugs (data corruption and silent failures) discovered in bug analysis
 
 **Requirements**:
-- Eliminate ~90 lines of duplicate code across commands
-- Create validators for priority, color, enum values
-- Create parsers for comma-separated and pipe-delimited values
-- Create file utilities for safe content file reading
-- Create resolution utilities for status entities
+- **Phase I (v0.13.2)**: Fix critical bugs #2 and #7
+  - Bug #7: Fix member cache pollution when using team filters
+  - Bug #2: Remove unsupported label entities from cache clear validation
+  - Comprehensive testing to ensure fixes work correctly
+  - No regressions in existing functionality
+- **Phase II (future - fold into M12)**: Complete label caching and workflow state resolution
+  - Bug #3: Implement full label cache infrastructure
+  - Bug #9: Add workflow state name-based resolution
+  - Integrate with M12 metadata commands milestone
+
+**Out of Scope**:
+- New features beyond bug fixes
+- Performance optimizations beyond bug fixes
+- Breaking changes to existing APIs
+
+**Bug Details**:
+
+**Bug #7 (HIGH PRIORITY)**: Entity Cache Team Filter Pollutes Global Cache
+- **File**: `src/lib/entity-cache.ts:220-273`
+- **Issue**: When `getMembers({ teamId: X })` is called, it fetches filtered members from API but caches them as "all members". Subsequent calls to `getMembers()` return incorrect subset.
+- **Impact**: Data corruption - cache returns wrong member list
+- **Root Cause**: Passes `options` to API call but caches filtered result globally
+- **Fix**: Fetch all members, cache all, filter client-side (as code comment suggests)
+
+**Bug #2 (MEDIUM PRIORITY)**: Missing Cache Clear for Issue/Project Labels
+- **File**: `src/commands/cache/clear.ts:19-48`
+- **Issue**: `validEntities` includes 'issue-labels' and 'project-labels', but switch statement has no cases for them. Command reports success but only clears session cache, not persistent cache.
+- **Impact**: Silent failure - users think cache is cleared but persistent cache remains stale
+- **Root Cause**: Labels added to validation but no persistent cache implementation exists yet
+- **Fix**: Remove 'issue-labels' and 'project-labels' from `validEntities` until persistent cache is implemented
+
+### Phase I Tests & Tasks
+
+#### Bug Fixes
+- [x] [M14.5-T01] Fix Bug #7: Update getMembers() in entity-cache.ts
+      - Bypass cache when teamId filter is provided (call API directly)
+      - Only cache unfiltered member requests (all organization members)
+      - Added documentation explaining why teamId filtering bypasses cache
+      - Fix prevents cache pollution from team-filtered member queries
+
+- [x] [M14.5-T02] Fix Bug #2: Update cache/clear.ts validation
+      - Remove 'issue-labels' from validEntities array
+      - Remove 'project-labels' from validEntities array
+      - Keep only entities with persistent cache support: teams, initiatives, members, templates, statuses
+      - Added comment explaining labels will be added in M12
+
+#### Testing
+- [ ] [M14.5-TS01] Test getMembers() without filter
+      - Call getMembers() with no options
+      - Verify returns all members
+      - Verify caches all members
+
+- [ ] [M14.5-TS02] Test getMembers() with team filter
+      - Call getMembers({ teamId: 'team_123' })
+      - Verify returns only members from that team
+      - Verify cache still contains ALL members (not filtered subset)
+
+- [ ] [M14.5-TS03] Test sequential calls (critical regression test)
+      - Call getMembers({ teamId: 'team_123' }) - filtered
+      - Call getMembers() - no filter
+      - Verify second call returns ALL members, not just team_123 members
+      - This is the bug reproduction test
+
+- [ ] [M14.5-TS04] Test cache clear with valid entities
+      - Test cache clear --entity teams
+      - Test cache clear --entity initiatives
+      - Test cache clear --entity members
+      - Test cache clear --entity templates
+      - Test cache clear --entity statuses
+      - Verify all succeed
+
+- [x] [M14.5-TS05] Test cache clear with invalid entities (should fail)
+      - Test cache clear --entity issue-labels (should error) ✓
+      - Test cache clear --entity project-labels (should error) ✓
+      - Verify helpful error message with valid options ✓
+
+- [x] [M14.5-TS06] Build and type verification
+      - npm run build (succeeds) ✓
+      - npm run typecheck (passes) ✓
+      - npm run lint (passes, no new errors, 1 pre-existing warning) ✓
+
+- [ ] [M14.5-TS07] Regression tests
+      - Run existing test suite (tests/scripts/run-all-tests.sh)
+      - Verify no existing functionality broken
+      - Test project create with members
+      - Test project update with members
+
+### Phase II Planning (Defer to M12 or create M12.5)
+
+**Bug #3**: Complete Label Cache Implementation
+- Add getIssueLabels() / getProjectLabels() to EntityCache
+- Add getAllIssueLabels() / getAllProjectLabels() to linear-client.ts
+- Add persistent cache functions to status-cache.ts
+- Restore 'issue-labels' and 'project-labels' to cache clear command
+- **Recommendation**: Fold into M12 milestone (already plans label commands)
+
+**Bug #9**: Implement Workflow State Resolution
+- Add getAllWorkflowStates(teamId?) to linear-client.ts
+- Add workflow state caching to status-cache.ts
+- Update resolveStatus() to lookup by name (like project-status)
+- Add to cache clear command
+- **Recommendation**: Fold into M12 milestone (already plans workflow-states commands)
+
+### Deliverable (Phase I)
+```bash
+# Bug #7 fixed - member caching works correctly
+$ linear-create project create --team eng --members "user_1,user_2"
+# Cache is populated with ALL members, not just user_1 and user_2
+
+# Bug #2 fixed - cache clear validates correctly
+$ linear-create cache clear --entity issue-labels
+❌ Invalid entity type: issue-labels
+   Valid options: teams, initiatives, members, templates, statuses
+
+$ linear-create cache clear --entity members
+🗑️  Clearing members cache...
+✅ Cache cleared successfully (session + persistent)
+```
+
+### Automated Verification
+- `npm run build` succeeds without errors
+- `npm run lint` passes (no new errors)
+- `npm run typecheck` passes
+- All existing tests continue to pass
+
+### Manual Verification
+- Member caching with team filters works correctly
+- Sequential getMembers() calls return correct data
+- Cache clear command only accepts valid entity types
+- No false success messages from cache clear
+- No regressions in existing functionality
+
+---
+
+## [-] Milestone M14: Foundation - Shared Utilities + Caching & Batching (v0.13.0)
+
+**Goal**: Extract duplicated code into reusable utilities AND add comprehensive caching layer to reduce API calls by 60-70%
+
+**Requirements**:
+- **Phase 1 - Utilities**: Eliminate ~90 lines of duplicate code across commands
+  - Create validators for priority, color, enum values
+  - Create parsers for comma-separated and pipe-delimited values
+  - Create file utilities for safe content file reading
+  - Create resolution utilities for status entities
+- **Phase 2 - Caching**: Add entity caching to reduce API calls
+  - Create unified in-memory entity cache (session-scoped)
+  - Extend file-based persistent cache for teams, initiatives, templates
+  - Implement batch fetching strategy (fetch all, filter in memory)
+  - Parallelize validation calls with Promise.all
+- **Phase 3 - Integration**: Update commands to use caching
+  - Reduce project create from 18-20 API calls to 6-8 calls (60-70% reduction)
+  - Reduce project update from 5-8 API calls to 3-4 calls (40-50% reduction)
 - Ensure existing functionality unchanged (regression-free)
 
 **Out of Scope**:
 - New features (save for subsequent milestones)
-- UI/UX changes
+- UI/UX changes beyond caching feedback
 - Breaking changes to existing commands
+- GraphQL query batching (future optimization)
+
+**Expected Impact**:
+- 60-70% reduction in API calls for project create
+- 50-60% reduction in API calls for project update
+- 50-70% faster wall-clock time
+- Reusable caching infrastructure for all future commands
 
 ### Tests & Tasks
 
-#### Validators Module
-- [ ] [M14-T01] Create `/src/lib/validators.ts`
+#### Phase 1: Shared Utilities (Original M14 Goals)
+
+##### Validators Module
+- [x] [M14-T01] Create `/src/lib/validators.ts`
       - Implement `validatePriority(value: string | number): { valid: boolean; priority?: number; error?: string }`
       - Implement `validateAndNormalizeColor(value: string): { valid: boolean; color?: string; error?: string }`
       - Implement `validateEnumValue(value: string, allowedValues: string[]): { valid: boolean; error?: string }`
+      - Implement `validateISODate(value: string): { valid: boolean; error?: string }`
+      - Implement `validateNonEmpty(value: string, fieldName?: string): { valid: boolean; error?: string }`
       - Return structured results, no process.exit() in utilities
       - Add JSDoc comments with examples
 
-#### Parsers Module
-- [ ] [M14-T02] Create `/src/lib/parsers.ts`
+##### Parsers Module
+- [x] [M14-T02] Create `/src/lib/parsers.ts`
       - Implement `parseCommaSeparated(value: string): string[]` - Split by comma, trim, filter empty
       - Implement `parsePipeDelimited(value: string): { key: string; value: string }` - Split "URL|Label" format
+      - Implement `parseLifecycleDate(value: string): string` - Convert "now" or YYYY-MM-DD to ISO DateTime
+      - Implement `parsePipeDelimitedArray(inputs: string[]): PipeDelimitedValue[]` - Batch processing
+      - Implement `parseCommaSeparatedUnique(value: string): string[]` - With deduplication
       - Add JSDoc comments with examples
       - Handle edge cases (empty strings, multiple pipes, etc.)
 
-#### File Utilities Module
-- [ ] [M14-T03] Create `/src/lib/file-utils.ts`
+##### File Utilities Module
+- [x] [M14-T03] Create `/src/lib/file-utils.ts`
       - Implement `readContentFile(path: string): Promise<{ success: boolean; content?: string; error?: string }>`
       - Include ENOENT (file not found) error handling
       - Include EACCES (permission denied) error handling
       - Include generic error fallback
       - Return structured results with user-friendly error messages
 
-#### Resolution Module
-- [ ] [M14-T04] Create `/src/lib/resolution.ts`
+##### Resolution Module
+- [x] [M14-T04] Create `/src/lib/resolution.ts`
       - Implement `resolveStatus(input: string, entityType: 'project-status' | 'workflow-state'): Promise<{ success: boolean; id?: string; error?: string }>`
       - Encapsulates: try alias first, then name/ID lookup
       - Include proper console logging ("📎 Resolved...", "✓ Found...")
       - Eliminates 28-line duplicate between create and update
 
-#### Refactor Existing Code
-- [ ] [M14-T05] Refactor `project/update.ts` to use validators
+#### Phase 2: Caching Infrastructure (NEW)
+
+##### Entity Cache Foundation
+- [x] [M14-T11] Create `/src/lib/entity-cache.ts` - Unified in-memory cache
+      - Implement `EntityCache` class with Maps for: teams, initiatives, members, templates, labels
+      - Methods: `getTeams()`, `getInitiatives()`, `getMembers()`, `getTemplates()`, `getLabels()`
+      - Lookup methods: `findTeamById()`, `findMemberByEmail()`, etc.
+      - Cache management: `clear()`, `clearEntity()`, `invalidateIfExpired()`
+      - Singleton pattern: `getEntityCache()` returns shared instance
+      - TTL checking with configurable expiration
+      - Thread-safe Map operations
+
+- [ ] [M14-T12] Extend `/src/lib/status-cache.ts` pattern to teams/initiatives
+      - Add `cacheTeams()`, `getCachedTeams()` functions
+      - Add `cacheInitiatives()`, `getCachedInitiatives()` functions
+      - Add `cacheTemplates()`, `getCachedTemplates()` functions
+      - Use same TTL strategy as existing status cache (60 min default)
+      - File storage: `.linear-create/entity-cache.json`
+      - Per-entity timestamps for independent expiration
+
+- [x] [M14-T13] Create `/src/lib/batch-fetcher.ts` - Batch API calls
+      - Implement `batchFetchEntities(options: BatchFetchOptions): Promise<...>`
+      - Implement `prewarmProjectCreation(): Promise<void>` - Fetch teams, initiatives, templates in parallel
+      - Implement `prewarmProjectUpdate(): Promise<void>` - Lighter version for updates
+      - Use Promise.all for parallel fetching
+      - Populate entity cache automatically
+      - Error handling for individual fetch failures
+
+##### Update Resolution Functions
+- [x] [M14-T14] Update `/src/lib/linear-client.ts` validation functions to use cache
+      - Update `validateTeamExists()` - Use entity cache instead of API call
+      - Update `validateInitiativeExists()` - Use entity cache instead of API call
+      - Update `getTemplateById()` - Use entity cache instead of API call
+      - Update `resolveMemberIdentifier()` - Use cached member list (0 API calls after first fetch)
+      - Keep existing function signatures (backward compatible)
+      - Add console output showing cache hits
+
+- [x] [M14-T15] Update `/src/commands/project/create.tsx` to use batch fetching
+      - Add `await prewarmProjectCreation()` at start of command (after line 50)
+      - Console: "🔄 Loading workspace data..."
+      - Parallelize validation (lines 195-212): use Promise.all for initiative + team
+      - Members already batched (lines 244-271) - first call fetches all, subsequent use cache
+      - Verify API call reduction: 18-20 → 6-8 calls
+
+- [x] [M14-T16] Update `/src/commands/project/update.ts` to use batch fetching
+      - Add conditional prewarm (after line 17): only if status/team/lead/members provided
+      - Use lighter `prewarmProjectUpdate()` function
+      - Verify API call reduction: 5-8 → 3-4 calls
+
+##### Configuration & Management
+- [ ] [M14-T17] Add cache configuration options to `src/lib/config.ts`
+      - Add `entityCacheMinTTL?: number` (default: 60)
+      - Add `enableEntityCache?: boolean` (default: true)
+      - Add `enablePersistentCache?: boolean` (default: true)
+      - Add `enableSessionCache?: boolean` (default: true)
+      - Add `enableBatchFetching?: boolean` (default: true)
+      - Add `prewarmCacheOnCreate?: boolean` (default: true)
+
+- [ ] [M14-T18] Add cache management commands (optional)
+      - Create `src/commands/cache/clear.ts` - Clear all or specific entity cache
+      - Create `src/commands/cache/stats.ts` - Show cache hit/miss stats, size, TTL
+      - Register in CLI: `linear-create cache clear [entity-type]`
+      - Register in CLI: `linear-create cache stats`
+
+#### Phase 1 Refactoring (Original M14)
+
+##### Refactor Existing Code
+- [x] [M14-T05] Refactor `project/update.ts` to use validators
       - Replace inline priority validation (lines 97-108) with `validatePriority()`
       - Test that validation still works correctly
       - Verify error messages are unchanged
 
-- [ ] [M14-T06] Refactor workflow-states commands to use validators
+- [x] [M14-T06] Refactor workflow-states commands to use validators
       - Update `workflow-states/create.ts` to use `validateAndNormalizeColor()`
       - Update `workflow-states/update.ts` to use `validateAndNormalizeColor()`
       - Update `workflow-states/create.ts` to use `validateEnumValue()` for type validation
       - Update `workflow-states/update.ts` to use `validateEnumValue()` for type validation
+      - Removed unused imports from colors.js
 
-- [ ] [M14-T07] Refactor issue-labels commands to use validators
+- [x] [M14-T07] Refactor issue-labels commands to use validators
       - Update `issue-labels/create.ts` to use `validateAndNormalizeColor()`
       - Update `issue-labels/update.ts` to use `validateAndNormalizeColor()`
+      - Removed unused imports from colors.js
 
-- [ ] [M14-T08] Refactor project-labels commands to use validators
+- [x] [M14-T08] Refactor project-labels commands to use validators
       - Update `project-labels/create.ts` to use `validateAndNormalizeColor()`
       - Update `project-labels/update.ts` to use `validateAndNormalizeColor()`
+      - Removed unused imports from colors.js
 
-- [ ] [M14-T09] Refactor project commands to use parsers
+- [x] [M14-T09] Refactor project commands to use parsers
       - Update `project/create.tsx` to use `parseCommaSeparated()` for members parsing
       - Update `project/create.tsx` to use `parseCommaSeparated()` for labels parsing
-      - Update `project/create.tsx` to use `parsePipeDelimited()` for links parsing (if applicable)
+      - Update `project/create.tsx` to use `parsePipeDelimitedArray()` for links parsing
 
-- [ ] [M14-T10] Refactor status resolution to use shared utility
-      - Update `project/create.tsx` (lines 151-179) to use `resolveStatus()`
-      - Update `project/update.ts` (lines 82-113) to use `resolveStatus()`
-      - Verify console output matches previous behavior
-      - Eliminate 28-line near-duplicate
+- [x] [M14-T10] Refactor status resolution to use shared utility
+      - Update `project/create.tsx` (lines 151-179) to use `resolveStatusOrThrow()`
+      - Update `project/update.ts` (lines 82-113) to use `resolveStatusOrThrow()`
+      - Removed unused imports: `resolveProjectStatusId`, `resolveAlias` from project/update.ts
+      - Removed unused imports: `resolveProjectStatusId` from project/create.tsx
+      - Eliminate 28-line near-duplicate ✓
 
 ### Tests
-- [ ] [M14-TS01] Unit test `validatePriority()` with valid/invalid values
-      - Test valid range (0-4)
-      - Test invalid (negative, >4, NaN, string)
-      - Test return structure
 
-- [ ] [M14-TS02] Unit test `validateAndNormalizeColor()` with/without # prefix
+**Note**: See detailed implementation in:
+- [M14_TS_IMPLEMENTATION_OVERVIEW.md](./M14_TS_IMPLEMENTATION_OVERVIEW.md) - Complete strategy and timeline
+- [M14_TS_P1_IMPLEMENTATION_UNIT.md](./M14_TS_P1_IMPLEMENTATION_UNIT.md) - Unit test details
+- [M14_TS_P2_IMPLEMENTATION_E2E.md](./M14_TS_P2_IMPLEMENTATION_E2E.md) - E2E test details
+
+**Timeline**: 5 weeks (~94 hours total)
+- Phase 1 (Weeks 1-2): Unit tests - ~38 hours
+- Phase 2 (Weeks 3-4): E2E tests - ~36 hours
+- Phase 3 (Week 5): Integration & polish - ~20 hours
+
+**Test File Structure**:
+- Unit tests: `tests/unit/**/*.test.ts`
+- E2E tests: `tests/e2e/**/*.e2e.ts`
+- Existing bash tests: `tests/scripts/**/*.sh` (kept separate)
+
+#### Test Framework & Setup (4 tasks)
+- [ ] [M14-INT01] Install Vitest and configure test environment
+      File: `tests/vitest.config.ts`, `package.json`
+      - Install vitest, @vitest/ui, @vitest/coverage-v8 as dev dependencies
+      - Configure test patterns: tests/unit/**/*.test.ts
+      - Enable coverage reporting (v8 provider)
+      - Set up ESM/TypeScript support for Node.js type: "module"
+      - Add test scripts: test, test:unit, test:e2e, test:watch, test:coverage, test:ui
+      - Configure test environment and globals
+
+- [ ] [M14-INT02] Create test utilities and mocking helpers
+      File: `tests/unit/fixtures/`, `tests/unit/helpers/`
+      - Mock Linear API responses (teams, initiatives, members, templates)
+      - Mock file system operations (fs.readFileSync, fs.writeFileSync)
+      - Mock entity cache data with factory functions
+      - Create assertion helpers for common patterns
+      - Export mock builders for easy test setup
+      - Document mock usage patterns
+
+- [ ] [M14-INT03] Update package.json with test scripts
+      File: `package.json`
+      - Add "test" script: "npm run test:unit && npm run test:e2e"
+      - Add "test:unit" script: "vitest run"
+      - Add "test:unit:watch" script: "vitest"
+      - Add "test:unit:coverage" script: "vitest run --coverage"
+      - Add "test:e2e" script: "tsx tests/e2e/runner.ts"
+      - Add "test:e2e:setup" script for E2E configuration
+
+- [ ] [M14-INT04] Verify test infrastructure works
+      - Create simple smoke test
+      - Run test scripts to verify configuration
+      - Verify coverage reports generate
+      - Verify watch mode works
+      - Verify TypeScript types in tests
+
+#### Unit Tests - Phase 1 (Fast, Isolated, ~100+ tests initially, expandable)
+**Note**: Initial target is ~100 tests covering core utilities. The 360 test comprehensive suite below represents the full possible scope - review and prioritize based on M14 needs.
+
+- [ ] [M14-UT01] Unit test validators module
+      File: `tests/unit/lib/validators.test.ts` (~50 tests)
+      **validatePriority()** (~10 tests):
+      - Test valid range (0-4)
+      - Test invalid (negative, >4, NaN, string, null, undefined)
+      - Test return structure (valid, value, error)
+      **validateAndNormalizeColor()** (~15 tests):
       - Test valid hex with # (#FF6B6B)
       - Test valid hex without # (FF6B6B)
-      - Test invalid hex (ZZZZZZ, short codes)
-      - Test normalization (adds # if missing)
+      - Test invalid hex (ZZZZZZ, GGG, short codes)
+      - Test normalization (adds # if missing, uppercase)
+      - Test edge cases (empty, null, special chars)
+      **validateEnumValue()** (~10 tests):
+      - Test valid values from allowed list
+      - Test invalid values not in list
+      - Test case sensitivity
+      - Test empty/null values
+      **validateISODate()** (~10 tests):
+      - Test valid ISO dates
+      - Test invalid formats
+      - Test edge cases
+      **validateNonEmpty()** (~5 tests):
+      - Test non-empty strings
+      - Test empty, whitespace, null, undefined
+      Mocking: None (pure functions)
+      Coverage target: 100%
 
-- [ ] [M14-TS03] Unit test `parseCommaSeparated()` with various inputs
+- [ ] [M14-UT02] Unit test parsers module
+      File: `tests/unit/lib/parsers.test.ts` (~40 tests)
+      **parseCommaSeparated()** (~10 tests):
       - Test normal case ("a,b,c")
       - Test with spaces ("a, b , c")
       - Test with empty segments ("a,,c")
       - Test empty string ("")
       - Test single value ("a")
-
-- [ ] [M14-TS04] Unit test `parsePipeDelimited()` for link format
+      - Test trailing commas
+      **parsePipeDelimited()** (~8 tests):
       - Test "URL|Label" format
       - Test "URL" format (no label)
       - Test multiple pipes edge case
       - Test empty strings
+      **parseLifecycleDate()** (~10 tests):
+      - Test "now" keyword
+      - Test valid ISO date "2025-01-15"
+      - Test invalid format "01/15/2025"
+      - Test invalid date "2025-13-45"
+      - Test edge cases (empty, null)
+      **parseCommaSeparatedUnique()** (~6 tests):
+      - Test deduplication
+      - Test case sensitivity
+      **parsePipeDelimitedArray()** (~6 tests):
+      - Test batch processing
+      - Test mixed formats
+      Mocking: None (pure functions)
+      Coverage target: 100%
 
-- [ ] [M14-TS05] Unit test `readContentFile()` with missing file, permission errors
-      - Mock ENOENT error (file not found)
-      - Mock EACCES error (permission denied)
-      - Mock success case
-      - Verify error message quality
+- [ ] [M14-UT03] Unit test file-utils module
+      File: `tests/unit/lib/file-utils.test.ts` (~15 tests)
+      **readContentFile()** (~15 tests):
+      - Mock success case with actual content
+      - Mock ENOENT error (file not found) - verify error message
+      - Mock EACCES error (permission denied) - verify error message
+      - Mock generic errors - fallback handling
+      - Test empty files
+      - Test large files
+      - Test different encodings
+      - Test return structure (success, content, error)
+      Mocking: `fs` module (readFileSync, existsSync)
+      Coverage target: 100%
 
-- [ ] [M14-TS06] Integration test `resolveStatus()` with project-status
-      - Test with alias (should resolve)
-      - Test with ID (should use directly)
-      - Test with name (should lookup)
-      - Test with invalid (should return error)
+- [ ] [M14-UT04] Unit test resolution module
+      File: `tests/unit/lib/resolution.test.ts` (~20 tests)
+      **resolveStatus()** for project-status (~10 tests):
+      - Test with alias (mock alias resolution)
+      - Test with ID (direct pass-through)
+      - Test with name (mock status cache lookup)
+      - Test invalid input (should return error structure)
+      - Test error cases
+      **resolveStatus()** for workflow-state (~10 tests):
+      - Same tests as project-status but for workflow states
+      - Verify type parameter affects lookup
+      Mocking: `aliases.js` (resolveAlias), `status-cache.js` (getProjectStatuses)
+      Coverage target: 100%
 
-- [ ] [M14-TS07] Regression test - create/update still work after refactor
-      - Run `project create` with all options
-      - Run `project update` with all options
-      - Run `workflow-states create` with color
-      - Run `issue-labels create` with color
-      - Verify no behavior changes
+#### Unit Tests - Phase 1 Caching (~180 tests)
+- [ ] [M14-UT05] Unit test entity-cache module
+      File: `tests/unit/lib/entity-cache.test.ts` (~60 tests)
+      **EntityCache class** (~60 tests):
+      - getTeams() - session cache, persistent cache, API fallback (~10 tests)
+      - getInitiatives() - hybrid caching strategy (~10 tests)
+      - getMembers() - cache behavior with options (~10 tests)
+      - getTemplates() - hybrid caching (~10 tests)
+      - findTeamById(), findMemberByEmail() - lookup functions (~8 tests)
+      - TTL expiration - cache invalidation (~6 tests)
+      - clear(), clearEntity() - cache clearing (~4 tests)
+      - invalidateIfExpired() - expiration logic (~4 tests)
+      - Config checks - enableEntityCache, enableSessionCache, enablePersistentCache (~8 tests)
+      Mocking: `linear-client.js` (getAllTeams, etc.), `status-cache.js`, `config.js`
+      Coverage target: >90%
+
+- [ ] [M14-UT06] Unit test batch-fetcher module
+      File: `tests/unit/lib/batch-fetcher.test.ts` (~40 tests)
+      **batchFetchEntities()** (~15 tests):
+      - Parallel fetching with Promise.all
+      - Individual fetch failures don't fail batch
+      - Error collection
+      - Cache population after fetch
+      **prewarmProjectCreation()** (~8 tests):
+      - Fetches teams, initiatives, templates, members
+      - Populates entity cache
+      - Error handling
+      **prewarmProjectUpdate()** (~5 tests):
+      - Lighter version (teams, members only)
+      **prewarmEntities()** (~5 tests):
+      - Selective prewarming by entity type
+      **refreshCache()** (~4 tests):
+      - Cache clearing + refetch
+      **getCacheStatus()** (~3 tests):
+      - Statistics without fetching
+      **Config checks** (~5 tests):
+      - enableBatchFetching (parallel vs sequential)
+      Mocking: `entity-cache.js`, `linear-client.js`, `config.js`
+      Coverage target: >85%
+
+- [ ] [M14-UT07] Unit test status-cache module (persistent cache)
+      File: `tests/unit/lib/status-cache.test.ts` (~60 tests)
+      **Project statuses** (~12 tests):
+      - getCachedProjectStatuses(), refreshStatusCache(), clearStatusCache()
+      - TTL expiration
+      - File I/O error handling
+      **Teams cache** (~12 tests):
+      - getCachedTeams(), refreshTeamsCache(), clearTeamsCache()
+      - TTL validation
+      **Initiatives cache** (~12 tests):
+      - getCachedInitiatives(), refreshInitiativesCache(), clearInitiativesCache()
+      **Members cache** (~12 tests):
+      - getCachedMembers(), refreshMembersCache(), clearMembersCache()
+      **Templates cache** (~12 tests):
+      - getCachedTemplates(), refreshTemplatesCache(), clearTemplatesCache()
+      **Utility functions** (~10 tests):
+      - clearAllCache() - clears all entity caches
+      - isCacheValid() - TTL checking
+      - readCache(), writeCache() - file I/O with error handling
+      **Config checks** (~5 tests):
+      - enablePersistentCache flag
+      Mocking: `fs` module, `linear-client.js`, `config.js`
+      Coverage target: >85%
+
+- [ ] [M14-UT08] Unit test config module
+      File: `tests/unit/lib/config.test.ts` (~30 tests)
+      **getConfig()** (~10 tests):
+      - Priority: project > global > env
+      - Location tracking
+      - Default values
+      **setConfigValue()** (~12 tests):
+      - Validation for each cache config key
+      - Boolean parsing ("true", "1", "yes", "false", "0", "no")
+      - Number parsing - TTL validation (1-1440)
+      - Invalid values - proper error messages
+      **unsetConfigValue()** (~4 tests):
+      - Removal from global/project config
+      **File operations** (~4 tests):
+      - Mock fs operations
+      - Error handling
+      Mocking: `fs` module
+      Coverage target: >80%
+
+- [ ] [M14-UT09] Unit test cache commands
+      File: `tests/unit/commands/cache/stats.test.ts` (~10 tests)
+      - Output formatting
+      - Shows all config flags
+      - Shows cache status for all entities
+      - Age formatting (seconds, minutes, hours)
+      File: `tests/unit/commands/cache/clear.test.ts` (~15 tests)
+      - Clear all caches (session + persistent)
+      - Clear specific entity (--entity teams)
+      - Invalid entity type (error handling)
+      - Verify both session and persistent cache cleared
+      Mocking: `entity-cache.js`, `status-cache.js`
+      Coverage target: >75%
+
+- [ ] [M14-UT10] Unit test linear-client validation functions
+      File: `tests/unit/lib/linear-client.test.ts` (~40 tests)
+      **Validation functions with mocked entity cache** (~40 tests):
+      - validateTeamExists() - uses entity cache (~10 tests)
+      - validateInitiativeExists() - uses entity cache (~10 tests)
+      - getTemplateById() - uses entity cache (~10 tests)
+      - resolveMemberIdentifier() - uses cached member list (~10 tests)
+      - Verify 0 API calls after cache populated
+      - Error cases - not found scenarios
+      Mocking: `entity-cache.js`, Linear SDK
+      Coverage target: >80%
+
+#### E2E Tests - Phase 2 (Real API, 6-7 focused tests)
+**Note**: Simplified from original 63 test plan to focus on core caching validation scenarios.
+
+- [ ] [M14-E2E01] E2E test - project create with caching (basic validation)
+      File: `tests/e2e/specs/project-create.e2e.ts`
+      **API call counting** (~10 tests):
+      - Instrument Linear SDK to count API calls
+      - First project create with 5 members - verify ≤8 API calls (60-70% reduction from 18-20)
+      - Second project create - verify cache hits (even fewer calls)
+      - Third create with different options - verify cache reuse
+      - Measure wall-clock time improvement (50-70% faster)
+      - Verify cache is populated after first call
+      - Test with various field combinations
+      Requires: Real Linear API key, test workspace
+      Success criteria: ≤8 API calls per create, >50% time reduction
+
+- [ ] [M14-E2E02] E2E test - project update with caching
+      File: `tests/e2e/specs/project-update.e2e.ts`
+      **API call counting** (~8 tests):
+      - Instrument Linear SDK to count API calls
+      - Project update with status change - verify ≤4 API calls (40-50% reduction from 5-8)
+      - Multiple updates in sequence - verify cache reuse
+      - Test with different field combinations
+      - Measure performance improvement
+      Requires: Real Linear API key, test workspace
+      Success criteria: ≤4 API calls per update
+
+- [ ] [M14-E2E03] E2E test - regression (no breaking changes)
+      File: `tests/e2e/specs/regression.e2e.ts`
+      **Regression testing** (~2 tests):
+      - Run `project create` with all fields - verify behavior unchanged
+      - Run `project update` with all fields - verify behavior unchanged
+      - Verify output messages unchanged
+      - Verify error messages unchanged
+      Requires: Real Linear API key, test workspace
+      Success criteria: All commands work identically to pre-M14 behavior
+
+- [ ] [M14-E2E04] E2E test - caching performance (API call reduction)
+      File: `tests/e2e/specs/caching-performance.e2e.ts`
+      **API call reduction measurement** (~2 tests):
+      - Measure API calls: baseline (no cache) vs cached for project create
+      - Calculate and verify 60-70% reduction target met
+      - Baseline: create project without prewarm
+      - Cached: create project with prewarm
+      Requires: Real Linear API key
+      Success criteria: ≥60% reduction in API calls
+
+- [ ] [M14-E2E05] E2E test - caching performance (time reduction)
+      File: `tests/e2e/specs/caching-performance.e2e.ts`
+      **Wall-clock time measurement** (~1 test):
+      - Measure execution time: baseline vs cached
+      - Calculate and verify 50-70% time reduction
+      Requires: Real Linear API key
+      Success criteria: ≥50% reduction in execution time
+
+#### Test Summary & Success Criteria
+
+**Phase 1 - Unit Tests:**
+- Initial target: ~100+ unit tests across 10 test suites (core utilities + caching)
+- Comprehensive target: ~360 tests (includes all edge cases, config, cache commands) - review and prioritize
+- Execution time: <10 seconds for all unit tests
+- Coverage target: >80% on all M14 modules (validators, parsers, file-utils, resolution, entity-cache, batch-fetcher, status-cache)
+- All tests must pass
+- Located in tests/unit/**/*.test.ts
+
+**Phase 2 - E2E Tests:**
+- Total: 5 focused E2E test suites (simplified from 63 comprehensive tests)
+- Tests: project-create, project-update, regression, caching-performance (API + time)
+- Execution time: 2-5 minutes for all E2E tests
+- Requires: Real Linear API key and test workspace
+- Located in tests/e2e/specs/*.e2e.ts
+- Verifies real-world performance improvements (60-70% API call reduction, 50-70% time reduction)
+
+**Overall Success Criteria:**
+- ✅ All ~100+ unit tests passing (or more if expanded)
+- ✅ All 5 E2E test suites passing
+- ✅ >80% code coverage on M14 modules
+- ✅ 60-70% API call reduction verified in E2E tests
+- ✅ 50-70% time reduction verified in E2E tests
+- ✅ No regression in existing functionality
+- ✅ Fast test execution (<10s unit, 2-5min E2E)
+- ✅ CI/CD ready with test scripts
+- ✅ Existing bash tests remain functional and separate
+
+**Test Scripts Available:**
+```bash
+npm test                  # Run all tests
+npm run test:unit         # Run unit tests only (fast)
+npm run test:e2e          # Run E2E tests only (slower, requires API key)
+npm run test:watch        # Watch mode for TDD
+npm run test:coverage     # Generate coverage report
+npm run test:ui           # Visual test UI
+```
+
+**Test File Structure:**
+```
+tests/
+  unit/                     # Unit tests (Phase 1)
+    lib/
+      validators.test.ts    # M14-UT01 (~50 tests)
+      parsers.test.ts       # M14-UT02 (~40 tests)
+      file-utils.test.ts    # M14-UT03 (~15 tests)
+      resolution.test.ts    # M14-UT04 (~20 tests)
+      entity-cache.test.ts  # M14-UT05 (~60 tests)
+      batch-fetcher.test.ts # M14-UT06 (~40 tests)
+      status-cache.test.ts  # M14-UT07 (~60 tests)
+      config.test.ts        # M14-UT08 (~30 tests)
+      linear-client.test.ts # M14-UT10 (~40 tests)
+    commands/
+      cache/
+        stats.test.ts       # M14-UT09 (~10 tests)
+        clear.test.ts       # M14-UT09 (~15 tests)
+    fixtures/               # Mock data
+    helpers/                # Test utilities
+
+  e2e/                      # E2E tests (Phase 2)
+    specs/
+      project-create.e2e.ts         # M14-E2E01
+      project-update.e2e.ts         # M14-E2E02 (optional)
+      regression.e2e.ts             # M14-E2E03
+      caching-performance.e2e.ts    # M14-E2E04, M14-E2E05
+    setup/
+      e2e-config.ts         # Config manager
+      interactive-setup.ts  # Interactive team/initiative selector
+      random-selector.ts    # Random fallback for CI
+      preflight-check.ts    # Pre-test validation
+    lib/
+      test-runner.ts        # E2E test framework
+      cleanup-tracker.ts    # Track created entities
+      api-call-tracker.ts   # Count API calls
+    runner.ts               # Main entry point
+
+  scripts/                  # Existing bash tests (separate)
+    test-project-create.sh
+    test-project-update.sh
+    run-all-tests.sh
+
+  vitest.config.ts          # Vitest configuration
+```
 
 ### Deliverable
 ```bash
-# Clean, reusable utility library
-src/lib/validators.ts    # Priority, color, enum validation
-src/lib/parsers.ts       # CSV and pipe-delimited parsing
+# Clean, reusable utility library (Phase 1)
+src/lib/validators.ts    # Priority, color, enum, date validation
+src/lib/parsers.ts       # CSV, pipe-delimited, date parsing
 src/lib/file-utils.ts    # Safe file reading
 src/lib/resolution.ts    # Status resolution logic
 
-# Refactored commands using utilities
-src/commands/project/update.ts          # Uses validators
-src/commands/project/create.tsx         # Uses parsers, resolution
+# Caching infrastructure (Phase 2)
+src/lib/entity-cache.ts           # In-memory entity cache
+src/lib/batch-fetcher.ts          # Batch API call utilities
+src/lib/status-cache.ts           # Extended for teams/initiatives/templates
+
+# Updated commands using utilities + caching
+src/commands/project/update.ts          # Uses validators + caching
+src/commands/project/create.tsx         # Uses parsers + resolution + caching
 src/commands/workflow-states/*.ts       # Uses validators
 src/commands/issue-labels/*.ts          # Uses validators
 src/commands/project-labels/*.ts        # Uses validators
+
+# Optional cache management commands
+src/commands/cache/clear.ts       # Clear cache
+src/commands/cache/stats.ts       # Show cache stats
 ```
+
+### API Call Reduction Breakdown
+
+**Project Create (5 members, 2 links):**
+- BEFORE: 18-20 API calls
+- AFTER: 6-8 API calls
+- SAVINGS: 60-70% reduction
+
+**Project Update:**
+- BEFORE: 5-8 API calls
+- AFTER: 3-4 API calls
+- SAVINGS: 40-50% reduction
+
+**Performance:**
+- Wall-clock time: 50-70% faster
+- First run: Cache populated (3-4 batch calls)
+- Subsequent runs: Cache hits (near-instant validation)
 
 ### Automated Verification
 - `npm run build` succeeds
 - `npm run lint` passes
 - `npm run typecheck` passes
 - All unit tests pass
+- All integration tests pass
+- Performance benchmarks show expected improvements
 
 ### Manual Verification
 - Existing commands work identically (no behavior changes)
 - Error messages are unchanged
-- Console output matches previous version
+- Console output matches previous version (plus cache status)
 - ~90 lines of duplicate code eliminated
+- API calls reduced by 60-70% (verify with API call logging)
+- Commands feel noticeably faster
 
 ---
 
