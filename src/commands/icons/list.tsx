@@ -12,19 +12,6 @@ interface IconsListProps {
 function IconsList({ search, category, format }: IconsListProps) {
   const icons = search ? searchIcons(search) : category ? getIconsByCategory(category) : CURATED_ICONS;
 
-  if (format === 'json') {
-    console.log(JSON.stringify(icons, null, 2));
-    process.exit(0);
-  }
-
-  if (format === 'tsv') {
-    console.log('Name\tEmoji\tUnicode\tCategory');
-    for (const icon of icons) {
-      console.log(`${icon.name}\t${icon.emoji}\t${icon.unicode || ''}\t${icon.category || ''}`);
-    }
-    process.exit(0);
-  }
-
   if (icons.length === 0) {
     return <Text color="yellow">No icons found</Text>;
   }
@@ -67,6 +54,22 @@ export function listIcons(program: Command) {
     .option('--category <category>', 'Filter by category')
     .option('-f, --format <type>', 'Output format (json|tsv|grid)', 'grid')
     .action(async (options) => {
+      // Handle JSON/TSV output before rendering React component
+      if (options.format === 'json' || options.format === 'tsv') {
+        const icons = options.search ? searchIcons(options.search) : options.category ? getIconsByCategory(options.category) : CURATED_ICONS;
+
+        if (options.format === 'json') {
+          console.log(JSON.stringify(icons, null, 2));
+        } else if (options.format === 'tsv') {
+          console.log('Name\tEmoji\tUnicode\tCategory');
+          for (const icon of icons) {
+            console.log(`${icon.name}\t${icon.emoji}\t${icon.unicode || ''}\t${icon.category || ''}`);
+          }
+        }
+        process.exit(0);
+      }
+
+      // Render interactive UI for grid format
       render(<IconsList search={options.search} category={options.category} format={options.format} />);
     });
 }

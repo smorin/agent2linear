@@ -1,4 +1,74 @@
-# Icons Extract - Bug Fix & Team Scoping
+# Icons Documentation
+
+## Icon Field Format for Project Creation
+
+### Valid Icon Values
+
+When creating or updating projects with the `--icon` flag, Linear expects **capitalized icon name identifiers**, not raw emoji characters.
+
+**❌ INCORRECT (will fail with "icon is not a valid icon"):**
+```bash
+linear-create project create --title "My Project" --team team_xxx --icon '🚀'
+linear-create project create --title "My Project" --team team_xxx --icon '🎨'
+linear-create project create --title "My Project" --team team_xxx --icon 'rocket'  # lowercase won't work
+```
+
+**✅ CORRECT (use capitalized icon names):**
+```bash
+linear-create project create --title "My Project" --team team_xxx --icon 'Joystick'
+linear-create project create --title "My Project" --team team_xxx --icon 'Tree'
+linear-create project create --title "My Project" --team team_xxx --icon 'Skull'
+linear-create project create --title "My Project" --team team_xxx --icon 'Email'
+linear-create project create --title "My Project" --team team_xxx --icon 'Checklist'
+```
+
+### Browsing Available Icons
+
+To see all available icon names and their corresponding emoji:
+
+```bash
+# List all curated icons
+linear-create icons list
+
+# Search for specific icons
+linear-create icons list --search rocket
+
+# Filter by category
+linear-create icons list --category status
+
+# Output as JSON for programmatic use
+linear-create icons list --format json
+```
+
+### Common Icon Names
+
+**Important:** Linear icon names are **capitalized** (PascalCase).
+
+Here are some verified working icon names:
+
+**Confirmed Working Icons:**
+- `Joystick` 🕹️
+- `Tree` 🌳
+- `Skull` 💀
+- `Email` 📧
+- `Checklist` ✅
+
+**Additional Common Icons (capitalize first letter):**
+- `Bug`, `Sparkles`, `Fire`, `Check`, `Cross`, `Warning`, `Alert`, `Hourglass`, `Rocket`, `Construction`
+- `Art`, `Gear`, `Wrench`, `Hammer`, `Microscope`, `Lightbulb`, `Key`, `Lock`, `Book`, `Memo`
+- `People`, `Person`, `Speech`, `Bell`, `Eyes`, `Hand`
+- `Star`, `Flag`, `Target`, `Heart`, `Clock`, `Calendar`, `Chart`, `Graph`
+- `Computer`, `Mobile`, `Database`, `Server`, `Cloud`, `Link`, `Package`, `Folder`
+- `Building`, `Briefcase`, `Money`, `Trophy`, `Medal`
+
+**Note:** The exact list of valid Linear icons may differ from the curated list shown by `linear-create icons list`. Use the `icons extract` command to see icons actually used in your workspace:
+```bash
+linear-create icons extract --type projects --workspace
+```
+
+---
+
+## Icons Extract Command - Bug Fix & Team Scoping
 
 ## Current Issue
 

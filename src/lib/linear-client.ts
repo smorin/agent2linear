@@ -645,7 +645,6 @@ export async function getAllProjects(teamId?: string): Promise<Project[]> {
 export interface ProjectCreateInput {
   name: string;
   description?: string;
-  state?: 'planned' | 'started' | 'paused' | 'completed' | 'canceled';
   initiativeId?: string;
   teamId?: string;
   templateId?: string;

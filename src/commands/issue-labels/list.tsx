@@ -130,6 +130,47 @@ export function listIssueLabels(program: Command) {
     .option('--color <hex>', 'Filter by color (hex code)')
     .option('-f, --format <type>', 'Output format (json|tsv)', 'default')
     .action(async (options) => {
+      // Handle JSON/TSV output before rendering React component
+      if (options.format === 'json' || options.format === 'tsv') {
+        try {
+          let resolvedTeamId = options.team;
+
+          // Use defaultTeam if no team specified and not workspace-only
+          if (!resolvedTeamId && !options.workspace) {
+            const config = getConfig();
+            if (config.defaultTeam) {
+              resolvedTeamId = config.defaultTeam;
+            }
+          }
+
+          // Resolve team alias if provided
+          if (resolvedTeamId) {
+            resolvedTeamId = resolveAlias('team', resolvedTeamId);
+          }
+
+          let allLabels = await getAllIssueLabels(options.workspace ? undefined : resolvedTeamId);
+
+          // Apply filters
+          if (options.color) {
+            allLabels = allLabels.filter(l => l.color.toUpperCase() === options.color.toUpperCase());
+          }
+
+          if (options.format === 'json') {
+            console.log(JSON.stringify(allLabels, null, 2));
+          } else if (options.format === 'tsv') {
+            console.log('ID\tName\tColor\tDescription\tTeam');
+            for (const label of allLabels) {
+              console.log(`${label.id}\t${label.name}\t${label.color}\t${label.description || ''}\t${label.teamId || 'workspace'}`);
+            }
+          }
+          process.exit(0);
+        } catch (err) {
+          console.error('Error:', err instanceof Error ? err.message : 'Unknown error');
+          process.exit(1);
+        }
+      }
+
+      // Render interactive UI for default format
       render(
         <IssueLabelsList
           teamId={options.team}

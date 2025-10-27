@@ -103,6 +103,45 @@ export function listWorkflowStates(program: Command) {
     .option('--color <hex>', 'Filter by color (hex code)')
     .option('-f, --format <type>', 'Output format (json|tsv)', 'default')
     .action(async (options) => {
+      // Handle JSON/TSV output before rendering React component
+      if (options.format === 'json' || options.format === 'tsv') {
+        try {
+          let resolvedTeamId = options.team;
+          if (!resolvedTeamId) {
+            const config = getConfig();
+            if (config.defaultTeam) {
+              resolvedTeamId = config.defaultTeam;
+            }
+          }
+          if (resolvedTeamId) {
+            resolvedTeamId = resolveAlias('team', resolvedTeamId);
+          }
+
+          let allStates = await getAllWorkflowStates(resolvedTeamId);
+
+          if (options.type) {
+            allStates = allStates.filter(s => s.type === options.type);
+          }
+          if (options.color) {
+            allStates = allStates.filter(s => s.color.toUpperCase() === options.color.toUpperCase());
+          }
+
+          if (options.format === 'json') {
+            console.log(JSON.stringify(allStates, null, 2));
+          } else if (options.format === 'tsv') {
+            console.log('ID\tName\tType\tColor\tPosition\tTeam');
+            for (const state of allStates) {
+              console.log(`${state.id}\t${state.name}\t${state.type}\t${state.color}\t${state.position}\t${state.teamId}`);
+            }
+          }
+          process.exit(0);
+        } catch (err) {
+          console.error('Error:', err instanceof Error ? err.message : 'Unknown error');
+          process.exit(1);
+        }
+      }
+
+      // Render interactive UI for default format
       render(
         <WorkflowStatesList
           teamId={options.team}

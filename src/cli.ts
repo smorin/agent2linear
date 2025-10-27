@@ -172,18 +172,13 @@ project
   .option('-w, --web', 'Open Linear in browser to create project')
   .option('-t, --title <title>', 'Project title (minimum 3 characters)')
   .option('-d, --description <description>', 'Project description')
-  .addOption(
-    new Option('-s, --state <state>', 'Project state')
-      .choices(['planned', 'started', 'paused', 'completed', 'canceled'])
-      .default('planned')
-  )
   .option('-i, --initiative <id>', 'Initiative ID to link project to (format: init_xxx)')
   .option('--team <id>', 'Team ID to assign project to (format: team_xxx)')
   .option('--template <id>', 'Template ID to use for project creation (format: template_xxx)')
   .option('--status <id>', 'Project status ID (format: status_xxx)')
   .option('--content <markdown>', 'Project content as markdown')
   .option('--content-file <path>', 'Path to file containing project content (markdown)')
-  .option('--icon <icon>', 'Project icon (emoji like 🚀 or icon identifier)')
+  .option('--icon <icon>', 'Project icon name (e.g., "Joystick", "Tree", "Skull" - capitalized)')
   .option('--color <hex>', 'Project color (hex code like #FF6B6B)')
   .option('--lead <id>', 'Project lead user ID (format: user_xxx)')
   .option('--no-lead', 'Do not assign a project lead (overrides auto-assign)')
@@ -209,7 +204,7 @@ project
   .addHelpText('after', `
 Examples:
   Basic (auto-assigns you as lead):
-  $ linear-create project create --title "My Project" --state started --team team_xyz789
+  $ linear-create project create --title "My Project" --team team_xyz789
   $ linear-create proj new --title "Quick Project" --team team_xyz789  # Same as 'create' (alias)
   $ linear-create project create --title "Q1 Goals" --initiative init_abc123 --team team_xyz789
 
@@ -231,7 +226,7 @@ Examples:
 
   With additional fields:
   $ linear-create project create --title "Website Redesign" --team team_abc123 \\
-      --icon "🎨" --color "#FF6B6B" --lead user_xyz789 \\
+      --icon "Tree" --color "#FF6B6B" --lead user_xyz789 \\
       --start-date "2025-01-15" --start-date-resolution quarter \\
       --target-date "2025-03-31" --target-date-resolution quarter \\
       --priority 2
@@ -255,7 +250,7 @@ Field Value Formats:
   --status          status_xxx (Linear status ID)
   --content         Inline markdown text
   --content-file    Path to markdown file (mutually exclusive with --content)
-  --icon            🚀 or icon_name
+  --icon            Capitalized icon name like "Joystick", "Tree", "Skull", "Email", "Checklist"
   --color           #FF6B6B (hex color code)
   --lead            user_xxx (Linear user ID)
   --no-lead         Flag to disable lead assignment

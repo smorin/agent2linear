@@ -86,6 +86,31 @@ export function listProjectLabels(program: Command) {
     .option('-f, --format <type>', 'Output format (json|tsv)', 'default')
     .option('-a, --all', 'Include all labels (including archived)')
     .action(async (options) => {
+      // Handle JSON/TSV output before rendering React component
+      if (options.format === 'json' || options.format === 'tsv') {
+        try {
+          let allLabels = await getAllProjectLabels(options.all);
+
+          if (options.color) {
+            allLabels = allLabels.filter(l => l.color.toUpperCase() === options.color.toUpperCase());
+          }
+
+          if (options.format === 'json') {
+            console.log(JSON.stringify(allLabels, null, 2));
+          } else if (options.format === 'tsv') {
+            console.log('ID\tName\tColor\tDescription');
+            for (const label of allLabels) {
+              console.log(`${label.id}\t${label.name}\t${label.color}\t${label.description || ''}`);
+            }
+          }
+          process.exit(0);
+        } catch (err) {
+          console.error('Error:', err instanceof Error ? err.message : 'Unknown error');
+          process.exit(1);
+        }
+      }
+
+      // Render interactive UI for default format
       render(
         <ProjectLabelsList
           colorFilter={options.color}

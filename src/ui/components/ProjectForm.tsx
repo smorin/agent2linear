@@ -49,7 +49,6 @@ export function ProjectForm({ onSubmit, defaultInitiative, defaultTeam }: Projec
     const projectData: ProjectCreateInput = {
       name: title,
       description: description || undefined,
-      state: item.value as ProjectCreateInput['state'],
       initiativeId: defaultInitiative?.id,
       teamId: defaultTeam?.id,
     };

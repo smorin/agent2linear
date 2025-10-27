@@ -22,7 +22,6 @@ import { resolveProjectStatusId } from '../../lib/status-cache.js';
 interface CreateOptions {
   title?: string;
   description?: string;
-  state?: 'planned' | 'started' | 'paused' | 'completed' | 'canceled';
   initiative?: string;
   team?: string;
   template?: string;
@@ -323,7 +322,6 @@ async function createProjectNonInteractive(options: CreateOptions) {
     const projectData: ProjectCreateInput = {
       name: title,
       description: options.description,
-      state: options.state || 'planned',
       initiativeId,
       teamId,
       templateId,
