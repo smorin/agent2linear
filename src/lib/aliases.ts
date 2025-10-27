@@ -9,6 +9,9 @@ import {
   getProjectStatusById,
   getTemplateById,
   getMemberById,
+  getIssueLabelById,
+  getProjectLabelById,
+  getWorkflowStateById,
 } from './linear-client.js';
 
 const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'linear-create');
@@ -380,6 +383,27 @@ async function validateEntity(
         }
         return { valid: true, name: member.name };
       }
+      case 'issue-label': {
+        const label = await getIssueLabelById(id);
+        if (!label) {
+          return { valid: false, error: `Issue label with ID "${id}" not found` };
+        }
+        return { valid: true, name: label.name };
+      }
+      case 'project-label': {
+        const label = await getProjectLabelById(id);
+        if (!label) {
+          return { valid: false, error: `Project label with ID "${id}" not found` };
+        }
+        return { valid: true, name: label.name };
+      }
+      case 'workflow-state': {
+        const state = await getWorkflowStateById(id);
+        if (!state) {
+          return { valid: false, error: `Workflow state with ID "${id}" not found` };
+        }
+        return { valid: true, name: state.name };
+      }
       default:
         return { valid: false, error: 'Invalid entity type' };
     }
@@ -638,6 +662,51 @@ export async function validateAllAliases(): Promise<{
     }
   }
 
+  // Check issue labels
+  for (const [alias, id] of Object.entries(aliases.issueLabels)) {
+    total++;
+    const validation = await validateEntity('issue-label', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'issue-label',
+        alias,
+        id,
+        location: aliases.locations['issue-label'][alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
+  // Check project labels
+  for (const [alias, id] of Object.entries(aliases.projectLabels)) {
+    total++;
+    const validation = await validateEntity('project-label', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'project-label',
+        alias,
+        id,
+        location: aliases.locations['project-label'][alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
+  // Check workflow states
+  for (const [alias, id] of Object.entries(aliases.workflowStates)) {
+    total++;
+    const validation = await validateEntity('workflow-state', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'workflow-state',
+        alias,
+        id,
+        location: aliases.locations['workflow-state'][alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
   return { broken, total };
 }
 
@@ -779,6 +848,34 @@ export function getAliasesForId(type: AliasEntityType, id: string): string[] {
   }
 
   return matchingAliases;
+}
+
+/**
+ * Clear all aliases of a specific type from a given scope
+ */
+export function clearAliases(
+  type: AliasEntityType,
+  scope: 'global' | 'project' = 'global',
+  options: { preview?: boolean } = {}
+): { success: boolean; error?: string; count: number; aliases?: string[] } {
+  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const existingAliases = readAliasesFile(filePath);
+  const key = getAliasesKey(type);
+
+  // Get list of aliases to be cleared
+  const aliasesToClear = Object.keys(existingAliases[key]);
+  const count = aliasesToClear.length;
+
+  // Preview mode - just return what would be cleared
+  if (options.preview) {
+    return { success: true, count, aliases: aliasesToClear };
+  }
+
+  // Clear the aliases
+  existingAliases[key] = {};
+  writeAliasesFile(filePath, existingAliases);
+
+  return { success: true, count, aliases: aliasesToClear };
 }
 
 /**

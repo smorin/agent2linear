@@ -14,7 +14,7 @@ interface IssueLabelsListProps {
 }
 
 function IssueLabelsList({ teamId, workspace, colorFilter, format }: IssueLabelsListProps) {
-  const [labels, setLabels] = React.useState<any[]>([]);
+  const [labels, setLabels] = React.useState<Array<{ id: string; name: string; color: string; description?: string; teamId?: string }>>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -53,10 +53,6 @@ function IssueLabelsList({ teamId, workspace, colorFilter, format }: IssueLabels
           }
           process.exit(0);
         }
-
-        // Group by workspace vs team
-        const workspaceLabels = allLabels.filter(l => !l.teamId);
-        const teamLabels = allLabels.filter(l => l.teamId);
 
         setLabels(allLabels);
         setLoading(false);

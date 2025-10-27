@@ -101,8 +101,13 @@ export function getIconCategories(): string[] {
 
 /**
  * Extract icons from workspace entities (labels, workflow states, etc.)
+ * @param type - Entity type to extract from (or undefined for all)
+ * @param teamId - Team ID to filter by (or undefined for workspace-wide)
  */
-export async function extractIconsFromEntities(type?: 'labels' | 'workflow-states' | 'projects'): Promise<
+export async function extractIconsFromEntities(
+  type?: 'labels' | 'workflow-states' | 'projects',
+  teamId?: string
+): Promise<
   Array<{
     emoji: string;
     usageCount: number;
@@ -128,8 +133,8 @@ export async function extractIconsFromEntities(type?: 'labels' | 'workflow-state
 
   try {
     if (!type || type === 'labels') {
-      // Extract from issue labels (workspace-wide: pass undefined to get all)
-      const issueLabels = await getAllIssueLabels(undefined);
+      // Extract from issue labels (team-scoped or workspace-wide)
+      const issueLabels = await getAllIssueLabels(teamId);
       for (const label of issueLabels) {
         const emojis = extractEmoji(label.name);
         for (const emoji of emojis) {
@@ -168,8 +173,8 @@ export async function extractIconsFromEntities(type?: 'labels' | 'workflow-state
     }
 
     if (!type || type === 'workflow-states') {
-      // Extract from workflow states (workspace-wide: pass undefined to get all teams)
-      const workflowStates = await getAllWorkflowStates(undefined);
+      // Extract from workflow states (team-scoped or workspace-wide)
+      const workflowStates = await getAllWorkflowStates(teamId);
       for (const state of workflowStates) {
         const emojis = extractEmoji(state.name);
         for (const emoji of emojis) {
@@ -189,19 +194,19 @@ export async function extractIconsFromEntities(type?: 'labels' | 'workflow-state
     }
 
     if (!type || type === 'projects') {
-      // Extract from projects (workspace-wide)
+      // Extract from projects (team-scoped or workspace-wide)
       const { getAllProjects } = await import('./linear-client.js');
-      const projects = await getAllProjects();
+      const projects = await getAllProjects(teamId);
       for (const project of projects) {
-        const emojis = extractEmoji(project.name);
-        for (const emoji of emojis) {
-          const existing = iconMap.get(emoji);
+        // Use the icon field directly (not project name)
+        if (project.icon) {
+          const existing = iconMap.get(project.icon);
           if (existing) {
             existing.usageCount++;
             existing.entities.push(project.name);
           } else {
-            iconMap.set(emoji, {
-              emoji,
+            iconMap.set(project.icon, {
+              emoji: project.icon,
               usageCount: 1,
               entities: [project.name],
             });

@@ -10,7 +10,7 @@ export function extractColors(program: Command) {
     .action(async (options) => {
       try {
         console.log('🔍 Extracting colors from workspace...');
-        const colors = await extractColorsFromEntities(options.type as any);
+        const colors = await extractColorsFromEntities(options.type as 'labels' | 'workflow-states' | 'project-statuses' | undefined);
         console.log(`   Found ${colors.length} unique colors`);
         console.log('');
 

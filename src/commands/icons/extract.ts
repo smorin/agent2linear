@@ -1,16 +1,48 @@
 import { Command } from 'commander';
 import { extractIconsFromEntities } from '../../lib/icons.js';
+import { resolveAlias } from '../../lib/aliases.js';
+import { validateTeamExists } from '../../lib/linear-client.js';
+import { getConfig } from '../../lib/config.js';
 
 export function extractIcons(program: Command) {
   program
     .command('extract')
     .description('Extract icons from workspace entities')
     .option('--type <type>', 'Entity type (labels|workflow-states|projects)')
+    .option('-t, --team <id>', 'Filter by team (ID, name, or alias)')
+    .option('-w, --workspace', 'Search entire workspace (ignore defaultTeam)')
     .option('-f, --format <format>', 'Output format (json|tsv)', 'default')
     .action(async (options) => {
       try {
-        console.log('🔍 Extracting icons from workspace...');
-        const icons = await extractIconsFromEntities(options.type as any);
+        let resolvedTeamId: string | undefined;
+
+        // Determine team scope (same pattern as issue-labels list)
+        if (!options.workspace) {
+          if (options.team) {
+            // Resolve team alias
+            resolvedTeamId = resolveAlias('team', options.team);
+
+            // Validate team exists
+            const teamCheck = await validateTeamExists(resolvedTeamId);
+            if (!teamCheck.valid) {
+              console.error(`❌ ${teamCheck.error}`);
+              process.exit(1);
+            }
+            console.log(`📎 Using team: ${teamCheck.name}`);
+          } else {
+            // Use defaultTeam from config
+            const config = getConfig();
+            if (config.defaultTeam) {
+              resolvedTeamId = config.defaultTeam;
+              console.log(`📎 Using default team: ${resolvedTeamId}`);
+            }
+          }
+        }
+
+        const scope = options.workspace ? 'workspace' : (resolvedTeamId ? 'team' : 'workspace');
+        console.log(`🔍 Extracting icons from ${scope}...`);
+
+        const icons = await extractIconsFromEntities(options.type as 'labels' | 'workflow-states' | 'projects' | undefined, resolvedTeamId);
         console.log(`   Found ${icons.length} unique icons`);
         console.log('');
 

@@ -15,14 +15,26 @@ import {
   validateTeamExists,
   getProjectById,
   getTemplateById,
+  getProjectStatusById,
+  getMemberById,
+  getIssueLabelById,
+  getProjectLabelById,
+  getWorkflowStateById,
   getAllInitiatives,
   getAllTeams,
   getAllProjects,
   getAllTemplates,
+  getAllProjectStatuses,
+  getAllMembers,
+  getAllIssueLabels,
+  getAllProjectLabels,
+  getAllWorkflowStates,
   type Initiative,
   type Team,
   type Project,
   type Template,
+  type ProjectStatus,
+  type Member,
 } from '../../lib/linear-client.js';
 
 interface EditOptions {
@@ -80,6 +92,26 @@ function AliasEditor({ options }: { options: EditOptions }) {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templateError, setTemplateError] = useState('');
 
+  const [projectStatuses, setProjectStatuses] = useState<ProjectStatus[]>([]);
+  const [loadingProjectStatuses, setLoadingProjectStatuses] = useState(false);
+  const [projectStatusError, setProjectStatusError] = useState('');
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [memberError, setMemberError] = useState('');
+
+  const [issueLabels, setIssueLabels] = useState<import('../../lib/types.js').IssueLabel[]>([]);
+  const [loadingIssueLabels, setLoadingIssueLabels] = useState(false);
+  const [issueLabelError, setIssueLabelError] = useState('');
+
+  const [projectLabels, setProjectLabels] = useState<import('../../lib/types.js').ProjectLabel[]>([]);
+  const [loadingProjectLabels, setLoadingProjectLabels] = useState(false);
+  const [projectLabelError, setProjectLabelError] = useState('');
+
+  const [workflowStates, setWorkflowStates] = useState<import('../../lib/types.js').WorkflowState[]>([]);
+  const [loadingWorkflowStates, setLoadingWorkflowStates] = useState(false);
+  const [workflowStateError, setWorkflowStateError] = useState('');
+
   // If scope is already determined, skip to type selection
   React.useEffect(() => {
     if (scope !== null && step === 'scope') {
@@ -113,8 +145,13 @@ function AliasEditor({ options }: { options: EditOptions }) {
       entityType === 'initiative' ? 'initiatives' :
       entityType === 'team' ? 'teams' :
       entityType === 'project' ? 'projects' :
+      entityType === 'project-status' ? 'projectStatuses' :
       entityType === 'issue-template' ? 'issueTemplates' :
       entityType === 'project-template' ? 'projectTemplates' :
+      entityType === 'member' ? 'members' :
+      entityType === 'issue-label' ? 'issueLabels' :
+      entityType === 'project-label' ? 'projectLabels' :
+      entityType === 'workflow-state' ? 'workflowStates' :
       'projects'; // fallback
     const id = aliases[key][item.value];
 
@@ -197,6 +234,46 @@ function AliasEditor({ options }: { options: EditOptions }) {
         }
         isValid = true;
         entityName = template.name;
+      } else if (selectedAlias.type === 'project-status') {
+        const status = await getProjectStatusById(idInput);
+        if (!status) {
+          setIdError('Project status not found');
+          return;
+        }
+        isValid = true;
+        entityName = status.name;
+      } else if (selectedAlias.type === 'member') {
+        const member = await getMemberById(idInput);
+        if (!member) {
+          setIdError('Member not found');
+          return;
+        }
+        isValid = true;
+        entityName = member.name;
+      } else if (selectedAlias.type === 'issue-label') {
+        const label = await getIssueLabelById(idInput);
+        if (!label) {
+          setIdError('Issue label not found');
+          return;
+        }
+        isValid = true;
+        entityName = label.name;
+      } else if (selectedAlias.type === 'project-label') {
+        const label = await getProjectLabelById(idInput);
+        if (!label) {
+          setIdError('Project label not found');
+          return;
+        }
+        isValid = true;
+        entityName = label.name;
+      } else if (selectedAlias.type === 'workflow-state') {
+        const state = await getWorkflowStateById(idInput);
+        if (!state) {
+          setIdError('Workflow state not found');
+          return;
+        }
+        isValid = true;
+        entityName = state.name;
       }
 
       if (!isValid) {
@@ -333,8 +410,13 @@ function AliasEditor({ options }: { options: EditOptions }) {
       entityType === 'initiative' ? 'initiatives' :
       entityType === 'team' ? 'teams' :
       entityType === 'project' ? 'projects' :
+      entityType === 'project-status' ? 'projectStatuses' :
       entityType === 'issue-template' ? 'issueTemplates' :
       entityType === 'project-template' ? 'projectTemplates' :
+      entityType === 'member' ? 'members' :
+      entityType === 'issue-label' ? 'issueLabels' :
+      entityType === 'project-label' ? 'projectLabels' :
+      entityType === 'workflow-state' ? 'workflowStates' :
       'projects'; // fallback
     const scopedAliases = Object.entries(aliases[key]).filter(([alias]) => {
       const location = aliases.locations[entityType as AliasEntityType]?.[alias];
@@ -401,6 +483,56 @@ function AliasEditor({ options }: { options: EditOptions }) {
       } catch (error) {
         setTemplateError(error instanceof Error ? error.message : 'Failed to fetch project templates');
         setLoadingTemplates(false);
+      }
+    } else if (entityType === 'project-status') {
+      setLoadingProjectStatuses(true);
+      try {
+        const data = await getAllProjectStatuses();
+        setProjectStatuses(data);
+        setLoadingProjectStatuses(false);
+      } catch (error) {
+        setProjectStatusError(error instanceof Error ? error.message : 'Failed to fetch project statuses');
+        setLoadingProjectStatuses(false);
+      }
+    } else if (entityType === 'member') {
+      setLoadingMembers(true);
+      try {
+        const data = await getAllMembers();
+        setMembers(data);
+        setLoadingMembers(false);
+      } catch (error) {
+        setMemberError(error instanceof Error ? error.message : 'Failed to fetch members');
+        setLoadingMembers(false);
+      }
+    } else if (entityType === 'issue-label') {
+      setLoadingIssueLabels(true);
+      try {
+        const data = await getAllIssueLabels();
+        setIssueLabels(data);
+        setLoadingIssueLabels(false);
+      } catch (error) {
+        setIssueLabelError(error instanceof Error ? error.message : 'Failed to fetch issue labels');
+        setLoadingIssueLabels(false);
+      }
+    } else if (entityType === 'project-label') {
+      setLoadingProjectLabels(true);
+      try {
+        const data = await getAllProjectLabels();
+        setProjectLabels(data);
+        setLoadingProjectLabels(false);
+      } catch (error) {
+        setProjectLabelError(error instanceof Error ? error.message : 'Failed to fetch project labels');
+        setLoadingProjectLabels(false);
+      }
+    } else if (entityType === 'workflow-state') {
+      setLoadingWorkflowStates(true);
+      try {
+        const data = await getAllWorkflowStates();
+        setWorkflowStates(data);
+        setLoadingWorkflowStates(false);
+      } catch (error) {
+        setWorkflowStateError(error instanceof Error ? error.message : 'Failed to fetch workflow states');
+        setLoadingWorkflowStates(false);
       }
     }
   };
@@ -470,8 +602,13 @@ function AliasEditor({ options }: { options: EditOptions }) {
       { label: 'Initiative aliases', value: 'initiative' as const },
       { label: 'Team aliases', value: 'team' as const },
       { label: 'Project aliases', value: 'project' as const },
+      { label: 'Project Status aliases', value: 'project-status' as const },
       { label: 'Issue Template aliases', value: 'issue-template' as const },
       { label: 'Project Template aliases', value: 'project-template' as const },
+      { label: 'Member aliases', value: 'member' as const },
+      { label: 'Issue Label aliases', value: 'issue-label' as const },
+      { label: 'Project Label aliases', value: 'project-label' as const },
+      { label: 'Workflow State aliases', value: 'workflow-state' as const },
     ];
 
     return (
@@ -507,7 +644,9 @@ function AliasEditor({ options }: { options: EditOptions }) {
     // Step 2: Entity selection
     if (addStep === 'selectEntity') {
       // Show loading state
-      if (loadingInitiatives || loadingTeams || loadingProjects || loadingTemplates) {
+      if (loadingInitiatives || loadingTeams || loadingProjects || loadingTemplates ||
+          loadingProjectStatuses || loadingMembers || loadingIssueLabels ||
+          loadingProjectLabels || loadingWorkflowStates) {
         return (
           <Box>
             <Text>🔄 Loading {entityType}s...</Text>
@@ -516,8 +655,12 @@ function AliasEditor({ options }: { options: EditOptions }) {
       }
 
       // Show error if fetch failed
-      if (initiativeError || teamError || projectError || templateError) {
-        const error = initiativeError || teamError || projectError || templateError;
+      if (initiativeError || teamError || projectError || templateError ||
+          projectStatusError || memberError || issueLabelError ||
+          projectLabelError || workflowStateError) {
+        const error = initiativeError || teamError || projectError || templateError ||
+                      projectStatusError || memberError || issueLabelError ||
+                      projectLabelError || workflowStateError;
         return (
           <Box flexDirection="column">
             <Text color="red">❌ Error: {error}</Text>
@@ -549,6 +692,31 @@ function AliasEditor({ options }: { options: EditOptions }) {
           label: `${tmpl.name} (${tmpl.id})`,
           value: tmpl.id,
         }));
+      } else if (entityType === 'project-status' && projectStatuses.length > 0) {
+        entityItems = projectStatuses.map(status => ({
+          label: `${status.name} (${status.id})`,
+          value: status.id,
+        }));
+      } else if (entityType === 'member' && members.length > 0) {
+        entityItems = members.map(member => ({
+          label: `${member.name} (${member.email}) [${member.id}]`,
+          value: member.id,
+        }));
+      } else if (entityType === 'issue-label' && issueLabels.length > 0) {
+        entityItems = issueLabels.map(label => ({
+          label: `${label.name} (${label.id})`,
+          value: label.id,
+        }));
+      } else if (entityType === 'project-label' && projectLabels.length > 0) {
+        entityItems = projectLabels.map(label => ({
+          label: `${label.name} (${label.id})`,
+          value: label.id,
+        }));
+      } else if (entityType === 'workflow-state' && workflowStates.length > 0) {
+        entityItems = workflowStates.map(state => ({
+          label: `${state.name} (${state.type}) [${state.id}]`,
+          value: state.id,
+        }));
       }
 
       if (entityItems.length === 0) {
@@ -579,8 +747,13 @@ function AliasEditor({ options }: { options: EditOptions }) {
       entityType === 'initiative' ? 'initiatives' :
       entityType === 'team' ? 'teams' :
       entityType === 'project' ? 'projects' :
+      entityType === 'project-status' ? 'projectStatuses' :
       entityType === 'issue-template' ? 'issueTemplates' :
       entityType === 'project-template' ? 'projectTemplates' :
+      entityType === 'member' ? 'members' :
+      entityType === 'issue-label' ? 'issueLabels' :
+      entityType === 'project-label' ? 'projectLabels' :
+      entityType === 'workflow-state' ? 'workflowStates' :
       'projects'; // fallback
     const typeAliases = aliases[key];
     const locations = aliases.locations[entityType as AliasEntityType];

@@ -7,17 +7,18 @@ import { formatColorPreview } from '../../lib/colors.js';
 interface ProjectLabelsListProps {
   colorFilter?: string;
   format?: string;
+  all?: boolean;
 }
 
-function ProjectLabelsList({ colorFilter, format }: ProjectLabelsListProps) {
-  const [labels, setLabels] = React.useState<any[]>([]);
+function ProjectLabelsList({ colorFilter, format, all }: ProjectLabelsListProps) {
+  const [labels, setLabels] = React.useState<Array<{ id: string; name: string; color: string; description?: string }>>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     async function fetchLabels() {
       try {
-        let allLabels = await getAllProjectLabels();
+        let allLabels = await getAllProjectLabels(all);
 
         if (colorFilter) {
           allLabels = allLabels.filter(l => l.color.toUpperCase() === colorFilter.toUpperCase());
@@ -43,7 +44,7 @@ function ProjectLabelsList({ colorFilter, format }: ProjectLabelsListProps) {
     }
 
     fetchLabels();
-  }, [colorFilter, format]);
+  }, [colorFilter, format, all]);
 
   if (loading) {
     return <Text>Loading project labels...</Text>;
@@ -83,11 +84,13 @@ export function listProjectLabels(program: Command) {
     .description('List project labels')
     .option('--color <hex>', 'Filter by color (hex code)')
     .option('-f, --format <type>', 'Output format (json|tsv)', 'default')
+    .option('-a, --all', 'Include all labels (including archived)')
     .action(async (options) => {
       render(
         <ProjectLabelsList
           colorFilter={options.color}
           format={options.format}
+          all={options.all}
         />
       );
     });

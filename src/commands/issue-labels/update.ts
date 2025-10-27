@@ -29,7 +29,7 @@ export function updateIssueLabelCommand(program: Command) {
           process.exit(1);
         }
 
-        const updateInput: any = {};
+        const updateInput: { name?: string; color?: string; description?: string } = {};
         if (options.name) updateInput.name = options.name;
         if (options.color) updateInput.color = normalizeHexColor(options.color);
         if (options.description !== undefined) updateInput.description = options.description;

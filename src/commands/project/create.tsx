@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text } from 'ink';
+import { readFileSync } from 'fs';
 import { ProjectForm } from '../../ui/components/ProjectForm.js';
 import {
   createProject,
@@ -8,7 +9,8 @@ import {
   validateTeamExists,
   getTemplateById,
   getCurrentUser,
-  getMemberById,
+  resolveMemberIdentifier,
+  createExternalLink,
   type ProjectCreateInput,
   type ProjectResult,
 } from '../../lib/linear-client.js';
@@ -29,6 +31,7 @@ interface CreateOptions {
   // Additional fields
   status?: string;
   content?: string;
+  contentFile?: string;
   icon?: string;
   color?: string;
   lead?: string;
@@ -41,11 +44,42 @@ interface CreateOptions {
   targetDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year';
   priority?: number;
   members?: string;
+  link?: string | string[];
 }
 
 // Non-interactive mode
 async function createProjectNonInteractive(options: CreateOptions) {
   try {
+    // Validate mutual exclusivity of --content and --content-file
+    if (options.content && options.contentFile) {
+      console.error('❌ Error: Cannot use both --content and --content-file\n');
+      console.error('Choose one:');
+      console.error('  --content "markdown text"  (inline content)');
+      console.error('  --content-file path/to/file.md  (file content)\n');
+      process.exit(1);
+    }
+
+    // Read content from file if --content-file is provided
+    let content = options.content;
+    if (options.contentFile) {
+      try {
+        content = readFileSync(options.contentFile, 'utf-8');
+        console.log(`📄 Read content from: ${options.contentFile}`);
+      } catch (error) {
+        console.error(`❌ Error reading file: ${options.contentFile}\n`);
+        if (error instanceof Error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.error('   File not found. Please check the path and try again.');
+          } else if ((error as NodeJS.ErrnoException).code === 'EACCES') {
+            console.error('   Permission denied. Please check file permissions.');
+          } else {
+            console.error(`   ${error.message}`);
+          }
+        }
+        process.exit(1);
+      }
+    }
+
     // Validate required fields
     if (!options.title) {
       console.error('❌ Error: --title is required\n');
@@ -190,42 +224,51 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     console.log('\n🚀 Creating project...');
 
-    // Parse comma-separated fields
-    const labelIds = options.labels
-      ? options.labels.split(',').map(id => id.trim()).filter(id => id.length > 0)
-      : undefined;
+    // Parse and resolve label aliases
+    let labelIds: string[] | undefined;
+    if (options.labels) {
+      const rawLabels = options.labels.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+      // Resolve all aliases
+      labelIds = rawLabels.map(id => {
+        const resolved = resolveAlias('project-label', id);
+        if (resolved !== id) {
+          console.log(`📎 Resolved project label alias "${id}" to ${resolved}`);
+        }
+        return resolved;
+      });
+    }
 
     // Resolve and validate member aliases
     let memberIds: string[] | undefined;
     if (options.members) {
       const rawMembers = options.members.split(',').map(id => id.trim()).filter(id => id.length > 0);
 
-      // Resolve all aliases
-      const resolvedMembers = rawMembers.map(id => {
-        const resolved = resolveAlias('member', id);
-        if (resolved !== id) {
-          console.log(`📎 Resolved member alias "${id}" to ${resolved}`);
-        }
-        return resolved;
-      });
+      // Validate all members exist using smart resolution
+      console.log(`🔍 Validating ${rawMembers.length} project member(s)...`);
+      const resolvedMembers: string[] = [];
 
-      // Validate all members exist
-      console.log(`🔍 Validating ${resolvedMembers.length} project member(s)...`);
-      for (const memberId of resolvedMembers) {
-        try {
-          const member = await getMemberById(memberId);
-          if (!member) {
-            console.error(`❌ Member not found: ${memberId}`);
-            process.exit(1);
-          }
-          console.log(`   ✓ Member found: ${member.name}`);
-        } catch (error) {
-          console.error(`❌ Member not found: ${memberId}`);
-          if (error instanceof Error && error.message) {
-            console.error(`   Error: ${error.message}`);
-          }
+      for (const identifier of rawMembers) {
+        const member = await resolveMemberIdentifier(identifier, resolveAlias);
+
+        if (!member) {
+          console.error(`❌ Member not found: ${identifier}`);
+          console.error(`   Tried: alias lookup, ID lookup, and email lookup`);
+          console.error(`   Tip: Use "linear-create members list" to see available members`);
           process.exit(1);
         }
+
+        // Show what was resolved
+        if (identifier !== member.id) {
+          if (identifier.includes('@')) {
+            console.log(`📎 Resolved email "${identifier}" to ${member.name}`);
+          } else {
+            console.log(`📎 Resolved "${identifier}" to ${member.name}`);
+          }
+        }
+
+        console.log(`   ✓ Member found: ${member.name} (${member.email})`);
+        resolvedMembers.push(member.id);
       }
 
       memberIds = resolvedMembers;
@@ -235,29 +278,28 @@ async function createProjectNonInteractive(options: CreateOptions) {
     let leadId: string | undefined;
 
     if (options.lead) {
-      // Explicit lead specified - resolve alias and validate
-      const resolvedLead = resolveAlias('member', options.lead);
-      if (resolvedLead !== options.lead) {
-        console.log(`📎 Resolved member alias "${options.lead}" to ${resolvedLead}`);
-      }
+      // Explicit lead specified - resolve using smart resolution
+      console.log(`🔍 Validating lead member...`);
+      const member = await resolveMemberIdentifier(options.lead, resolveAlias);
 
-      // Validate member exists
-      console.log(`🔍 Validating lead member: ${resolvedLead}...`);
-      try {
-        const member = await getMemberById(resolvedLead);
-        if (!member) {
-          console.error(`❌ Member not found: ${resolvedLead}`);
-          process.exit(1);
-        }
-        console.log(`   ✓ Member found: ${member.name}`);
-        leadId = resolvedLead;
-      } catch (error) {
-        console.error(`❌ Member not found: ${resolvedLead}`);
-        if (error instanceof Error && error.message) {
-          console.error(`   Error: ${error.message}`);
-        }
+      if (!member) {
+        console.error(`❌ Lead member not found: ${options.lead}`);
+        console.error(`   Tried: alias lookup, ID lookup, and email lookup`);
+        console.error(`   Tip: Use "linear-create members list" to see available members`);
         process.exit(1);
       }
+
+      // Show what was resolved
+      if (options.lead !== member.id) {
+        if (options.lead.includes('@')) {
+          console.log(`📎 Resolved email "${options.lead}" to ${member.name}`);
+        } else {
+          console.log(`📎 Resolved "${options.lead}" to ${member.name}`);
+        }
+      }
+
+      console.log(`   ✓ Lead found: ${member.name} (${member.email})`);
+      leadId = member.id;
     } else if (options.noLead === true) {
       // Explicit no-lead specified - don't assign a lead
       leadId = undefined;
@@ -287,7 +329,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
       templateId,
       // Additional fields
       statusId,
-      content: options.content,
+      content,
       icon: options.icon,
       color: options.color,
       leadId,
@@ -302,6 +344,42 @@ async function createProjectNonInteractive(options: CreateOptions) {
     };
 
     const result = await createProject(projectData);
+
+    // Create external links if provided
+    if (options.link) {
+      const linkArgs = Array.isArray(options.link) ? options.link : [options.link];
+
+      if (linkArgs.length > 0) {
+        // Parse link arguments: format is "URL" or "URL|Label"
+        const linksToCreate: Array<{ url: string; label: string }> = [];
+
+        for (const linkArg of linkArgs) {
+          if (linkArg.includes('|')) {
+            // Format: "URL|Label"
+            const [url, label] = linkArg.split('|', 2);
+            linksToCreate.push({ url: url.trim(), label: label.trim() });
+          } else {
+            // Format: "URL" (no label)
+            linksToCreate.push({ url: linkArg.trim(), label: '' });
+          }
+        }
+
+        console.log(`\n🔗 Creating ${linksToCreate.length} external link(s)...`);
+
+        for (const { url, label } of linksToCreate) {
+          try {
+            await createExternalLink({
+              url,
+              label,
+              projectId: result.id,
+            });
+            console.log(`   ✓ Link created: ${label || url}`);
+          } catch (error) {
+            console.error(`   ✗ Failed to create link "${url}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+      }
+    }
 
     // Display success message
     displaySuccess(result);

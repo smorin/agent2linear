@@ -1,6 +1,7 @@
 import { Command, Option, Argument } from 'commander';
 import { listConfig } from './commands/config/list.js';
 import { getConfigValue } from './commands/config/get.js';
+import type { ConfigKey } from './lib/config.js';
 import { setConfig } from './commands/config/set.js';
 import { unsetConfig } from './commands/config/unset.js';
 import { editConfig } from './commands/config/edit.js';
@@ -8,6 +9,7 @@ import { listInitiatives } from './commands/initiatives/list.js';
 import { viewInitiative } from './commands/initiatives/view.js';
 import { selectInitiative } from './commands/initiatives/select.js';
 import { setInitiative } from './commands/initiatives/set.js';
+import { syncInitiativeAliases } from './commands/initiatives/sync-aliases.js';
 import { createProjectCommand } from './commands/project/create.js';
 import { viewProject } from './commands/project/view.js';
 import { updateProjectCommand } from './commands/project/update.js';
@@ -15,6 +17,7 @@ import { listTeams } from './commands/teams/list.js';
 import { selectTeam } from './commands/teams/select.js';
 import { setTeam } from './commands/teams/set.js';
 import { viewTeam } from './commands/teams/view.js';
+import { syncTeamAliases } from './commands/teams/sync-aliases.js';
 import { listProjectStatuses } from './commands/project-status/list.js';
 import { viewProjectStatus } from './commands/project-status/view.js';
 import { syncProjectStatusAliases } from './commands/project-status/sync-aliases.js';
@@ -23,9 +26,12 @@ import { listAliasCommand } from './commands/alias/list.js';
 import { removeAliasCommand } from './commands/alias/remove.js';
 import { getAliasCommand } from './commands/alias/get.js';
 import { editAlias } from './commands/alias/edit.js';
+import { aliasSyncCommand } from './commands/alias/sync.js';
+import { clearAliasCommand } from './commands/alias/clear.js';
 import { listTemplates } from './commands/templates/list.js';
 import { viewTemplate } from './commands/templates/view.js';
 import { listMembers } from './commands/members/list.js';
+import { syncMemberAliases } from './commands/members/sync-aliases.js';
 import { listMilestoneTemplates } from './commands/milestone-templates/list.js';
 import { viewMilestoneTemplate } from './commands/milestone-templates/view.js';
 import { createTemplate } from './commands/milestone-templates/create.js';
@@ -57,6 +63,7 @@ import { extractIcons } from './commands/icons/extract.js';
 import { listColors } from './commands/colors/list.js';
 import { viewColor } from './commands/colors/view.js';
 import { extractColors } from './commands/colors/extract.js';
+import { setup } from './commands/setup.js';
 
 const cli = new Command();
 
@@ -146,6 +153,8 @@ Examples:
     await setInitiative(id, options);
   });
 
+syncInitiativeAliases(initiatives);
+
 // Project commands
 const project = cli
   .command('project')
@@ -173,11 +182,13 @@ project
   .option('--template <id>', 'Template ID to use for project creation (format: template_xxx)')
   .option('--status <id>', 'Project status ID (format: status_xxx)')
   .option('--content <markdown>', 'Project content as markdown')
+  .option('--content-file <path>', 'Path to file containing project content (markdown)')
   .option('--icon <icon>', 'Project icon (emoji like 🚀 or icon identifier)')
   .option('--color <hex>', 'Project color (hex code like #FF6B6B)')
   .option('--lead <id>', 'Project lead user ID (format: user_xxx)')
   .option('--no-lead', 'Do not assign a project lead (overrides auto-assign)')
   .option('--labels <ids>', 'Comma-separated project label IDs (e.g., label_1,label_2)')
+  .option('--link <url-and-label>', 'External link as "URL" or "URL|Label" (can be specified multiple times)', (value, previous: string[] = []) => [...previous, value], [])
   .option('--converted-from <id>', 'Issue ID this project was converted from (format: issue_xxx)')
   .option('--start-date <date>', 'Planned start date (ISO 8601 format: YYYY-MM-DD)')
   .addOption(
@@ -230,6 +241,10 @@ Examples:
       --content "# Goals\\n- Improve performance\\n- Add features" \\
       --labels "label_1,label_2"
 
+  With content from file:
+  $ linear-create project create --title "API Project" --team team_abc123 \\
+      --content-file ./project-plan.md
+
   Interactive mode:
   $ linear-create project create --interactive
 
@@ -238,6 +253,8 @@ Examples:
 
 Field Value Formats:
   --status          status_xxx (Linear status ID)
+  --content         Inline markdown text
+  --content-file    Path to markdown file (mutually exclusive with --content)
   --icon            🚀 or icon_name
   --color           #FF6B6B (hex color code)
   --lead            user_xxx (Linear user ID)
@@ -282,6 +299,8 @@ project
   .option('--status <name-or-id>', 'Project status (name, ID, or alias)')
   .option('--name <name>', 'Rename project')
   .option('--description <text>', 'Update description')
+  .option('--content <markdown>', 'Update content as markdown')
+  .option('--content-file <path>', 'Path to file containing project content (markdown)')
   .option('--priority <0-4>', 'Priority level (0-4)', parseInt)
   .option('--target-date <YYYY-MM-DD>', 'Target completion date')
   .option('--start-date <YYYY-MM-DD>', 'Estimated start date')
@@ -290,6 +309,9 @@ Examples:
   $ linear-create project update "My Project" --status "In Progress"
   $ linear-create proj update proj_abc --status done --priority 3
   $ linear-create proj update myalias --name "New Name"
+
+  Update content from file:
+  $ linear-create proj update "My Project" --content-file ./updated-plan.md
 
   Update multiple fields:
   $ linear-create proj update "Q1 Goals" --status in-progress --priority 2 --target-date 2025-03-31
@@ -417,6 +439,8 @@ Examples:
     await viewTeam(id, options);
   });
 
+syncTeamAliases(teams);
+
 // Members commands
 const members = cli
   .command('members')
@@ -462,6 +486,8 @@ Note: By default, uses your configured default team. Use --org-wide to see all m
   .action(async (options) => {
     await listMembers(options);
   });
+
+syncMemberAliases(members);
 
 // Project Status commands
 const projectStatus = cli
@@ -541,7 +567,7 @@ alias
   .command('add')
   .addArgument(
     new Argument('<type>', 'Entity type')
-      .choices(['initiative', 'team', 'project', 'project-status', 'initiatives', 'teams', 'projects', 'project-statuses', 'issue-template', 'issue-templates', 'project-template', 'project-templates', 'member', 'members', 'user', 'users', 'issue-label', 'issue-labels', 'project-label', 'project-labels', 'workflow-state', 'workflow-states'])
+      .choices(['initiative', 'team', 'project', 'project-status', 'issue-template', 'project-template', 'member', 'user', 'issue-label', 'project-label', 'workflow-state'])
   )
   .addArgument(new Argument('<alias>', 'Alias name (no spaces)'))
   .addArgument(new Argument('[id]', 'Linear ID (optional if using --email or --name for members)'))
@@ -561,6 +587,9 @@ Examples:
   $ linear-create alias add project-status in-progress status_abc123
   $ linear-create alias add issue-template bug-report template_abc123
   $ linear-create alias add project-template sprint-template template_xyz789
+  $ linear-create alias add issue-label bug label_abc123def
+  $ linear-create alias add project-label release label_ghi456jkl
+  $ linear-create alias add workflow-state done state_mno789pqr
   $ linear-create alias add member john user_abc123def
 
   Member by exact email (auto-select):
@@ -594,12 +623,17 @@ alias
 Examples:
   $ linear-create alias list                    # List all aliases
   $ linear-create alias ls                      # Same as 'list' (alias)
-  $ linear-create alias list initiatives        # List only initiative aliases
-  $ linear-create alias list project-statuses   # List only project status aliases
-  $ linear-create alias list issue-templates    # List only issue template aliases
-  $ linear-create alias list project-templates  # List only project template aliases
-  $ linear-create alias list members            # List only member aliases
-  $ linear-create alias list users              # List only user/member aliases
+  $ linear-create alias list initiative         # List only initiative aliases
+  $ linear-create alias list team               # List only team aliases
+  $ linear-create alias list project            # List only project aliases
+  $ linear-create alias list project-status     # List only project status aliases
+  $ linear-create alias list issue-template     # List only issue template aliases
+  $ linear-create alias list project-template   # List only project template aliases
+  $ linear-create alias list issue-label        # List only issue label aliases
+  $ linear-create alias list project-label      # List only project label aliases
+  $ linear-create alias list workflow-state     # List only workflow state aliases
+  $ linear-create alias list member             # List only member aliases
+  $ linear-create alias list user               # List only user/member aliases
   $ linear-create alias list --validate         # Validate all aliases
 `)
   .action(async (type?: string, options?: { validate?: boolean }) => {
@@ -611,7 +645,7 @@ alias
   .alias('rm')
   .addArgument(
     new Argument('<type>', 'Entity type')
-      .choices(['initiative', 'team', 'project', 'project-status', 'initiatives', 'teams', 'projects', 'project-statuses', 'issue-template', 'issue-templates', 'project-template', 'project-templates', 'member', 'members', 'user', 'users', 'issue-label', 'issue-labels', 'project-label', 'project-labels', 'workflow-state', 'workflow-states'])
+      .choices(['initiative', 'team', 'project', 'project-status', 'issue-template', 'project-template', 'member', 'user', 'issue-label', 'project-label', 'workflow-state'])
   )
   .addArgument(new Argument('<alias>', 'Alias name to remove'))
   .description('Remove an alias')
@@ -624,6 +658,9 @@ Examples:
   $ linear-create alias remove project-status in-progress
   $ linear-create alias remove issue-template bug-report
   $ linear-create alias rm project-template sprint-template
+  $ linear-create alias remove issue-label bug
+  $ linear-create alias remove project-label release
+  $ linear-create alias remove workflow-state done
   $ linear-create alias remove member john
   $ linear-create alias rm user jane
 `)
@@ -635,7 +672,7 @@ alias
   .command('get')
   .addArgument(
     new Argument('<type>', 'Entity type')
-      .choices(['initiative', 'team', 'project', 'project-status', 'initiatives', 'teams', 'projects', 'project-statuses', 'issue-template', 'issue-templates', 'project-template', 'project-templates', 'member', 'members', 'user', 'users', 'issue-label', 'issue-labels', 'project-label', 'project-labels', 'workflow-state', 'workflow-states'])
+      .choices(['initiative', 'team', 'project', 'project-status', 'issue-template', 'project-template', 'member', 'user', 'issue-label', 'project-label', 'workflow-state'])
   )
   .addArgument(new Argument('<alias>', 'Alias name'))
   .description('Get the ID for an alias')
@@ -643,8 +680,12 @@ alias
 Examples:
   $ linear-create alias get initiative backend
   $ linear-create alias get team frontend
+  $ linear-create alias get project-status in-progress
   $ linear-create alias get issue-template bug-report
   $ linear-create alias get project-template sprint-template
+  $ linear-create alias get issue-label bug
+  $ linear-create alias get project-label release
+  $ linear-create alias get workflow-state done
   $ linear-create alias get member john
   $ linear-create alias get user jane
 `)
@@ -654,20 +695,69 @@ Examples:
 
 alias
   .command('edit')
-  .description('Interactively edit aliases')
+  .description('Interactively edit aliases (add, rename, change ID, or delete)')
   .option('-g, --global', 'Edit global aliases')
   .option('-p, --project', 'Edit project aliases')
   .addHelpText('after', `
-Examples:
-  $ linear-create alias edit           # Interactive mode
-  $ linear-create alias edit --global  # Edit global aliases
-  $ linear-create alias edit --project # Edit project aliases
+This is an interactive command that guides you through editing aliases.
 
-Note: For non-interactive editing, use 'alias remove' and 'alias add' commands.
+Supported entity types:
+  - Initiatives       - Teams              - Projects
+  - Project Statuses  - Issue Templates    - Project Templates
+  - Members/Users     - Issue Labels       - Project Labels
+  - Workflow States
+
+Available operations:
+  - Add new alias: Create a new alias by selecting from available entities
+  - Rename alias: Change the alias name while keeping the same entity ID
+  - Change ID: Update the entity ID that an alias points to
+  - Delete alias: Remove an alias entirely
+
+Examples:
+  $ linear-create alias edit           # Interactive mode (choose scope interactively)
+  $ linear-create alias edit --global  # Edit global aliases directly
+  $ linear-create alias edit --project # Edit project aliases directly
+
+Note: This command is fully interactive. For non-interactive editing,
+      use 'alias add' and 'alias remove' commands instead.
 `)
   .action(async (options) => {
     await editAlias(options);
   });
+
+alias
+  .command('clear')
+  .addArgument(
+    new Argument('<type>', 'Entity type')
+      .choices(['initiative', 'team', 'project', 'project-status', 'issue-template', 'project-template', 'member', 'user', 'issue-label', 'project-label', 'workflow-state'])
+  )
+  .description('Clear all aliases of a specific type')
+  .option('-g, --global', 'Clear from global config (default)')
+  .option('-p, --project', 'Clear from project config')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview what would be cleared without actually clearing')
+  .addHelpText('after', `
+Examples:
+  # Preview what would be cleared
+  $ linear-create alias clear team --dry-run
+  $ linear-create alias clear member --project --dry-run
+
+  # Clear with confirmation
+  $ linear-create alias clear team --global
+  $ linear-create alias clear project-status --project
+
+  # Clear without confirmation
+  $ linear-create alias clear initiative --force
+  $ linear-create alias clear member --project --force
+
+Warning: This will remove ALL aliases of the specified type from the chosen scope.
+         Use --dry-run first to preview what will be removed.
+`)
+  .action(async (type: string, options) => {
+    await clearAliasCommand(type, options);
+  });
+
+aliasSyncCommand(alias);
 
 // Milestones commands (stub - future release)
 const milestones = cli
@@ -933,7 +1023,7 @@ Examples:
   $ linear-create cfg get projectCacheMinTTL
 `)
   .action(async (key: string) => {
-    await getConfigValue(key as any);
+    await getConfigValue(key as ConfigKey);
   });
 
 config
@@ -1055,5 +1145,23 @@ const colors = cli
 listColors(colors);
 viewColor(colors);
 extractColors(colors);
+
+// Setup command
+cli
+  .command('setup')
+  .description('Interactive first-time setup wizard')
+  .addHelpText('after', `
+Examples:
+  $ linear-create setup    # Run interactive setup wizard
+
+This command will guide you through:
+  • Setting up your Linear API key
+  • Selecting your default team
+  • Configuring optional defaults
+  • Learning about key commands
+`)
+  .action(async () => {
+    await setup();
+  });
 
 export { cli };

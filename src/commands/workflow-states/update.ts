@@ -54,9 +54,9 @@ export function updateWorkflowStateCommand(program: Command) {
         }
 
         // Build update input
-        const updateInput: any = {};
+        const updateInput: { name?: string; type?: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled'; color?: string; description?: string; position?: number } = {};
         if (options.name) updateInput.name = options.name;
-        if (options.type) updateInput.type = options.type;
+        if (options.type) updateInput.type = options.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
         if (options.color) updateInput.color = normalizeHexColor(options.color);
         if (options.description !== undefined) updateInput.description = options.description;
         if (options.position !== undefined) updateInput.position = parseInt(options.position, 10);

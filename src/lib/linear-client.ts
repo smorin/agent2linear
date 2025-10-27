@@ -200,6 +200,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
+  icon?: string;
 }
 
 /**
@@ -533,19 +534,95 @@ export async function searchMembers(options: {
 }
 
 /**
- * Get all projects from Linear
+ * Resolve a member identifier (ID, alias, or email) to a member
+ * Tries multiple lookup strategies in order:
+ * 1. Alias resolution (if configured)
+ * 2. Direct ID lookup (if looks like a UUID)
+ * 3. Email lookup (if contains @)
+ *
+ * @param identifier - The member identifier (ID, alias, or email)
+ * @param resolveAliasFn - Optional alias resolver function
+ * @returns Member details or null if not found
  */
-export async function getAllProjects(): Promise<Project[]> {
+export async function resolveMemberIdentifier(
+  identifier: string,
+  resolveAliasFn?: (type: 'member', value: string) => string
+): Promise<{ id: string; name: string; email: string } | null> {
+  try {
+    const trimmedId = identifier.trim();
+
+    // Try alias resolution first (if resolver provided)
+    let resolvedId = trimmedId;
+    if (resolveAliasFn) {
+      const aliasResolved = resolveAliasFn('member', trimmedId);
+      if (aliasResolved !== trimmedId) {
+        resolvedId = aliasResolved;
+        // Alias was found, now validate the resolved ID
+        const member = await getMemberById(resolvedId);
+        if (member) {
+          return member;
+        }
+      }
+    }
+
+    // Try direct ID lookup if it looks like a UUID
+    // Linear UUIDs are lowercase hex with dashes (e.g., "a1b2c3d4-...")
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidPattern.test(resolvedId)) {
+      const member = await getMemberById(resolvedId);
+      if (member) {
+        return member;
+      }
+    }
+
+    // Try email lookup if it contains @
+    if (trimmedId.includes('@')) {
+      const member = await getMemberByEmail(trimmedId);
+      if (member) {
+        return {
+          id: member.id,
+          name: member.name,
+          email: member.email,
+        };
+      }
+    }
+
+    // Not found by any method
+    return null;
+  } catch (error) {
+    // If there's an error during lookup, return null
+    // The caller will handle the error messaging
+    return null;
+  }
+}
+
+/**
+ * Get all projects from Linear
+ * @param teamId - Optional team ID to filter projects by team
+ */
+export async function getAllProjects(teamId?: string): Promise<Project[]> {
   try {
     const client = getLinearClient();
+
+    // Fetch all projects (team filtering happens client-side)
     const projects = await client.projects();
 
     const result: Project[] = [];
     for await (const project of projects.nodes) {
+      // If teamId specified, check if project belongs to team
+      if (teamId) {
+        const teams = await project.teams();
+        const teamIds = teams.nodes.map(t => t.id);
+        if (!teamIds.includes(teamId)) {
+          continue; // Skip projects not in this team
+        }
+      }
+
       result.push({
         id: project.id,
         name: project.name,
         description: project.description || undefined,
+        icon: project.icon || undefined,
       });
     }
 
@@ -691,7 +768,7 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
     const client = getLinearClient();
 
     // Prepare the creation input
-    const createInput: any = {
+    const createInput = {
       name: input.name,
       description: input.description,
       ...(input.teamId && { teamIds: [input.teamId] }),
@@ -710,7 +787,7 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
       ...(input.targetDateResolution && { targetDateResolution: input.targetDateResolution }),
       ...(input.priority !== undefined && { priority: input.priority }),
       ...(input.memberIds && input.memberIds.length > 0 && { memberIds: input.memberIds }),
-    };
+    } as const;
 
     // Debug: log what we're sending to the API
     if (process.env.DEBUG) {
@@ -718,7 +795,7 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
     }
 
     // Create the project
-    const projectPayload = await client.createProject(createInput);
+    const projectPayload = await client.createProject(createInput as Parameters<typeof client.createProject>[0]);
 
     const project = await projectPayload.project;
 
@@ -729,7 +806,7 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
     // Debug: Check if template was applied
     if (process.env.DEBUG && input.templateId) {
       try {
-        const lastAppliedTemplate = await (project as any).lastAppliedTemplate;
+        const lastAppliedTemplate = await (project as { lastAppliedTemplate?: { id: string; name: string } }).lastAppliedTemplate;
         if (lastAppliedTemplate) {
           console.log(`DEBUG: Template applied - ID: ${lastAppliedTemplate.id}, Name: ${lastAppliedTemplate.name}`);
         } else {
@@ -809,6 +886,7 @@ export interface ProjectUpdateInput {
   statusId?: string;
   name?: string;
   description?: string;
+  content?: string;
   priority?: number;
   startDate?: string;
   targetDate?: string;
@@ -825,7 +903,15 @@ export async function updateProject(
     const client = getLinearClient();
 
     // Prepare the update input
-    const updateInput: any = {};
+    const updateInput: Partial<{
+      statusId: string;
+      name: string;
+      description: string;
+      content: string;
+      priority: number;
+      startDate: string;
+      targetDate: string;
+    }> = {};
 
     if (updates.statusId !== undefined) {
       updateInput.statusId = updates.statusId;
@@ -835,6 +921,9 @@ export async function updateProject(
     }
     if (updates.description !== undefined) {
       updateInput.description = updates.description;
+    }
+    if (updates.content !== undefined) {
+      updateInput.content = updates.content;
     }
     if (updates.priority !== undefined) {
       updateInput.priority = updates.priority;
@@ -847,7 +936,7 @@ export async function updateProject(
     }
 
     // Update the project
-    const projectPayload = await client.updateProject(projectId, updateInput);
+    const projectPayload = await client.updateProject(projectId, updateInput as Parameters<typeof client.updateProject>[1]);
     const project = await projectPayload.project;
 
     if (!project) {
@@ -996,7 +1085,7 @@ export async function getProjectDetails(projectId: string): Promise<{
     // Get last applied template
     let lastAppliedTemplate;
     try {
-      const template = await (project as any).lastAppliedTemplate;
+      const template = await (project as { lastAppliedTemplate?: { id: string; name: string } }).lastAppliedTemplate;
       if (template) {
         lastAppliedTemplate = {
           id: template.id,
@@ -1190,7 +1279,7 @@ export async function getAllProjectStatuses(): Promise<ProjectStatus[]> {
     const organization = await client.organization;
     const statuses = await organization.projectStatuses;
 
-    return statuses.map((status: any) => ({
+    return statuses.map((status: { id: string; name: string; type: string; color: string; description?: string; position: number }) => ({
       id: status.id,
       name: status.name,
       type: status.type as 'planned' | 'started' | 'paused' | 'completed' | 'canceled',
@@ -1396,7 +1485,7 @@ export async function getAllWorkflowStates(teamId?: string): Promise<import('./t
         result.push({
           id: state.id,
           name: state.name,
-          type: state.type as any,
+          type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
           color: state.color,
           description: state.description || undefined,
           position: state.position,
@@ -1412,7 +1501,7 @@ export async function getAllWorkflowStates(teamId?: string): Promise<import('./t
           result.push({
             id: state.id,
             name: state.name,
-            type: state.type as any,
+            type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
             color: state.color,
             description: state.description || undefined,
             position: state.position,
@@ -1457,7 +1546,7 @@ export async function getWorkflowStateById(id: string): Promise<import('./types.
     return {
       id: state.id,
       name: state.name,
-      type: state.type as any,
+      type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
       color: state.color,
       description: state.description || undefined,
       position: state.position,
@@ -1498,7 +1587,7 @@ export async function createWorkflowState(input: WorkflowStateCreateInput): Prom
     return {
       id: state.id,
       name: state.name,
-      type: state.type as any,
+      type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
       color: state.color,
       description: state.description || undefined,
       position: state.position,
@@ -1539,7 +1628,7 @@ export async function updateWorkflowState(id: string, input: WorkflowStateUpdate
     return {
       id: state.id,
       name: state.name,
-      type: state.type as any,
+      type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
       color: state.color,
       description: state.description || undefined,
       position: state.position,
@@ -1789,20 +1878,68 @@ export interface ProjectLabelUpdateInput {
 
 /**
  * Get all project labels (workspace-level only)
+ * @param includeAll - If true, fetches ALL labels including ones never applied to projects
  */
-export async function getAllProjectLabels(): Promise<import('./types.js').ProjectLabel[]> {
+export async function getAllProjectLabels(includeAll?: boolean): Promise<import('./types.js').ProjectLabel[]> {
   try {
     const client = getLinearClient();
-    const labels = await client.organization.then(org => org.projectLabels());
     const result: import('./types.js').ProjectLabel[] = [];
 
-    for (const label of labels.nodes) {
-      result.push({
-        id: label.id,
-        name: label.name,
-        color: label.color,
-        description: label.description || undefined,
-      });
+    if (includeAll) {
+      // Use raw GraphQL query to fetch ALL project labels including unused ones
+      const query = `
+        query GetAllProjectLabels {
+          organization {
+            projectLabels {
+              nodes {
+                id
+                name
+                color
+                description
+                lastAppliedAt
+              }
+            }
+          }
+        }
+      `;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response: any = await client.client.rawRequest(query);
+
+      if (process.env.DEBUG) {
+        console.log(`DEBUG: Raw GraphQL response:`, JSON.stringify(response.data, null, 2));
+      }
+
+      const labels = response.data?.organization?.projectLabels?.nodes || [];
+
+      for (const label of labels) {
+        result.push({
+          id: label.id,
+          name: label.name,
+          color: label.color,
+          description: label.description || undefined,
+        });
+      }
+
+      if (process.env.DEBUG) {
+        console.log(`DEBUG: Fetched ${result.length} labels via raw GraphQL query`);
+      }
+    } else {
+      // Default: use SDK method which may only return labels that have been applied
+      const labels = await client.projectLabels();
+
+      for (const label of labels.nodes) {
+        result.push({
+          id: label.id,
+          name: label.name,
+          color: label.color,
+          description: label.description || undefined,
+        });
+      }
+
+      if (process.env.DEBUG) {
+        console.log(`DEBUG: Fetched ${result.length} labels from client.projectLabels()`);
+      }
     }
 
     // Sort by name
@@ -1932,6 +2069,105 @@ export async function deleteProjectLabel(id: string): Promise<boolean> {
 
     throw new Error(
       `Failed to delete project label: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * External Link API Methods
+ */
+
+export interface ExternalLink {
+  id: string;
+  url: string;
+  label: string;
+  sortOrder: number;
+  creatorId: string;
+}
+
+export interface ExternalLinkCreateInput {
+  url: string;
+  label: string;
+  projectId?: string;
+  initiativeId?: string;
+  sortOrder?: number;
+}
+
+/**
+ * Create an external link for a project or initiative
+ */
+export async function createExternalLink(input: ExternalLinkCreateInput): Promise<ExternalLink> {
+  try {
+    const client = getLinearClient();
+
+    const payload = await client.createEntityExternalLink({
+      url: input.url,
+      label: input.label,
+      projectId: input.projectId,
+      initiativeId: input.initiativeId,
+      sortOrder: input.sortOrder,
+    });
+
+    const link = await payload.entityExternalLink;
+    if (!link) {
+      throw new Error('Failed to create external link: No link returned from API');
+    }
+
+    const creator = await link.creator;
+
+    return {
+      id: link.id,
+      url: link.url,
+      label: link.label,
+      sortOrder: link.sortOrder,
+      creatorId: creator?.id ?? '',
+    };
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to create external link: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get all external links for a project
+ */
+export async function getProjectExternalLinks(projectId: string): Promise<ExternalLink[]> {
+  try {
+    const client = getLinearClient();
+    const project = await client.project(projectId);
+
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    const links = await project.externalLinks();
+    const result: ExternalLink[] = [];
+
+    for (const link of links.nodes) {
+      const creator = await link.creator;
+      result.push({
+        id: link.id,
+        url: link.url,
+        label: link.label,
+        sortOrder: link.sortOrder,
+        creatorId: creator?.id ?? '',
+      });
+    }
+
+    // Sort by sort order
+    return result.sort((a, b) => a.sortOrder - b.sortOrder);
+  } catch (error) {
+    if (error instanceof LinearClientError) {
+      throw error;
+    }
+
+    throw new Error(
+      `Failed to fetch external links: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
 }

@@ -14,7 +14,7 @@ interface WorkflowStatesListProps {
 }
 
 function WorkflowStatesList({ teamId, typeFilter, colorFilter, format }: WorkflowStatesListProps) {
-  const [states, setStates] = React.useState<any[]>([]);
+  const [states, setStates] = React.useState<Array<{ id: string; name: string; type: string; color: string; description?: string; position: number; teamId: string }>>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 

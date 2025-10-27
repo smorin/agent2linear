@@ -138,7 +138,7 @@ export function showWarning(message: string): void {
  */
 export function showEntityDetails(
   type: string,
-  entity: Record<string, any>,
+  entity: Record<string, unknown>,
   fields: string[]
 ): void {
   console.log(`📋 ${type}: ${entity.name || entity.title || entity.id}`);
@@ -175,7 +175,7 @@ export function showEntityNotFound(type: string, id: string): void {
  * formatListTSV([{id: 'team_123', name: 'Eng', key: 'ENG'}], ['id', 'name', 'key'])
  * // Output: "team_123\tEng\tENG"
  */
-export function formatListTSV(items: Array<Record<string, any>>, fields: string[]): string {
+export function formatListTSV(items: Array<Record<string, unknown>>, fields: string[]): string {
   if (items.length === 0) {
     return '';
   }
@@ -206,6 +206,6 @@ export function formatListTSV(items: Array<Record<string, any>>, fields: string[
  * formatListJSON([{id: 'team_123', name: 'Engineering'}])
  * // Output: [\n  {\n    "id": "team_123",\n    "name": "Engineering"\n  }\n]
  */
-export function formatListJSON(items: Array<Record<string, any>>): string {
+export function formatListJSON(items: Array<Record<string, unknown>>): string {
   return JSON.stringify(items, null, 2);
 }

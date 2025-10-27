@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs';
 import { resolveProject } from '../../lib/project-resolver.js';
 import { updateProject } from '../../lib/linear-client.js';
 import { resolveProjectStatusId } from '../../lib/status-cache.js';
@@ -8,6 +9,8 @@ interface UpdateOptions {
   status?: string;
   name?: string;
   description?: string;
+  content?: string;
+  contentFile?: string;
   priority?: string;
   targetDate?: string;
   startDate?: string;
@@ -15,13 +18,45 @@ interface UpdateOptions {
 
 export async function updateProjectCommand(nameOrId: string, options: UpdateOptions) {
   try {
+    // Validate mutual exclusivity of --content and --content-file
+    if (options.content && options.contentFile) {
+      showError(
+        'Cannot use both --content and --content-file',
+        'Choose one:\n' +
+        '  --content "markdown text"  (inline content)\n' +
+        '  --content-file path/to/file.md  (file content)'
+      );
+      process.exit(1);
+    }
+
+    // Read content from file if --content-file is provided
+    let content = options.content;
+    if (options.contentFile) {
+      try {
+        content = readFileSync(options.contentFile, 'utf-8');
+        console.log(`📄 Read content from: ${options.contentFile}`);
+      } catch (error) {
+        console.error(`❌ Error reading file: ${options.contentFile}\n`);
+        if (error instanceof Error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.error('   File not found. Please check the path and try again.');
+          } else if ((error as NodeJS.ErrnoException).code === 'EACCES') {
+            console.error('   Permission denied. Please check file permissions.');
+          } else {
+            console.error(`   ${error.message}`);
+          }
+        }
+        process.exit(1);
+      }
+    }
+
     // Validate at least one field provided
-    if (!options.status && !options.name && !options.description &&
+    if (!options.status && !options.name && !options.description && !content &&
         options.priority === undefined && !options.targetDate && !options.startDate) {
       showError(
         'No update fields provided',
         'Specify at least one field to update:\n' +
-        '  --status, --name, --description, --priority, --target-date, --start-date'
+        '  --status, --name, --description, --content, --content-file, --priority, --target-date, --start-date'
       );
       process.exit(1);
     }
@@ -40,7 +75,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
     console.log(`   ✓ Found project: "${resolved.project?.name}"`);
 
     // Prepare updates
-    const updates: any = {};
+    const updates: { statusId?: string; name?: string; description?: string; content?: string; priority?: number; startDate?: string; targetDate?: string } = {};
     const changes: string[] = [];
 
     // Resolve status if provided
@@ -86,6 +121,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
     if (options.description) {
       updates.description = options.description;
       changes.push(`Description updated`);
+    }
+
+    if (content) {
+      updates.content = content;
+      changes.push(`Content updated`);
     }
 
     if (options.priority !== undefined) {

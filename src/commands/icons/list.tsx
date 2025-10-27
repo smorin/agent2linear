@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, Text, Box } from 'ink';
 import { Command } from 'commander';
-import { CURATED_ICONS, getIconCategories, getIconsByCategory, searchIcons } from '../../lib/icons.js';
+import { CURATED_ICONS, getIconsByCategory, searchIcons } from '../../lib/icons.js';
 
 interface IconsListProps {
   search?: string;

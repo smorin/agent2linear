@@ -10,7 +10,7 @@ interface ColorsListProps {
 }
 
 function ColorsList({ palette, search, format }: ColorsListProps) {
-  const [colors, setColors] = React.useState<any[]>([]);
+  const [colors, setColors] = React.useState<Array<{ hex: string; name?: string; usageCount?: number }>>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
