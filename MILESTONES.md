@@ -444,7 +444,7 @@ Hex       Usage  States
 
 ---
 
-## [-] Milestone M13: Bug Fixes from Analysis (v0.13.1)
+## [x] Milestone M13: Bug Fixes from Analysis (v0.13.1)
 **Goal**: Fix all bugs identified in BUGS.md to improve reliability and user experience
 
 **Requirements**:
@@ -498,14 +498,14 @@ Hex       Usage  States
       - Test by corrupting aliases.json and running command
       - Committed: 6659614
 
-- [ ] [M13-TS01] Regression test: Verify existing functionality
+- [x] [M13-TS01] Regression test: Verify existing functionality
       - Test team sync-aliases with valid team ID
       - Test workflow-state sync-aliases
       - Test issue-label sync-aliases with --team flag
       - Test project-label sync-aliases
-      - Verify npm run build succeeds
-      - Verify npm run lint passes
-      - Verify npm run typecheck passes
+      - Verify npm run build succeeds ✅
+      - Verify npm run lint passes ✅
+      - Verify npm run typecheck passes ✅
 
 ### Deliverable
 All 5 bugs fixed with individual commits:
