@@ -1,6 +1,6 @@
 {
   "name": "linear-create",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "description": "Command-line tool for creating Linear issues and projects",
   "main": "dist/index.js",
   "bin": {

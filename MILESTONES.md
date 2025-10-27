@@ -46,6 +46,38 @@
       - Extend looksLikeLinearId() for label_ and workflow_ prefixes
       - Update validateAllAliases() to check new entity types
 
+#### Phase II Prerequisites (from M14.5 Bug #3 and #9)
+
+- [ ] [M12-T02a] Add workflow state caching infrastructure (Bug #9)
+      - Add getAllWorkflowStates() caching to status-cache.ts
+      - Add getCachedWorkflowStates(), refreshWorkflowStatesCache(), clearWorkflowStatesCache()
+      - Add WorkflowStateCacheEntry type
+      - Use same TTL strategy as other entities (60 min default)
+      - File storage: .linear-create/entity-cache.json
+      - This enables workflow state name-based resolution
+
+- [ ] [M12-T02b] Add workflow state resolution to resolution.ts (Bug #9)
+      - Update resolveStatus() for workflow-state entity type
+      - Add name lookup logic (like project-status has)
+      - Use workflow state cache for fast lookups
+      - Support resolution by: alias → name → ID
+      - Add helpful error messages with available states
+      - This completes Bug #9 fix from M14.5
+
+- [ ] [M12-T02c] Add issue label caching infrastructure (Bug #3)
+      - Add getIssueLabels() / getProjectLabels() methods to EntityCache
+      - Add persistent cache functions to status-cache.ts
+      - Add getCachedIssueLabels(), getCachedProjectLabels()
+      - Add IssueLabelCacheEntry, ProjectLabelCacheEntry types
+      - Follow same pattern as teams, initiatives, members, templates
+      - This completes Bug #3 fix from M14.5
+
+- [ ] [M12-T02d] Restore label entities to cache clear command (Bug #3)
+      - Add 'issue-labels' and 'project-labels' back to validEntities in cache/clear.ts
+      - Add switch cases for clearIssueLabelsCache() and clearProjectLabelsCache()
+      - Update error message to include label entity types
+      - This completes the cache clear functionality for labels
+
 - [ ] [M12-T03] Add Linear API client methods for workflow states
       - Add getAllWorkflowStates(teamId?: string) to linear-client.ts
       - Add getWorkflowStateById(id: string) for single state fetch
@@ -533,7 +565,7 @@ fix: resolve team aliases in issue-labels sync-aliases
 
 ---
 
-## [-] Milestone M14.5: Cache & Resolution Bug Fixes (v0.13.2)
+## [x] Milestone M14.5: Cache & Resolution Bug Fixes (v0.13.2)
 **Goal**: Fix critical caching bugs (data corruption and silent failures) discovered in bug analysis
 
 **Requirements**:
@@ -624,21 +656,23 @@ fix: resolve team aliases in issue-labels sync-aliases
       - Test project create with members
       - Test project update with members
 
-### Phase II Planning (Defer to M12 or create M12.5)
+### Phase II Planning (Integrated into M12)
 
-**Bug #3**: Complete Label Cache Implementation
-- Add getIssueLabels() / getProjectLabels() to EntityCache
-- Add getAllIssueLabels() / getAllProjectLabels() to linear-client.ts
-- Add persistent cache functions to status-cache.ts
-- Restore 'issue-labels' and 'project-labels' to cache clear command
-- **Recommendation**: Fold into M12 milestone (already plans label commands)
+**Bug #3**: Complete Label Cache Implementation → **M12-T02c, M12-T02d**
+- Add getIssueLabels() / getProjectLabels() to EntityCache (M12-T02c)
+- Add getAllIssueLabels() / getAllProjectLabels() to linear-client.ts (M12-T04, M12-T05)
+- Add persistent cache functions to status-cache.ts (M12-T02c)
+- Restore 'issue-labels' and 'project-labels' to cache clear command (M12-T02d)
+- **Status**: Integrated into M12 milestone as prerequisite tasks
 
-**Bug #9**: Implement Workflow State Resolution
-- Add getAllWorkflowStates(teamId?) to linear-client.ts
-- Add workflow state caching to status-cache.ts
-- Update resolveStatus() to lookup by name (like project-status)
-- Add to cache clear command
-- **Recommendation**: Fold into M12 milestone (already plans workflow-states commands)
+**Bug #9**: Implement Workflow State Resolution → **M12-T02a, M12-T02b**
+- Add getAllWorkflowStates(teamId?) to linear-client.ts (M12-T03 - already exists)
+- Add workflow state caching to status-cache.ts (M12-T02a)
+- Update resolveStatus() to lookup by name (like project-status) (M12-T02b)
+- Add to cache clear command (M12-T02a)
+- **Status**: Integrated into M12 milestone as prerequisite tasks
+
+See M12 milestone tasks M12-T02a through M12-T02d for implementation details.
 
 ### Deliverable (Phase I)
 ```bash
