@@ -3,6 +3,7 @@ import { resolveProject } from '../../lib/project-resolver.js';
 import { updateProject } from '../../lib/linear-client.js';
 import { showEntityNotFound, showError, showSuccess } from '../../lib/output.js';
 import { resolveAlias } from '../../lib/aliases.js';
+import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
 
 interface UpdateOptions {
   status?: string;
@@ -39,29 +40,9 @@ interface UpdateOptions {
   removeDependency?: string[];     // Remove all dependencies with project
 }
 
-function validateDateFormat(date: string, fieldName: string): void {
-  // ISO 8601 date format: YYYY-MM-DD
-  const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-  if (!isoDateRegex.test(date)) {
-    showError(
-      `Invalid ${fieldName} format`,
-      `Date must be in ISO format (YYYY-MM-DD), e.g., 2025-01-15\n` +
-      `   You provided: ${date}`
-    );
-    process.exit(1);
-  }
-
-  // Validate it's a valid date
-  const dateObj = new Date(date);
-  if (isNaN(dateObj.getTime())) {
-    showError(
-      `Invalid ${fieldName}`,
-      `"${date}" is not a valid date`
-    );
-    process.exit(1);
-  }
-}
+// validateDateFormat removed in M22 Phase 5 - replaced with parseDateForCommand()
+// Date parsing now supports flexible formats: quarters (Q1 2025), months (Jan 2025), years (2025), and ISO dates
+// See src/lib/date-parser.ts for full implementation
 
 export async function updateProjectCommand(nameOrId: string, options: UpdateOptions) {
   try {
@@ -195,16 +176,49 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
       changes.push(`Priority → ${result.value}`);
     }
 
+    // M22 Phase 5: Parse dates with flexible format support
     if (options.targetDate) {
-      validateDateFormat(options.targetDate, 'target date');
-      updates.targetDate = options.targetDate;
-      changes.push(`Target Date → ${options.targetDate}`);
+      const parsed = parseDateForCommand(options.targetDate, 'target date');
+      updates.targetDate = parsed.date;
+      // Auto-detect resolution from parsed format, or use explicit flag if provided
+      if (!options.targetDateResolution && parsed.resolution) {
+        updates.targetDateResolution = parsed.resolution;
+      }
+      changes.push(`Target Date → ${parsed.displayText} (${parsed.date}${parsed.resolution ? `, resolution: ${parsed.resolution}` : ''})`);
+
+      // Validate resolution override (M22.1)
+      const targetValidation = validateResolutionOverride(
+        options.targetDate,
+        parsed.resolution,
+        options.targetDateResolution,
+      );
+      if (targetValidation.warning) {
+        console.log(`⚠️  ${targetValidation.warning}`);
+      } else if (targetValidation.info) {
+        console.log(`ℹ️  ${targetValidation.info}`);
+      }
     }
 
     if (options.startDate) {
-      validateDateFormat(options.startDate, 'start date');
-      updates.startDate = options.startDate;
-      changes.push(`Start Date → ${options.startDate}`);
+      const parsed = parseDateForCommand(options.startDate, 'start date');
+      updates.startDate = parsed.date;
+      // Auto-detect resolution from parsed format, or use explicit flag if provided
+      if (!options.startDateResolution && parsed.resolution) {
+        updates.startDateResolution = parsed.resolution;
+      }
+      changes.push(`Start Date → ${parsed.displayText} (${parsed.date}${parsed.resolution ? `, resolution: ${parsed.resolution}` : ''})`);
+
+      // Validate resolution override (M22.1)
+      const startValidation = validateResolutionOverride(
+        options.startDate,
+        parsed.resolution,
+        options.startDateResolution,
+      );
+      if (startValidation.warning) {
+        console.log(`⚠️  ${startValidation.warning}`);
+      } else if (startValidation.info) {
+        console.log(`ℹ️  ${startValidation.info}`);
+      }
     }
 
     // M15 Phase 1: Visual & Ownership Fields
@@ -325,16 +339,18 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
 
     // M15 Phase 3: Date Resolutions
 
-    // Start date resolution
-    if (options.startDateResolution) {
+    // Start date resolution (resolution-only update)
+    if (options.startDateResolution && !options.startDate) {
       updates.startDateResolution = options.startDateResolution;
       changes.push(`Start Date Resolution → ${options.startDateResolution}`);
+      console.log(`ℹ️  Updating resolution without changing date (resolution-only update)`);
     }
 
-    // Target date resolution
-    if (options.targetDateResolution) {
+    // Target date resolution (resolution-only update)
+    if (options.targetDateResolution && !options.targetDate) {
       updates.targetDateResolution = options.targetDateResolution;
       changes.push(`Target Date Resolution → ${options.targetDateResolution}`);
+      console.log(`ℹ️  Updating resolution without changing date (resolution-only update)`);
     }
 
     // Update project

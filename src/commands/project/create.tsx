@@ -17,6 +17,7 @@ import {
 import { getConfig } from '../../lib/config.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { resolveAlias } from '../../lib/aliases.js';
+import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
 
 interface CreateOptions {
   title?: string;
@@ -340,6 +341,44 @@ async function createProjectNonInteractive(options: CreateOptions) {
       }
     }
 
+    // Parse dates with flexible format support (M22 Phase 5)
+    let startDateParsed = null;
+    let targetDateParsed = null;
+
+    if (options.startDate) {
+      startDateParsed = parseDateForCommand(options.startDate, 'start date');
+      console.log(`📅 Start date: ${startDateParsed.displayText} (${startDateParsed.date}${startDateParsed.resolution ? `, resolution: ${startDateParsed.resolution}` : ''})`);
+
+      // Validate resolution override (M22.1)
+      const startValidation = validateResolutionOverride(
+        options.startDate,
+        startDateParsed.resolution,
+        options.startDateResolution,
+      );
+      if (startValidation.warning) {
+        console.log(`⚠️  ${startValidation.warning}`);
+      } else if (startValidation.info) {
+        console.log(`ℹ️  ${startValidation.info}`);
+      }
+    }
+
+    if (options.targetDate) {
+      targetDateParsed = parseDateForCommand(options.targetDate, 'target date');
+      console.log(`📅 Target date: ${targetDateParsed.displayText} (${targetDateParsed.date}${targetDateParsed.resolution ? `, resolution: ${targetDateParsed.resolution}` : ''})`);
+
+      // Validate resolution override (M22.1)
+      const targetValidation = validateResolutionOverride(
+        options.targetDate,
+        targetDateParsed.resolution,
+        options.targetDateResolution,
+      );
+      if (targetValidation.warning) {
+        console.log(`⚠️  ${targetValidation.warning}`);
+      } else if (targetValidation.info) {
+        console.log(`ℹ️  ${targetValidation.info}`);
+      }
+    }
+
     // Create the project
     const projectData: ProjectCreateInput = {
       name: title,
@@ -355,10 +394,10 @@ async function createProjectNonInteractive(options: CreateOptions) {
       leadId,
       labelIds,
       convertedFromIssueId: options.convertedFrom,
-      startDate: options.startDate,
-      startDateResolution: options.startDateResolution,
-      targetDate: options.targetDate,
-      targetDateResolution: options.targetDateResolution,
+      startDate: startDateParsed?.date || options.startDate,
+      startDateResolution: options.startDateResolution || startDateParsed?.resolution,
+      targetDate: targetDateParsed?.date || options.targetDate,
+      targetDateResolution: options.targetDateResolution || targetDateParsed?.resolution,
       priority: options.priority,
       memberIds,
     };

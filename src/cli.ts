@@ -73,7 +73,7 @@ const cli = new Command();
 cli
   .name('linear-create')
   .description('Command-line tool for creating Linear issues and projects')
-  .version('0.20.3')
+  .version('0.21.1')
   .action(() => {
     cli.help();
   });
@@ -188,14 +188,14 @@ project
   .option('--labels <ids>', 'Comma-separated project label IDs (e.g., label_1,label_2)')
   .option('--link <url-and-label>', 'External link as "URL" or "URL|Label" (can be specified multiple times)', (value, previous: string[] = []) => [...previous, value], [])
   .option('--converted-from <id>', 'Issue ID this project was converted from (format: issue_xxx)')
-  .option('--start-date <date>', 'Planned start date (ISO 8601 format: YYYY-MM-DD)')
+  .option('--start-date <date>', 'Planned start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
   .addOption(
-    new Option('--start-date-resolution <resolution>', 'Start date resolution')
+    new Option('--start-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Only needed when date format doesn\'t match your intent. Example: --start-date 2025-01-15 --start-date-resolution quarter (mid-month date representing Q1)')
       .choices(['month', 'quarter', 'halfYear', 'year'])
   )
-  .option('--target-date <date>', 'Target completion date (ISO 8601 format: YYYY-MM-DD)')
+  .option('--target-date <date>', 'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
   .addOption(
-    new Option('--target-date-resolution <resolution>', 'Target date resolution')
+    new Option('--target-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Only needed when date format doesn\'t match your intent. Example: --target-date 2025-01-15 --target-date-resolution quarter (mid-month date representing Q1)')
       .choices(['month', 'quarter', 'halfYear', 'year'])
   )
   .addOption(
@@ -233,9 +233,20 @@ Examples:
   With additional fields:
   $ linear-create project create --title "Website Redesign" --team team_abc123 \\
       --icon "Tree" --color "#FF6B6B" --lead user_xyz789 \\
-      --start-date "2025-01-15" --start-date-resolution quarter \\
-      --target-date "2025-03-31" --target-date-resolution quarter \\
+      --start-date "2025-01-15" \\
+      --target-date "2025-03-31" \\
       --priority 2
+
+  Date formats (flexible, auto-detected resolution):
+  $ linear-create project create --title "Q1 Initiative" --team team_abc123 --start-date "2025-Q1"
+      # Creates project with start date: 2025-01-01, resolution: quarter
+
+  $ linear-create project create --title "January Sprint" --team team_abc123 --start-date "Jan 2025"
+      # Creates project with start date: 2025-01-01, resolution: month
+
+  $ linear-create project create --title "2025 Strategy" --team team_abc123 \\
+      --start-date "2025" --target-date "2025-Q4"
+      # Start: 2025-01-01 (year), Target: 2025-10-01 (quarter)
 
   With content and labels:
   $ linear-create project create --title "Q1 Planning" --team team_abc123 \\
@@ -272,13 +283,25 @@ Field Value Formats:
   --no-lead         Flag to disable lead assignment
   --labels          label_1,label_2,label_3 (comma-separated)
   --members         user_1,user_2 (comma-separated)
-  --start-date      2025-01-15 (YYYY-MM-DD)
-  --target-date     2025-12-31 (YYYY-MM-DD)
   --priority        0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
-  --*-resolution    month | quarter | halfYear | year
   --depends-on      proj1,proj2 (my end waits for their start)
   --blocks          proj1,proj2 (their end waits for my start)
   --dependency      project:myAnchor:theirAnchor (advanced: start|end)
+
+Date Formats (--start-date, --target-date):
+  Quarters:         2025-Q1, Q1 2025, q1-2025 (case-insensitive)
+                    → Q1: 2025-01-01, Q2: 2025-04-01, Q3: 2025-07-01, Q4: 2025-10-01
+  Half-years:       2025-H1, H1 2025, h1-2025
+                    → H1: 2025-01-01 (Jan-Jun), H2: 2025-07-01 (Jul-Dec)
+  Months:           2025-01, Jan 2025, January 2025, 2025-Dec
+                    → First day of month (2025-01-01, 2025-12-01)
+  Years:            2025
+                    → First day of year (2025-01-01)
+  ISO dates:        2025-01-15, 2025-03-31
+                    → Specific day (no auto-detected resolution)
+
+  Note: Resolution is auto-detected from format. The --*-resolution flags are optional
+        and only needed for advanced use cases where you want to override the auto-detection.
 
 Note: Set defaults with config:
   $ linear-create config set defaultProjectTemplate template_abc123
@@ -316,15 +339,15 @@ project
   .option('--content <markdown>', 'Update content as markdown')
   .option('--content-file <path>', 'Path to file containing project content (markdown)')
   .option('--priority <0-4>', 'Priority level (0-4)', parseInt)
-  .option('--target-date <YYYY-MM-DD>', 'Target completion date')
-  .option('--start-date <YYYY-MM-DD>', 'Estimated start date')
+  .option('--target-date <date>', 'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
+  .option('--start-date <date>', 'Estimated start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
   .option('--color <hex>', 'Project color (hex code like #FF6B6B)')
   .option('--icon <icon>', 'Project icon name (passed directly to Linear API)')
   .option('--lead <id>', 'Project lead (user ID, alias, or email)')
   .option('--members <ids>', 'Comma-separated member IDs, aliases, or emails')
   .option('--labels <ids>', 'Comma-separated project label IDs or aliases')
-  .addOption(new Option('--start-date-resolution <resolution>', 'Start date resolution').choices(['month', 'quarter', 'halfYear', 'year']))
-  .addOption(new Option('--target-date-resolution <resolution>', 'Target date resolution').choices(['month', 'quarter', 'halfYear', 'year']))
+  .addOption(new Option('--start-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --start-date 2025-01-15 --start-date-resolution quarter').choices(['month', 'quarter', 'halfYear', 'year']))
+  .addOption(new Option('--target-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --target-date 2025-01-15 --target-date-resolution quarter').choices(['month', 'quarter', 'halfYear', 'year']))
   .option('--link <url-and-label>', 'Add external link as "URL" or "URL|Label" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
   .option('--remove-link <url>', 'Remove external link by exact URL match (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
   .option('--depends-on <projects>', 'Add "depends on" relations (comma-separated IDs/aliases)')
@@ -343,8 +366,10 @@ Examples:
   Update content from file:
   $ linear-create proj update "My Project" --content-file ./updated-plan.md
 
-  Update multiple fields:
-  $ linear-create proj update "Q1 Goals" --status in-progress --priority 2 --target-date 2025-03-31
+  Update with flexible date formats:
+  $ linear-create proj update "Q1 Goals" --status in-progress --priority 2 --target-date "2025-Q1"
+  $ linear-create proj update "My Project" --start-date "Jan 2025" --target-date "2025-H1"
+  $ linear-create proj update "Annual Plan" --start-date "2025" --target-date "2025-12-31"
 
   Manage external links:
   $ linear-create proj update "My Project" --link "https://github.com/org/repo|GitHub"

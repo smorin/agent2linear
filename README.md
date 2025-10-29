@@ -455,6 +455,123 @@ linear-create project create --title "Test" --team eng --icon "InvalidIcon"
 - Linear supports hundreds of standard icons beyond this curated list
 - Invalid icons will be rejected by Linear's API with clear error messages
 
+## Date Formats
+
+linear-create supports flexible date formats for project `--start-date` and `--target-date` options, making it easy to specify dates naturally without manually calculating start-of-quarter or start-of-month dates.
+
+### Supported Formats
+
+**Quarters:**
+```bash
+linear-create project create --title "Q1 Initiative" --start-date "2025-Q1"
+linear-create project create --title "Q2 Goals" --start-date "Q2 2025"
+linear-create project create --title "Q3 Project" --start-date "q3-2025"  # Case-insensitive
+```
+
+**Half-Years:**
+```bash
+linear-create project create --title "H1 Strategy" --start-date "2025-H1"
+linear-create project create --title "H2 Plan" --start-date "H2 2025"
+```
+
+**Months:**
+```bash
+# Numeric format
+linear-create project create --title "January Sprint" --start-date "2025-01"
+
+# Short month names
+linear-create project create --title "Feb Release" --start-date "Feb 2025"
+
+# Full month names
+linear-create project create --title "March Update" --start-date "March 2025"
+```
+
+**Years:**
+```bash
+linear-create project create --title "2025 Roadmap" --start-date "2025"
+```
+
+**ISO Dates (specific dates):**
+```bash
+linear-create project create --title "Sprint 1" --start-date "2025-01-15"
+```
+
+### How It Works
+
+The date parser automatically:
+- Converts flexible formats to ISO dates (YYYY-MM-DD)
+- Detects and sets the appropriate resolution (quarter, month, year)
+- Shows confirmation messages with the parsed format
+
+**Example output:**
+```bash
+$ linear-create project create --title "Q1 Initiative" --start-date "2025-Q1"
+📅 Start date: Q1 2025 (2025-01-01, resolution: quarter)
+✅ Created project: Q1 Initiative
+```
+
+### Date Resolution
+
+Linear projects support date resolutions to indicate time granularity:
+- **quarter**: Project spans a quarter (Q1-Q4)
+- **month**: Project spans a month
+- **halfYear**: Project spans half a year (H1 or H2)
+- **year**: Project spans an entire year
+- *(none)*: Specific date without resolution
+
+#### Auto-Detection (Recommended)
+
+The parser **automatically sets the resolution** based on your input format:
+```bash
+# ✅ Recommended: Let the parser auto-detect resolution
+linear-create project create --start-date "2025-Q1"      # Auto: resolution = quarter
+linear-create project create --start-date "Jan 2025"     # Auto: resolution = month
+linear-create project create --start-date "2025"         # Auto: resolution = year
+linear-create project create --start-date "2025-01-15"   # Auto: no resolution (specific date)
+```
+
+#### Explicit Override (Advanced)
+
+For advanced use cases, you can explicitly override the resolution with `--start-date-resolution` or `--target-date-resolution`:
+
+**When to use explicit override:**
+- Mid-period dates with specific resolution (e.g., mid-month representing a quarter)
+- Resolution-only updates (update command only)
+
+```bash
+# ⚙️ Advanced: Override auto-detection
+# Mid-month date representing Q1
+linear-create project create --start-date "2025-01-15" --start-date-resolution quarter
+
+# Resolution-only update (update command)
+linear-create project update myproject --start-date-resolution quarter
+```
+
+**Validation warnings:**
+```bash
+# ⚠️ Conflicting format and explicit flag
+$ linear-create project create --start-date "2025-Q1" --start-date-resolution month
+⚠️  Warning: Date format '2025-Q1' implies quarter resolution, but --start-date-resolution
+    is set to 'month'. Using explicit value (month).
+```
+
+**Best practice:** Use auto-detection for 95% of cases. Only use explicit flags when the date format doesn't match your intent.
+
+### Error Handling
+
+Invalid dates are caught with helpful error messages:
+
+```bash
+$ linear-create project create --title "Test" --start-date "2025-Q5"
+❌ Invalid start date: Invalid quarter: Q5
+
+Quarter must be Q1, Q2, Q3, or Q4. Examples:
+  --start-date "2025-Q1"     → Q1 2025 (Jan 1 - Mar 31)
+  --start-date "Q2 2025"     → Q2 2025 (Apr 1 - Jun 30)
+  --start-date "Q3 2025"     → Q3 2025 (Jul 1 - Sep 30)
+  --start-date "Q4 2025"     → Q4 2025 (Oct 1 - Dec 31)
+```
+
 ## Development
 
 ```bash
@@ -472,7 +589,85 @@ npm run format
 
 # Type check
 npm run typecheck
+
+# Run unit tests
+npm run test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with web UI
+npm run test:ui
+
+# Run tests with coverage report
+npm run test:coverage
 ```
+
+### Testing
+
+This project uses [Vitest](https://vitest.dev/) for unit testing with comprehensive coverage of core utilities.
+
+**Test Structure:**
+- Unit tests: `src/**/*.test.ts` - Fast, isolated tests for utilities and parsers
+- Integration tests: `tests/scripts/*.sh` - End-to-end tests with real Linear API
+
+**Running Tests:**
+```bash
+# Run all unit tests once (recommended for CI/CD and verification)
+npm run test
+
+# Watch mode - auto-run tests on file changes (best for active development)
+npm run test:watch
+
+# Interactive web UI for test exploration (debugging and visual analysis)
+npm run test:ui
+
+# Generate coverage report (check test completeness)
+npm run test:coverage
+```
+
+**Running Specific Tests:**
+```bash
+# Run only date parser tests (104 tests)
+npx vitest run src/lib/date-parser.test.ts
+
+# Run tests matching a pattern
+npx vitest run -t "Quarter formats"
+
+# Run with verbose output
+npx vitest run --reporter=verbose
+```
+
+**Test Files:**
+- `src/lib/smoke.test.ts` - 4 basic sanity tests
+- `src/lib/date-parser.test.ts` - 104 comprehensive date parser tests
+
+**Date Parser Test Coverage (104 tests):**
+- Quarter formats (15 tests) - All Q1-Q4 variants, case sensitivity, validation
+- Half-year formats (10 tests) - H1/H2 variants, edge cases
+- Month formats - Numeric (10 tests) - YYYY-MM format with validation
+- Month formats - Named (20 tests) - Jan/January, all 12 months, case sensitivity
+- Year formats (5 tests) - 4-digit years with range validation
+- ISO date formats (10 tests) - YYYY-MM-DD with leap year validation
+- Resolution detection (8 tests) - Auto-detection verification
+- Parser priority (12 tests) - Format precedence rules
+- Error messages (10 tests) - User-friendly error handling
+- Edge cases (4 tests) - Whitespace, mixed case, boundaries
+
+**Helper Function Tests (20 tests):**
+- `getQuarterStartDate()` - 6 tests
+- `getHalfYearStartDate()` - 4 tests
+- `getMonthStartDate()` - 5 tests
+- `parseMonthName()` - 5 tests
+
+**Coverage:**
+- Target: 95%+ coverage for core utilities
+- Current: `date-parser.ts` has **99.10%** coverage
+  - Statements: 99.10%
+  - Branches: 98.07%
+  - Functions: 100%
+  - Lines: 99.04%
+- Coverage reports available in `coverage/` directory after running `npm run test:coverage`
 
 ## Project Status
 

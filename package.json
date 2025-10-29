@@ -1,6 +1,6 @@
 {
   "name": "linear-create",
-  "version": "0.20.3",
+  "version": "0.21.1",
   "description": "Command-line tool for creating Linear issues and projects",
   "main": "dist/index.js",
   "bin": {
@@ -17,7 +17,11 @@
     "format": "turbo run format:task",
     "format:task": "prettier --write \"src/**/*.{ts,tsx,json}\"",
     "typecheck": "turbo run typecheck:task",
-    "typecheck:task": "tsc --noEmit"
+    "typecheck:task": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "linear",
@@ -31,11 +35,14 @@
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@vitest/coverage-v8": "^4.0.4",
+    "@vitest/ui": "^4.0.4",
     "eslint": "^8.0.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "turbo": "^1.13.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.4"
   },
   "dependencies": {
     "@linear/sdk": "^61.0.0",
