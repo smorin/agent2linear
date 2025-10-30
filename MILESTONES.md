@@ -586,145 +586,145 @@ Opening in browser...
 #### Tests & Tasks
 
 **Command Setup:**
-- [ ] [M15.4-T01] Create src/commands/issue/update.ts file with commander setup
-- [ ] [M15.4-T02] Register issue update command in src/cli.ts
-- [ ] [M15.4-T03] Add `<identifier>` required argument (ENG-123 or UUID)
-- [ ] [M15.4-T04] Implement identifier resolution using issue-resolver
-- [ ] [M15.4-T05] Validate at least one update option is provided (error if none):
+- [x] [M15.4-T01] Create src/commands/issue/update.ts file with commander setup
+- [x] [M15.4-T02] Register issue update command in src/cli.ts
+- [x] [M15.4-T03] Add `<identifier>` required argument (ENG-123 or UUID)
+- [x] [M15.4-T04] Implement identifier resolution using issue-resolver
+- [x] [M15.4-T05] Validate at least one update option is provided (error if none):
       - Count data-modifying flags: title, description, priority, estimate, state, dates, assignments,
         labels, subscribers, trash/untrash, team, project, cycle, parent
       - Exclude: --web (mode flag), --json (output format)
       - Error message: "No update options specified. Use --help to see available options."
 
 **Group 1: Basic Field Updates:**
-- [ ] [M15.4-T06] Implement `--title <string>` option
-- [ ] [M15.4-T07] Implement `--description <string>` option (inline)
-- [ ] [M15.4-T08] Implement `--description-file <path>` option
-- [ ] [M15.4-T08a] Add file existence and readability validation for description-file
-- [ ] [M15.4-T09] Implement mutual exclusivity for description options
-- [ ] [M15.4-TS01] Test update title only
-- [ ] [M15.4-TS02] Test update description inline
-- [ ] [M15.4-TS03] Test update description from file
-- [ ] [M15.4-TS03a] Test error: description-file doesn't exist
-- [ ] [M15.4-TS03b] Test error: description-file not readable
-- [ ] [M15.4-TS04] Test error: no update options provided (only identifier)
-- [ ] [M15.4-TS04a] Test --web alone doesn't count as update (should error)
-- [ ] [M15.4-TS05] Test error: both description and description-file
+- [x] [M15.4-T06] Implement `--title <string>` option
+- [x] [M15.4-T07] Implement `--description <string>` option (inline)
+- [x] [M15.4-T08] Implement `--description-file <path>` option
+- [x] [M15.4-T08a] Add file existence and readability validation for description-file
+- [x] [M15.4-T09] Implement mutual exclusivity for description options
+- [x] [M15.4-TS01] Test update title only
+- [x] [M15.4-TS02] Test update description inline
+- [x] [M15.4-TS03] Test update description from file
+- [x] [M15.4-TS03a] Test error: description-file doesn't exist
+- [x] [M15.4-TS03b] Test error: description-file not readable
+- [x] [M15.4-TS04] Test error: no update options provided (only identifier)
+- [x] [M15.4-TS04a] Test --web alone doesn't count as update (should error)
+- [x] [M15.4-TS05] Test error: both description and description-file
 
 **Group 2: Priority & Estimation Updates:**
-- [ ] [M15.4-T10] Implement `--priority <0-4>` option with validation
-- [ ] [M15.4-T11] Implement `--estimate <number>` option
-- [ ] [M15.4-T12] Implement `--no-estimate` flag to clear estimate
-- [ ] [M15.4-TS06] Test change priority
-- [ ] [M15.4-TS07] Test change estimate
-- [ ] [M15.4-TS08] Test clear estimate with --no-estimate
-- [ ] [M15.4-TS09] Test priority + estimate together
+- [x] [M15.4-T10] Implement `--priority <0-4>` option with validation
+- [x] [M15.4-T11] Implement `--estimate <number>` option
+- [x] [M15.4-T12] Implement `--no-estimate` flag to clear estimate
+- [x] [M15.4-TS06] Test change priority
+- [x] [M15.4-TS07] Test change estimate
+- [x] [M15.4-TS08] Test clear estimate with --no-estimate
+- [x] [M15.4-TS09] Test priority + estimate together
 
 **Group 3: Workflow Updates:**
-- [ ] [M15.4-T13] Implement `--state <id|alias>` option with alias resolution
-- [ ] [M15.4-T14] Validate state belongs to current team (or new team if changing)
-- [ ] [M15.4-T14a] Handle cross-team state validation during team change:
+- [x] [M15.4-T13] Implement `--state <id|alias>` option with alias resolution
+- [x] [M15.4-T14] Validate state belongs to current team (or new team if changing)
+- [x] [M15.4-T14a] Handle cross-team state validation during team change:
       - If changing team and state, validate state belongs to NEW team
       - If changing state only, validate state belongs to CURRENT team
       - Provide clear error with both teams if mismatch
-- [ ] [M15.4-TS10] Test change state by ID
-- [ ] [M15.4-TS11] Test change state by alias
-- [ ] [M15.4-TS11a] Test error: state from wrong team (clear error message)
+- [x] [M15.4-TS10] Test change state by ID
+- [x] [M15.4-TS11] Test change state by alias
+- [x] [M15.4-TS11a] Test error: state from wrong team (clear error message)
 
 **Group 4: Date Updates:**
-- [ ] [M15.4-T15] Implement `--due-date <YYYY-MM-DD>` option with ISO validation
-- [ ] [M15.4-T16] Implement `--no-due-date` flag to clear due date
-- [ ] [M15.4-TS12] Test set due date
-- [ ] [M15.4-TS13] Test change due date
-- [ ] [M15.4-TS14] Test clear due date with --no-due-date
+- [x] [M15.4-T15] Implement `--due-date <YYYY-MM-DD>` option with ISO validation
+- [x] [M15.4-T16] Implement `--no-due-date` flag to clear due date
+- [x] [M15.4-TS12] Test set due date
+- [x] [M15.4-TS13] Test change due date
+- [x] [M15.4-TS14] Test clear due date with --no-due-date
 
 **Group 5: Assignment Updates:**
-- [ ] [M15.4-T17] Implement `--assignee <id|alias|email>` option with member resolution
-- [ ] [M15.4-T18] Implement `--no-assignee` flag to remove assignee
-- [ ] [M15.4-TS15] Test change assignee by ID
-- [ ] [M15.4-TS16] Test change assignee by email
-- [ ] [M15.4-TS17] Test remove assignee with --no-assignee
+- [x] [M15.4-T17] Implement `--assignee <id|alias|email>` option with member resolution
+- [x] [M15.4-T18] Implement `--no-assignee` flag to remove assignee
+- [x] [M15.4-TS15] Test change assignee by ID
+- [x] [M15.4-TS16] Test change assignee by email
+- [x] [M15.4-TS17] Test remove assignee with --no-assignee
 
 **Group 6: Team & Organization Updates:**
-- [ ] [M15.4-T19] Implement `--team <id|alias>` option to move between teams
-- [ ] [M15.4-T20] Validate workflow state compatibility when changing teams
-- [ ] [M15.4-T21] Implement `--project <id|alias|name>` option with project resolver
-- [ ] [M15.4-T22] Implement `--no-project` flag to remove from project
-- [ ] [M15.4-T23] Implement `--cycle <id>` option
-- [ ] [M15.4-T24] Implement `--no-cycle` flag to remove from cycle
-- [ ] [M15.4-TS18] Test move to different team
-- [ ] [M15.4-TS19] Test assign to project
-- [ ] [M15.4-TS20] Test remove from project (--no-project)
-- [ ] [M15.4-TS21] Test assign to cycle
-- [ ] [M15.4-TS22] Test remove from cycle (--no-cycle)
-- [ ] [M15.4-TS23] Test move team + change state together
-- [ ] [M15.4-TS24] Test error: invalid state for new team
+- [x] [M15.4-T19] Implement `--team <id|alias>` option to move between teams
+- [x] [M15.4-T20] Validate workflow state compatibility when changing teams
+- [x] [M15.4-T21] Implement `--project <id|alias|name>` option with project resolver
+- [x] [M15.4-T22] Implement `--no-project` flag to remove from project
+- [x] [M15.4-T23] Implement `--cycle <id>` option
+- [x] [M15.4-T24] Implement `--no-cycle` flag to remove from cycle
+- [x] [M15.4-TS18] Test move to different team
+- [x] [M15.4-TS19] Test assign to project
+- [x] [M15.4-TS20] Test remove from project (--no-project)
+- [x] [M15.4-TS21] Test assign to cycle
+- [x] [M15.4-TS22] Test remove from cycle (--no-cycle)
+- [x] [M15.4-TS23] Test move team + change state together
+- [x] [M15.4-TS24] Test error: invalid state for new team
 
 **Group 7: Parent Relationship Updates:**
-- [ ] [M15.4-T25] Implement `--parent <identifier>` option to set/change parent
-- [ ] [M15.4-T26] Implement `--no-parent` flag to remove parent (make root issue)
-- [ ] [M15.4-TS25] Test set parent (make sub-issue)
-- [ ] [M15.4-TS26] Test change parent
-- [ ] [M15.4-TS27] Test remove parent with --no-parent (make root)
+- [x] [M15.4-T25] Implement `--parent <identifier>` option to set/change parent
+- [x] [M15.4-T26] Implement `--no-parent` flag to remove parent (make root issue)
+- [x] [M15.4-TS25] Test set parent (make sub-issue)
+- [x] [M15.4-TS26] Test change parent
+- [x] [M15.4-TS27] Test remove parent with --no-parent (make root)
 
 **Group 8: Label Management (Three Modes):**
-- [ ] [M15.4-T27] Implement `--labels <id|alias,...>` option to replace all labels
-- [ ] [M15.4-T28] Implement `--add-labels <id|alias,...>` option to add labels
-- [ ] [M15.4-T29] Implement `--remove-labels <id|alias,...>` option to remove labels
-- [ ] [M15.4-T30] Validate mutual exclusivity: --labels vs --add-labels/--remove-labels
+- [x] [M15.4-T27] Implement `--labels <id|alias,...>` option to replace all labels
+- [x] [M15.4-T28] Implement `--add-labels <id|alias,...>` option to add labels
+- [x] [M15.4-T29] Implement `--remove-labels <id|alias,...>` option to remove labels
+- [x] [M15.4-T30] Validate mutual exclusivity: --labels vs --add-labels/--remove-labels
       - Error if --labels AND --add-labels provided
       - Error if --labels AND --remove-labels provided
       - Allow --add-labels AND --remove-labels together (add first, then remove)
-- [ ] [M15.4-T31] Implement comma-separated parsing and alias resolution for labels
-- [ ] [M15.4-TS28] Test replace all labels (--labels)
-- [ ] [M15.4-TS29] Test add labels to existing (--add-labels)
-- [ ] [M15.4-TS30] Test remove specific labels (--remove-labels)
-- [ ] [M15.4-TS31] Test add + remove in same command
-- [ ] [M15.4-TS32] Test clear all labels (empty list)
-- [ ] [M15.4-TS32a] Test error: --labels and --add-labels together (mutual exclusivity)
-- [ ] [M15.4-TS32b] Test error: --labels and --remove-labels together
-- [ ] [M15.4-TS33] Test label alias resolution
-- [ ] [M15.4-TS33a] Test remove label that doesn't exist on issue (silent success)
+- [x] [M15.4-T31] Implement comma-separated parsing and alias resolution for labels
+- [x] [M15.4-TS28] Test replace all labels (--labels)
+- [x] [M15.4-TS29] Test add labels to existing (--add-labels)
+- [x] [M15.4-TS30] Test remove specific labels (--remove-labels)
+- [x] [M15.4-TS31] Test add + remove in same command
+- [x] [M15.4-TS32] Test clear all labels (empty list)
+- [x] [M15.4-TS32a] Test error: --labels and --add-labels together (mutual exclusivity)
+- [x] [M15.4-TS32b] Test error: --labels and --remove-labels together
+- [x] [M15.4-TS33] Test label alias resolution
+- [x] [M15.4-TS33a] Test remove label that doesn't exist on issue (silent success)
 
 **Group 9: Subscriber Management (Three Modes):**
-- [ ] [M15.4-T32] Implement `--subscribers <id|alias|email,...>` option to replace all
-- [ ] [M15.4-T33] Implement `--add-subscribers <id|alias|email,...>` option
-- [ ] [M15.4-T34] Implement `--remove-subscribers <id|alias|email,...>` option
-- [ ] [M15.4-T35] Validate mutual exclusivity: --subscribers vs --add/--remove variants
-- [ ] [M15.4-T36] Implement comma-separated parsing and member resolution
-- [ ] [M15.4-TS34] Test replace all subscribers
-- [ ] [M15.4-TS35] Test add subscribers
-- [ ] [M15.4-TS36] Test remove subscribers
+- [x] [M15.4-T32] Implement `--subscribers <id|alias|email,...>` option to replace all
+- [x] [M15.4-T33] Implement `--add-subscribers <id|alias|email,...>` option
+- [x] [M15.4-T34] Implement `--remove-subscribers <id|alias|email,...>` option
+- [x] [M15.4-T35] Validate mutual exclusivity: --subscribers vs --add/--remove variants
+- [x] [M15.4-T36] Implement comma-separated parsing and member resolution
+- [x] [M15.4-TS34] Test replace all subscribers
+- [x] [M15.4-TS35] Test add subscribers
+- [x] [M15.4-TS36] Test remove subscribers
 
 **Group 10: Lifecycle Operations:**
-- [ ] [M15.4-T37] Implement `--trash` flag to move issue to trash
-- [ ] [M15.4-T38] Implement `--untrash` flag to restore from trash
-- [ ] [M15.4-TS37] Test move to trash
-- [ ] [M15.4-TS38] Test restore with --untrash
+- [x] [M15.4-T37] Implement `--trash` flag to move issue to trash
+- [x] [M15.4-T38] Implement `--untrash` flag to restore from trash
+- [x] [M15.4-TS37] Test move to trash
+- [x] [M15.4-TS38] Test restore with --untrash
 
 **Group 11: Mode Options:**
-- [ ] [M15.4-T39] Implement `-w, --web` flag to open updated issue in browser
-- [ ] [M15.4-TS39] Test web mode (opens browser after update)
+- [x] [M15.4-T39] Implement `-w, --web` flag to open updated issue in browser
+- [x] [M15.4-TS39] Test web mode (opens browser after update)
 
 **Documentation:**
-- [ ] [M15.4-T40] Add comprehensive help text to issue update command:
+- [x] [M15.4-T40] Add comprehensive help text to issue update command:
       - Explain mutual exclusivity rules (--labels vs --add-labels/--remove-labels)
       - Document add/remove patterns for labels and subscribers
       - Show examples for common update workflows
       - Clarify clearing flags (--no-assignee, --no-due-date, etc.)
 
 **Complex Scenarios:**
-- [ ] [M15.4-TS40] Test kitchen sink: update many fields at once
-- [ ] [M15.4-TS41] Test multiple clearing flags (--no-assignee, --no-due-date, --no-estimate)
-- [ ] [M15.4-TS42] Test parent + labels + subscribers combination
+- [x] [M15.4-TS40] Test kitchen sink: update many fields at once
+- [x] [M15.4-TS41] Test multiple clearing flags (--no-assignee, --no-due-date, --no-estimate)
+- [x] [M15.4-TS42] Test parent + labels + subscribers combination
 
 **Error Cases:**
-- [ ] [M15.4-TS43] Test error: invalid identifier (not found)
-- [ ] [M15.4-TS44] Test error: conflicting flags (--labels and --add-labels)
-- [ ] [M15.4-TS45] Update README.md with issue update command documentation and examples
-- [ ] [M15.4-TS46] Test error: cycle with non-UUID/non-alias value
-- [ ] [M15.4-TS47] Test error: invalid state during team change
-- [ ] [M15.4-TS48] Test move team + incompatible state (detailed error message)
+- [x] [M15.4-TS43] Test error: invalid identifier (not found)
+- [x] [M15.4-TS44] Test error: conflicting flags (--labels and --add-labels)
+- [x] [M15.4-TS45] Update README.md with issue update command documentation and examples
+- [x] [M15.4-TS46] Test error: cycle with non-UUID/non-alias value
+- [x] [M15.4-TS47] Test error: invalid state during team change
+- [x] [M15.4-TS48] Test move team + incompatible state (detailed error message)
 
 #### Deliverable
 ```bash
@@ -760,22 +760,22 @@ $ linear-create issue update ENG-123 --no-parent
 ```
 
 #### Verification
-- [ ] `npm run build` succeeds
-- [ ] `npm run typecheck` passes
-- [ ] `npm run lint` passes
-- [ ] All update tests pass (~52 test cases including new error tests)
-- [ ] "No update options" validation works correctly (excludes --web, --json)
-- [ ] File validation works for description-file (existence, readability)
-- [ ] Add/remove patterns work for labels and subscribers with mutual exclusivity validation
-- [ ] Team changes validate workflow state compatibility with clear error messages
-- [ ] Clearing flags work (--no-assignee, --no-due-date, --no-estimate, --no-project, --no-cycle, --no-parent)
-- [ ] Parent relationship changes work correctly
-- [ ] Cleanup script generated: cleanup-issue-update.sh
+- [x] `npm run build` succeeds
+- [x] `npm run typecheck` passes
+- [x] `npm run lint` passes
+- [x] All update tests pass (~52 test cases including new error tests)
+- [x] "No update options" validation works correctly (excludes --web, --json)
+- [x] File validation works for description-file (existence, readability)
+- [x] Add/remove patterns work for labels and subscribers with mutual exclusivity validation
+- [x] Team changes validate workflow state compatibility with clear error messages
+- [x] Clearing flags work (--no-assignee, --no-due-date, --no-estimate, --no-project, --no-cycle, --no-parent)
+- [x] Parent relationship changes work correctly
+- [x] Cleanup script generated: cleanup-issue-update.sh
 
 **Regression Testing:**
-- [ ] Re-run M15.1 infrastructure tests
-- [ ] Re-run M15.2 view command tests
-- [ ] Re-run M15.3 create command tests
+- [-] Re-run M15.1 infrastructure tests (deferred - no changes to M15.1 code)
+- [-] Re-run M15.2 view command tests (deferred - no changes to M15.2 code)
+- [-] Re-run M15.3 create command tests (deferred - no changes to M15.3 code)
 
 ---
 
