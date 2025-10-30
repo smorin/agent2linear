@@ -991,7 +991,77 @@ Total: 100 issue(s)
 # Performance: 1 API call, ~2 seconds for 100 issues
 ```
 
-**Next Phase:** Phase 2 will add smart defaults (assignee=me, defaultTeam, defaultInitiative, active filter) and core filtering options.
+**Next Phase:** Phase 2 will add smart defaults (assignee=me, defaultTeam, active filter) and core filtering options.
+
+---
+
+**=== PHASE 2 COMPLETE (v0.24.0-alpha.5.2) ===**
+
+**Smart Defaults + Core Filters - COMPLETED**
+
+- [x] [M15.5-P2-T01] Implement buildDefaultFilters() helper function
+- [x] [M15.5-P2-T02] Implement assignee default ("me") with --all-assignees override
+- [x] [M15.5-P2-T03] Implement team default (config.defaultTeam) with --team override
+- [x] [M15.5-P2-T04] Implement active filter default (excludes completed/canceled via completedAt/canceledAt)
+- [x] [M15.5-P2-T05] Add primary filter options: --team, --assignee, --project, --state, --priority
+- [x] [M15.5-P2-T06] Add status filter options: --active, --completed, --canceled, --all-states, --archived
+- [x] [M15.5-P2-T07] Verify filter precedence logic (explicit overrides defaults)
+- [x] [M15.5-P2-T08] Add comprehensive help text with examples
+- [x] [M15.5-P2-T09] Manual testing of all filters
+- [x] [M15.5-P2-TS01] Regression testing (Phase 1 tests still pass)
+
+**Phase 2 Scope Adjustments:**
+- ✅ Initiative filtering **deferred to Phase 3** (Linear's IssueFilter doesn't support direct initiative field)
+- ✅ Simplified to core filters that map directly to Linear API
+
+**Phase 2 Verification:**
+- [x] `npm run build` succeeds (dist/index.js: 665.30 KB)
+- [x] `npm run typecheck` passes (0 errors)
+- [x] `npm run lint` passes (warnings only, no errors)
+- [x] All Phase 1 performance tests pass (10/10)
+- [x] Manual testing confirms smart defaults work correctly
+- [x] Manual testing confirms filter overrides work (--all-assignees, --priority, etc.)
+- [x] Performance maintained: Still 1 API call for basic list
+
+**Phase 2 Deliverable:**
+```bash
+# Default: My active issues in default team
+$ linear-create issue list
+Identifier  Title           State       Priority  Assignee  Team
+BAN-273     Updated Title   Backlog     Urgent    steve     BAN
+...
+Total: 5 issue(s)
+
+# Override assignee default
+$ linear-create issue list --all-assignees
+[Shows all users' active issues]
+
+# Filter by priority
+$ linear-create issue list --priority 1
+[Shows only Urgent issues assigned to me]
+
+# Show completed instead of active
+$ linear-create issue list --completed
+[Shows completed issues assigned to me]
+
+# Combine filters
+$ linear-create issue list --team backend --priority 2 --state todo
+[Shows High priority Todo issues in backend team assigned to me]
+```
+
+**Smart Defaults Confirmed:**
+- ✅ Assignee = current user ("me") unless --assignee or --all-assignees provided
+- ✅ Team = defaultTeam from config (if set), overridden by --team
+- ✅ Status = Active only (excludes completed/canceled) unless status filter provided
+- ✅ Archived = Excluded unless --archived provided
+
+**Filter Precedence Verified:**
+- ✅ Explicit --assignee overrides "me" default (no --all-assignees needed)
+- ✅ --all-assignees removes assignee filter entirely
+- ✅ Explicit --team overrides defaultTeam
+- ✅ Status filters (--completed, --canceled, --all-states) override active default
+
+**Next Phase:** Phase 3 will add advanced filters (labels, search, relationships), output formats (JSON, TSV), sorting, and web mode.
 
 ---
 
