@@ -70,11 +70,12 @@ async function resolveIdentifierToUUID(identifier: string): Promise<string | nul
       return null;
     }
 
-    const [_, teamKey, numberStr] = match;
+    const teamKey = match[1];
+    const numberStr = match[2];
     const issueNumber = parseInt(numberStr, 10);
 
     // Query Linear API for issues by team key and number
-    // We need to find the team first, then query issues
+    // We query directly by team key and issue number without fetching the team first
     const teams = await client.teams({
       filter: {
         key: {
@@ -87,8 +88,6 @@ async function resolveIdentifierToUUID(identifier: string): Promise<string | nul
       // Team not found
       return null;
     }
-
-    const team = teams.nodes[0];
 
     // Now query issues for this team with the specific number
     const issues = await client.issues({
@@ -118,35 +117,6 @@ async function resolveIdentifierToUUID(identifier: string): Promise<string | nul
     // If API call fails, return null (resolver will handle error messaging)
     return null;
   }
-}
-
-/**
- * Fetch issue by UUID
- * @param uuid - Issue UUID
- * @returns Issue object or null if not found
- */
-async function fetchIssueByUUID(uuid: string): Promise<any | null> {
-  try {
-    const client = getLinearClient();
-    const issue = await client.issue(uuid);
-    return issue || null;
-  } catch (error) {
-    return null;
-  }
-}
-
-/**
- * Fetch issue by identifier
- * @param identifier - Issue identifier in ENG-123 format
- * @returns Issue object or null if not found
- */
-async function fetchIssueByIdentifier(identifier: string): Promise<any | null> {
-  const uuid = await resolveIdentifierToUUID(identifier);
-  if (!uuid) {
-    return null;
-  }
-
-  return fetchIssueByUUID(uuid);
 }
 
 /**

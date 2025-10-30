@@ -67,13 +67,14 @@ import { extractColors } from './commands/colors/extract.js';
 import { showCacheStats } from './commands/cache/stats.js';
 import { clearCache } from './commands/cache/clear.js';
 import { setup } from './commands/setup.js';
+import { viewIssue } from './commands/issue/view.js';
 
 const cli = new Command();
 
 cli
   .name('linear-create')
   .description('Command-line tool for creating Linear issues and projects')
-  .version('0.21.1')
+  .version('0.24.0-alpha.2')
   .action(() => {
     cli.help();
   });
@@ -1406,6 +1407,45 @@ Cache will be automatically repopulated on next access.
 `)
   .action(async (options) => {
     await clearCache(options);
+  });
+
+// Issue commands (M15.2)
+const issue = cli
+  .command('issue')
+  .description('Manage Linear issues')
+  .action(() => {
+    issue.help();
+  });
+
+issue
+  .command('view <identifier>')
+  .description('View an issue by identifier (e.g., ENG-123) or UUID')
+  .option('--json', 'Output in JSON format')
+  .option('-w, --web', 'Open issue in web browser')
+  .option('--show-comments', 'Display issue comments')
+  .option('--show-history', 'Display issue history')
+  .addHelpText('after', `
+Examples:
+  $ linear-create issue view ENG-123                    # View issue by identifier
+  $ linear-create issue view <uuid>                     # View issue by UUID
+  $ linear-create issue view ENG-123 --json             # Output as JSON
+  $ linear-create issue view ENG-123 --web              # Open in browser
+  $ linear-create issue view ENG-123 --show-comments    # Include comments
+  $ linear-create issue view ENG-123 --show-history     # Include history
+
+The view command displays comprehensive issue information including:
+  • Core details: title, description, status, priority
+  • Assignment: assignee, subscribers
+  • Organization: team, project, cycle, labels
+  • Dates: created, updated, due, completed
+  • Relationships: parent issue, sub-issues
+  • Creator information
+
+Use --show-comments to see all comments on the issue.
+Use --show-history to see the change history.
+`)
+  .action(async (identifier, options) => {
+    await viewIssue(identifier, options);
   });
 
 // Setup command

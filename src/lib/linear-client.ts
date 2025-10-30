@@ -8,6 +8,7 @@ import type {
   IssueCreateInput,
   IssueUpdateInput,
   IssueListFilters,
+  IssueViewData,
 } from './types.js';
 import { getRelationDirection } from './parsers.js';
 
@@ -1049,6 +1050,253 @@ export async function getCurrentUserIssues(): Promise<Array<{
     throw new Error(
       `Failed to get current user issues: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
+  }
+}
+
+/**
+ * Get full issue details for display (M15.2)
+ * Returns comprehensive issue data including relationships, metadata, and dates
+ * @param issueId - Issue UUID
+ * @returns Full issue data or null if not found
+ */
+export async function getFullIssueById(issueId: string): Promise<IssueViewData | null> {
+  try {
+    const client = getLinearClient();
+    const issue = await client.issue(issueId);
+
+    if (!issue) {
+      return null;
+    }
+
+    // Fetch related data
+    const state = await issue.state;
+    const team = await issue.team;
+    const assignee = await issue.assignee;
+    const project = await issue.project;
+    const cycle = await issue.cycle;
+    const parent = await issue.parent;
+    const children = await issue.children();
+    const labels = await issue.labels();
+    const subscribers = await issue.subscribers();
+    const creator = await issue.creator;
+
+    return {
+      // Core identification
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      url: issue.url,
+
+      // Content
+      description: issue.description || undefined,
+
+      // Workflow
+      state: state
+        ? {
+            id: state.id,
+            name: state.name,
+            type: state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
+            color: state.color,
+          }
+        : { id: '', name: 'Unknown', type: 'backlog' as const, color: '#95a2b3' },
+      priority: issue.priority,
+      estimate: issue.estimate || undefined,
+
+      // Assignment
+      assignee: assignee
+        ? {
+            id: assignee.id,
+            name: assignee.name,
+            email: assignee.email,
+          }
+        : undefined,
+      subscribers: subscribers.nodes.map(sub => ({
+        id: sub.id,
+        name: sub.name,
+        email: sub.email,
+      })),
+
+      // Organization
+      team: team
+        ? {
+            id: team.id,
+            key: team.key,
+            name: team.name,
+          }
+        : { id: '', key: '', name: 'Unknown' },
+      project: project
+        ? {
+            id: project.id,
+            name: project.name,
+          }
+        : undefined,
+      cycle: cycle
+        ? {
+            id: cycle.id,
+            name: cycle.name || `Cycle #${cycle.number}`,
+            number: cycle.number,
+          }
+        : undefined,
+      parent: parent
+        ? {
+            id: parent.id,
+            identifier: parent.identifier,
+            title: parent.title,
+          }
+        : undefined,
+      children: await Promise.all(
+        children.nodes.map(async child => {
+          const childState = await child.state;
+          return {
+            id: child.id,
+            identifier: child.identifier,
+            title: child.title,
+            state: childState?.name || 'Unknown',
+          };
+        })
+      ),
+      labels: labels.nodes.map(label => ({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+      })),
+
+      // Dates
+      createdAt: issue.createdAt.toISOString(),
+      updatedAt: issue.updatedAt.toISOString(),
+      completedAt: issue.completedAt?.toISOString(),
+      canceledAt: issue.canceledAt?.toISOString(),
+      dueDate: issue.dueDate,
+      archivedAt: issue.archivedAt?.toISOString(),
+
+      // Creator
+      creator: creator
+        ? {
+            id: creator.id,
+            name: creator.name,
+            email: creator.email,
+          }
+        : { id: '', name: 'Unknown', email: '' },
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Get issue comments (M15.2)
+ * @param issueId - Issue UUID
+ * @returns Array of comments
+ */
+export async function getIssueComments(issueId: string): Promise<
+  Array<{
+    id: string;
+    body: string;
+    createdAt: string;
+    updatedAt: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+    };
+  }>
+> {
+  try {
+    const client = getLinearClient();
+    const issue = await client.issue(issueId);
+
+    if (!issue) {
+      return [];
+    }
+
+    const comments = await issue.comments();
+
+    return await Promise.all(
+      comments.nodes.map(async comment => {
+        const user = await comment.user;
+        return {
+          id: comment.id,
+          body: comment.body,
+          createdAt: comment.createdAt.toISOString(),
+          updatedAt: comment.updatedAt.toISOString(),
+          user: user
+            ? {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+              }
+            : { id: '', name: 'Unknown', email: '' },
+        };
+      })
+    );
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Get issue history (M15.2)
+ * @param issueId - Issue UUID
+ * @returns Array of history entries
+ */
+export async function getIssueHistory(issueId: string): Promise<
+  Array<{
+    id: string;
+    createdAt: string;
+    actor?: {
+      id: string;
+      name: string;
+      email: string;
+    };
+    fromState?: string;
+    toState?: string;
+    fromAssignee?: string;
+    toAssignee?: string;
+    addedLabels?: string[];
+    removedLabels?: string[];
+  }>
+> {
+  try {
+    const client = getLinearClient();
+    const issue = await client.issue(issueId);
+
+    if (!issue) {
+      return [];
+    }
+
+    const history = await issue.history();
+
+    return await Promise.all(
+      history.nodes.map(async entry => {
+        const actor = await entry.actor;
+        const fromState = await entry.fromState;
+        const toState = await entry.toState;
+        const fromAssignee = await entry.fromAssignee;
+        const toAssignee = await entry.toAssignee;
+        const addedLabels = await entry.addedLabels;
+        const removedLabels = await entry.removedLabels;
+
+        return {
+          id: entry.id,
+          createdAt: entry.createdAt.toISOString(),
+          actor: actor
+            ? {
+                id: actor.id,
+                name: actor.name,
+                email: actor.email,
+              }
+            : undefined,
+          fromState: fromState?.name,
+          toState: toState?.name,
+          fromAssignee: fromAssignee?.name,
+          toAssignee: toAssignee?.name,
+          addedLabels: addedLabels ? addedLabels.map(l => l.name) : undefined,
+          removedLabels: removedLabels ? removedLabels.map(l => l.name) : undefined,
+        };
+      })
+    );
+  } catch (error) {
+    return [];
   }
 }
 

@@ -106,27 +106,28 @@ export function handleLinearError(error: any, context?: string): string {
     case 404:
       return (
         '❌ Resource not found\n\n' +
-        `The${entityContext} you\'re looking for doesn\'t exist.\n` +
+        `The${entityContext} you're looking for doesn't exist.\n` +
         'Please check:\n' +
         '  - The ID or identifier is correct\n' +
         '  - You have access to the workspace\n' +
-        '  - The resource hasn\'t been deleted'
+        "  - The resource hasn't been deleted"
       );
 
-    case 429:
+    case 429: {
       const retryAfter = getRetryAfter(error);
       const waitTime = retryAfter || '60';
       return (
         '❌ Rate limited\n\n' +
-        'You\'ve made too many requests to the Linear API.\n' +
+        "You've made too many requests to the Linear API.\n" +
         `Please wait ${waitTime} seconds and try again.\n\n` +
         'To avoid rate limiting:\n' +
         '  - Reduce the frequency of your requests\n' +
         '  - Use batch operations when possible\n' +
         '  - Enable caching with: linear-create config set enableEntityCache true'
       );
+    }
 
-    default:
+    default: {
       // Try to extract validation error message from Linear
       const validationMessage = getValidationMessage(error);
       if (validationMessage) {
@@ -139,6 +140,7 @@ export function handleLinearError(error: any, context?: string): string {
       }
 
       return '❌ An unexpected error occurred while communicating with Linear';
+    }
   }
 }
 
