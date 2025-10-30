@@ -564,7 +564,7 @@ Opening in browser...
 
 ---
 
-### [ ] Milestone M15.4: Issue Update Command (v0.24.0-alpha.4)
+### [x] Milestone M15.4: Issue Update Command (v0.24.0-alpha.4)
 **Goal**: Implement comprehensive issue update with 33+ options including add/remove patterns
 
 **Performance Note**: Similar to create - minimize validation calls. Only fetch what's needed for validation. Consider that update is modifying existing data, so validation may require current state (but batch it).

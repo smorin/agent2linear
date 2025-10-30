@@ -69,6 +69,7 @@ import { clearCache } from './commands/cache/clear.js';
 import { setup } from './commands/setup.js';
 import { viewIssue } from './commands/issue/view.js';
 import { createIssueCommand } from './commands/issue/create.js';
+import { updateIssueCommand } from './commands/issue/update.js';
 
 const cli = new Command();
 
@@ -1544,6 +1545,121 @@ Config Defaults:
 `)
   .action(async (options) => {
     await createIssueCommand(options);
+  });
+
+issue
+  .command('update <identifier>')
+  .description('Update an existing Linear issue by identifier (ENG-123) or UUID')
+  .option('--title <string>', 'Update issue title')
+  .option('--description <string>', 'Update description (markdown)')
+  .option('--description-file <path>', 'Read description from file (mutually exclusive with --description)')
+  .option('--priority <0-4>', 'Update priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low', parseInt)
+  .option('--estimate <number>', 'Update estimate', parseFloat)
+  .option('--no-estimate', 'Clear estimate')
+  .option('--state <id|alias>', 'Update workflow state (must belong to team)')
+  .option('--due-date <YYYY-MM-DD>', 'Set/update due date')
+  .option('--no-due-date', 'Clear due date')
+  .option('--assignee <id|alias|email|name>', 'Change assignee')
+  .option('--no-assignee', 'Remove assignee')
+  .option('--team <id|alias>', 'Move to different team (requires compatible state)')
+  .option('--project <id|alias|name>', 'Assign to project')
+  .option('--no-project', 'Remove from project')
+  .option('--cycle <uuid|alias>', 'Assign to cycle')
+  .option('--no-cycle', 'Remove from cycle')
+  .option('--parent <identifier>', 'Set/change parent issue (ENG-123 or UUID)')
+  .option('--no-parent', 'Remove parent (make root issue)')
+  .option('--labels <list>', 'Replace ALL labels (comma-separated)')
+  .option('--add-labels <list>', 'Add labels (comma-separated)')
+  .option('--remove-labels <list>', 'Remove labels (comma-separated)')
+  .option('--subscribers <list>', 'Replace ALL subscribers (comma-separated)')
+  .option('--add-subscribers <list>', 'Add subscribers (comma-separated)')
+  .option('--remove-subscribers <list>', 'Remove subscribers (comma-separated)')
+  .option('--trash', 'Move issue to trash')
+  .option('--untrash', 'Restore issue from trash')
+  .option('-w, --web', 'Open updated issue in browser')
+  .addHelpText('after', `
+Examples:
+  # Update single field
+  $ linear-create issue update ENG-123 --title "New title"
+  $ linear-create issue update ENG-123 --priority 1
+  $ linear-create issue update ENG-123 --state done
+
+  # Update multiple fields
+  $ linear-create issue update ENG-123 \\
+      --title "Updated title" \\
+      --priority 2 \\
+      --estimate 5 \\
+      --due-date 2025-12-31
+
+  # Change assignment
+  $ linear-create issue update ENG-123 --assignee john@company.com
+  $ linear-create issue update ENG-123 --no-assignee
+
+  # Label management (3 modes)
+  $ linear-create issue update ENG-123 --labels "bug,urgent"           # Replace all
+  $ linear-create issue update ENG-123 --add-labels "feature"          # Add to existing
+  $ linear-create issue update ENG-123 --remove-labels "wontfix"       # Remove specific
+  $ linear-create issue update ENG-123 --add-labels "new" --remove-labels "old"  # Add + remove
+
+  # Subscriber management (3 modes)
+  $ linear-create issue update ENG-123 --subscribers "user1,user2"     # Replace all
+  $ linear-create issue update ENG-123 --add-subscribers "user3"       # Add to existing
+  $ linear-create issue update ENG-123 --remove-subscribers "user1"    # Remove specific
+
+  # Clear fields
+  $ linear-create issue update ENG-123 --no-assignee --no-due-date --no-estimate
+  $ linear-create issue update ENG-123 --no-project --no-cycle --no-parent
+
+  # Parent relationship
+  $ linear-create issue update ENG-123 --parent ENG-100     # Make sub-issue
+  $ linear-create issue update ENG-123 --no-parent          # Make root issue
+
+  # Move between teams
+  $ linear-create issue update ENG-123 --team frontend --state todo
+
+  # Lifecycle operations
+  $ linear-create issue update ENG-123 --trash              # Move to trash
+  $ linear-create issue update ENG-123 --untrash            # Restore from trash
+
+Field Details:
+  • Identifier: Use issue identifier (ENG-123) or UUID
+  • At least one update field required (--web alone is not enough)
+  • Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
+  • State: Must belong to the issue's team (or new team if also using --team)
+
+Mutual Exclusivity Rules:
+  • Cannot use --description with --description-file
+  • Cannot use --labels with --add-labels or --remove-labels
+  • Cannot use --subscribers with --add-subscribers or --remove-subscribers
+  • Cannot use --assignee with --no-assignee
+  • Cannot use --due-date with --no-due-date
+  • Cannot use --estimate with --no-estimate
+  • Cannot use --project with --no-project
+  • Cannot use --cycle with --no-cycle
+  • Cannot use --parent with --no-parent
+  • Cannot use --trash with --untrash
+
+Label/Subscriber Patterns:
+  • Replace mode: --labels or --subscribers replaces ALL items
+  • Add mode: --add-labels or --add-subscribers adds to existing
+  • Remove mode: --remove-labels or --remove-subscribers removes specific items
+  • Add + Remove: Can use --add-labels AND --remove-labels together (add first, then remove)
+
+Team Changes:
+  When changing teams (--team), the workflow state must be compatible:
+    • If also providing --state, it must belong to the NEW team
+    • If NOT providing --state, current state must be compatible with new team
+    • Linear will reject invalid team-state combinations
+
+Member Resolution:
+  --assignee and --subscribers support multiple resolution methods:
+    • Linear ID: user_abc123
+    • Alias: john (from aliases.json)
+    • Email: john@company.com
+    • Display name: "John Doe"
+`)
+  .action(async (identifier, options) => {
+    await updateIssueCommand(identifier, options);
   });
 
 // Setup command

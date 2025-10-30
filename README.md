@@ -95,6 +95,68 @@ linear-create issue view ENG-123 --json
 linear-create issue view ENG-123 --web
 ```
 
+### Issue Update
+
+Update existing issues with comprehensive field support and smart validation.
+
+**Basic Examples:**
+```bash
+# Update single field
+linear-create issue update ENG-123 --title "New title"
+linear-create issue update ENG-123 --priority 1
+linear-create issue update ENG-123 --state done
+
+# Update multiple fields
+linear-create issue update ENG-123 \
+  --title "Updated title" \
+  --priority 2 \
+  --estimate 5 \
+  --due-date 2025-12-31
+```
+
+**Advanced Examples:**
+```bash
+# Change assignment
+linear-create issue update ENG-123 --assignee john@company.com
+linear-create issue update ENG-123 --no-assignee
+
+# Label management (3 modes)
+linear-create issue update ENG-123 --labels "bug,urgent"           # Replace all
+linear-create issue update ENG-123 --add-labels "feature"          # Add to existing
+linear-create issue update ENG-123 --remove-labels "wontfix"       # Remove specific
+linear-create issue update ENG-123 --add-labels "new" --remove-labels "old"  # Both
+
+# Subscriber management (3 modes)
+linear-create issue update ENG-123 --subscribers "user1,user2"     # Replace all
+linear-create issue update ENG-123 --add-subscribers "user3"       # Add to existing
+linear-create issue update ENG-123 --remove-subscribers "user1"    # Remove specific
+
+# Clear fields
+linear-create issue update ENG-123 --no-assignee --no-due-date --no-estimate
+linear-create issue update ENG-123 --no-project --no-cycle --no-parent
+
+# Parent relationship
+linear-create issue update ENG-123 --parent ENG-100     # Make sub-issue
+linear-create issue update ENG-123 --no-parent          # Make root issue
+
+# Move between teams
+linear-create issue update ENG-123 --team frontend --state todo
+
+# Lifecycle operations
+linear-create issue update ENG-123 --trash              # Move to trash
+linear-create issue update ENG-123 --untrash            # Restore from trash
+```
+
+**Key Features:**
+- **33+ update options**: Comprehensive field coverage including add/remove patterns
+- **Smart validation**: Team-aware state validation, compatibility checks
+- **Flexible updates**: Update one field or many at once
+- **Clearing operations**: Use `--no-*` flags to clear fields (assignee, dates, etc.)
+- **Label/subscriber patterns**: Replace, add, or remove items with distinct flags
+- **Mutual exclusivity**: Prevents conflicting flag combinations with helpful errors
+
+For full documentation: `linear-create issue update --help`
+
 ## Project List & Search
 
 List and search projects with smart defaults and extensive filtering. The `project list` command provides intelligent defaults for common workflows while supporting comprehensive filtering options.

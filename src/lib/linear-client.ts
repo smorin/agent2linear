@@ -826,6 +826,7 @@ export async function updateIssue(issueId: string, input: IssueUpdateInput): Pro
   id: string;
   identifier: string;
   title: string;
+  url: string;
 }> {
   try {
     const client = getLinearClient();
@@ -859,6 +860,7 @@ export async function updateIssue(issueId: string, input: IssueUpdateInput): Pro
       id: updatedIssue.id,
       identifier: updatedIssue.identifier,
       title: updatedIssue.title,
+      url: updatedIssue.url,
     };
   } catch (error) {
     if (error instanceof LinearClientError) {
