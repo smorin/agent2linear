@@ -77,7 +77,7 @@ const cli = new Command();
 cli
   .name('linear-create')
   .description('Command-line tool for creating Linear issues and projects')
-  .version('0.24.0-alpha.5')
+  .version('0.24.0-rc.1')
   .action(() => {
     cli.help();
   });
