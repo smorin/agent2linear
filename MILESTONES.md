@@ -1577,10 +1577,10 @@ $ linear-create issue list --team backend --web
 - [x] [M15.6-T26] Update Overall Verification section: mark remaining items `[x]` complete - ✅ COMPLETED: All items verified, interactive modes deferred to M25
 
 **Git Release**
-- [ ] [M15.6-T27] Stage changes: `git add MILESTONES.md package.json src/cli.ts README.md CHANGELOG.md`
-- [ ] [M15.6-T28] Commit with message: `release: v0.24.0 - Issue Commands Complete (M15)`
-- [ ] [M15.6-T29] Create git tag: `git tag v0.24.0`
-- [ ] [M15.6-T30] Push to GitHub: `git push && git push --tags`
+- [x] [M15.6-T27] Stage changes: `git add MILESTONES.md package.json src/cli.ts README.md CHANGELOG.md` - ✅ COMPLETED
+- [x] [M15.6-T28] Commit with message: `release: v0.24.0 - Issue Commands Complete (M15)` - ✅ COMPLETED: Commit fd23333
+- [x] [M15.6-T29] Create git tag: `git tag v0.24.0` - ✅ COMPLETED
+- [x] [M15.6-T30] Push to GitHub: `git push && git push --tags` - ✅ COMPLETED: Tag v0.24.0 pushed to origin
 
 #### Deliverable
 ```bash
