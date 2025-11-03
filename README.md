@@ -157,6 +157,72 @@ linear-create issue update ENG-123 --untrash            # Restore from trash
 
 For full documentation: `linear-create issue update --help`
 
+### Issue List
+
+List and filter issues with smart defaults, extensive filtering, sorting, and multiple output formats.
+
+**Basic Examples:**
+```bash
+# Smart defaults: your assigned issues
+linear-create issue list
+
+# Limit results
+linear-create issue list --limit 10
+
+# Filter by team
+linear-create issue list --team backend
+
+# Filter by state
+linear-create issue list --state "in progress"
+```
+
+**Advanced Filtering:**
+```bash
+# Multiple filters
+linear-create issue list \
+  --team backend \
+  --priority 1 \
+  --state "in progress" \
+  --assignee steve@company.com
+
+# Project and labels
+linear-create issue list \
+  --project "Q1 Goals" \
+  --labels "bug,urgent"
+
+# Date filters
+linear-create issue list --due-before 2025-12-31
+linear-create issue list --created-after 2025-01-01
+
+# Parent/sub-issue filters
+linear-create issue list --has-parent        # Only sub-issues
+linear-create issue list --no-parent         # Only root issues
+```
+
+**Sorting and Output:**
+```bash
+# Sort options
+linear-create issue list --sort priority     # By priority (high to low)
+linear-create issue list --sort created      # By creation date (newest first)
+linear-create issue list --sort updated      # By update date
+linear-create issue list --sort identifier   # By identifier (ENG-1, ENG-2...)
+
+# Output formats
+linear-create issue list --format table      # Table view (default)
+linear-create issue list --format compact    # Compact view
+linear-create issue list --format json       # JSON output
+linear-create issue list --format urls       # URLs only (for scripting)
+```
+
+**Key Features:**
+- **Smart defaults**: Shows your assigned issues by default
+- **Extensive filters**: Team, state, priority, assignee, labels, project, dates, parent, and more
+- **Flexible sorting**: By priority, dates, identifier, or other fields
+- **Multiple formats**: Table, compact, JSON, or URLs for scripting
+- **Performance optimized**: Batch fetching eliminates N+1 queries (11x+ API call reduction)
+
+For full documentation: `linear-create issue list --help`
+
 ## Project List & Search
 
 List and search projects with smart defaults and extensive filtering. The `project list` command provides intelligent defaults for common workflows while supporting comprehensive filtering options.
