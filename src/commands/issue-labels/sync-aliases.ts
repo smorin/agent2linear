@@ -28,7 +28,6 @@ export async function syncIssueLabelAliasesCore(options: SyncIssueLabelAliasesOp
     entityTypeNamePlural: 'issue labels',
     entities: labels,
     options,
-    detectDuplicates: true,
   });
 }
 
@@ -44,6 +43,7 @@ export function syncIssueLabelAliases(program: Command) {
     .option('--dry-run', 'Preview aliases without creating them')
     .option('-f, --force', 'Overwrite existing aliases')
     .option('-t, --team <id>', 'Only sync labels for specific team')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .action(async (options) => {
       await syncIssueLabelAliasesCore(options);
     });

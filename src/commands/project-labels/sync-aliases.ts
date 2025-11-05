@@ -14,7 +14,6 @@ export async function syncProjectLabelAliasesCore(options: SyncAliasesOptions): 
     entityTypeNamePlural: 'project labels',
     entities: labels,
     options,
-    detectDuplicates: true,
   });
 }
 
@@ -29,6 +28,7 @@ export function syncProjectLabelAliases(program: Command) {
     .option('-p, --project', 'Create aliases in project config')
     .option('--dry-run', 'Preview aliases without creating them')
     .option('-f, --force', 'Overwrite existing aliases')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .action(async (options) => {
       await syncProjectLabelAliasesCore(options);
     });

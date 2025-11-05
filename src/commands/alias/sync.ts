@@ -33,6 +33,7 @@ export function aliasSyncCommand(program: Command) {
     .option('-f, --force', 'Overwrite existing aliases')
     .option('-t, --team <id>', 'Filter by team (for members, workflow-states, issue-labels only)')
     .option('--org-wide', 'All organization members (for members only)')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .addHelpText('after', `
 Examples:
   # Initiatives

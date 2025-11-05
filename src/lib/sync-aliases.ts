@@ -21,6 +21,7 @@ export interface SyncAliasesOptions {
   project?: boolean;
   dryRun?: boolean;
   force?: boolean;
+  noAutoSuffix?: boolean;
 }
 
 /**
@@ -53,9 +54,6 @@ export interface SyncAliasesConfig<T extends SyncableEntity> {
   /** Options from command line */
   options: SyncAliasesOptions;
 
-  /** Additional context for duplicate handling (optional) */
-  detectDuplicates?: boolean;
-
   /** Custom slug generator (optional, defaults to generateSlug) */
   generateSlug?: (name: string) => string;
 }
@@ -68,7 +66,8 @@ interface AliasToCreate {
   id: string;
   displayName: string;
   conflict: boolean;
-  duplicate?: boolean;
+  collision?: boolean; // True if this slug was generated from a collision (has numeric suffix)
+  originalSlug?: string; // The base slug before suffix was added (for collision reporting)
 }
 
 /**
@@ -85,7 +84,6 @@ export async function syncAliasesCore<T extends SyncableEntity>(
     entities,
     formatEntityDisplay,
     options,
-    detectDuplicates = false,
     generateSlug: customSlugGenerator,
   } = config;
 
@@ -103,41 +101,47 @@ export async function syncAliasesCore<T extends SyncableEntity>(
     // Get existing aliases
     const existingAliases = listAliases(entityType) as Record<string, string>;
 
-    // Track slugs for duplicate detection
-    const slugMap = new Map<string, T[]>();
-
-    if (detectDuplicates) {
-      for (const entity of entities) {
-        const slug = slugGenerator(entity.name);
-        if (!slugMap.has(slug)) {
-          slugMap.set(slug, []);
-        }
-        slugMap.get(slug)!.push(entity);
-      }
-    }
-
-    // Generate alias preview
+    // Track slugs for collision detection and auto-suffix assignment
+    const slugCounter = new Map<string, number>();
     const aliasesToCreate: AliasToCreate[] = [];
 
     for (const entity of entities) {
-      const slug = slugGenerator(entity.name);
+      const baseSlug = slugGenerator(entity.name);
 
       // Skip entities with empty slugs (names with only special characters)
-      if (!slug) {
+      if (!baseSlug) {
         console.warn(`   ⚠️  Skipping "${entity.name}" - name contains only special characters`);
         continue;
       }
 
-      const conflict = !!(existingAliases[slug] && existingAliases[slug] !== entity.id);
-      const duplicate = detectDuplicates && (slugMap.get(slug)?.length || 0) > 1;
       const displayName = formatEntityDisplay ? formatEntityDisplay(entity) : entity.name;
 
+      // Handle collision with auto-suffix (unless --no-auto-suffix is set)
+      const count = slugCounter.get(baseSlug) || 0;
+      slugCounter.set(baseSlug, count + 1);
+
+      let finalSlug = baseSlug;
+      let collision = false;
+
+      // If this is a collision and auto-suffix is enabled
+      if (count > 0 && !options.noAutoSuffix) {
+        finalSlug = `${baseSlug}-${count + 1}`;
+        collision = true;
+      } else if (count > 0 && options.noAutoSuffix) {
+        // With --no-auto-suffix, skip all duplicates (old behavior)
+        console.warn(`   ⚠️  Skipping "${entity.name}" - duplicate slug "${baseSlug}" (use without --no-auto-suffix to enable auto-numbering)`);
+        continue;
+      }
+
+      const conflict = !!(existingAliases[finalSlug] && existingAliases[finalSlug] !== entity.id);
+
       aliasesToCreate.push({
-        slug,
+        slug: finalSlug,
         id: entity.id,
         displayName,
         conflict,
-        duplicate,
+        collision,
+        originalSlug: collision ? baseSlug : undefined,
       });
     }
 
@@ -152,8 +156,8 @@ export async function syncAliasesCore<T extends SyncableEntity>(
 
     for (const alias of aliasesToCreate) {
       let status = '✓';
-      if (alias.duplicate) {
-        status = '⚠️  DUPLICATE';
+      if (alias.collision) {
+        status = '⚠️  COLLISION';
       } else if (alias.conflict) {
         status = options.force ? '⚠️  OVERWRITE' : '❌ CONFLICT';
       }
@@ -161,13 +165,15 @@ export async function syncAliasesCore<T extends SyncableEntity>(
     }
 
     // Check for issues
-    const conflicts = aliasesToCreate.filter(a => a.conflict && !a.duplicate);
-    const duplicates = aliasesToCreate.filter(a => a.duplicate);
+    const conflicts = aliasesToCreate.filter(a => a.conflict);
+    const collisions = aliasesToCreate.filter(a => a.collision);
 
-    if (duplicates.length > 0) {
+    if (collisions.length > 0) {
       console.log('');
-      console.log(`⚠️  ${duplicates.length} duplicate name(s) detected - these will be skipped`);
-      console.log('   (multiple entities would map to the same alias)');
+      console.log(`⚠️  ${collisions.length} collision(s) detected - auto-numbered to avoid duplicates:`);
+      for (const alias of collisions) {
+        console.log(`   "${alias.displayName}" → ${alias.slug} (${alias.originalSlug} was taken)`);
+      }
     }
 
     if (conflicts.length > 0 && !options.force) {
@@ -197,12 +203,6 @@ export async function syncAliasesCore<T extends SyncableEntity>(
     let failed = 0;
 
     for (const alias of aliasesToCreate) {
-      // Skip duplicates
-      if (alias.duplicate) {
-        skipped++;
-        continue;
-      }
-
       // Skip conflicts unless --force
       if (alias.conflict && !options.force) {
         skipped++;
@@ -230,8 +230,7 @@ export async function syncAliasesCore<T extends SyncableEntity>(
       console.log(`✅ Created ${created} ${entityTypeName} aliases (${scope})`);
     }
     if (skipped > 0) {
-      const reason = duplicates.length > 0 ? 'conflicts or duplicates' : 'conflicts (use --force to overwrite)';
-      console.log(`   Skipped ${skipped} due to ${reason}`);
+      console.log(`   Skipped ${skipped} due to conflicts (use --force to overwrite)`);
     }
     console.log('');
   } catch (error) {

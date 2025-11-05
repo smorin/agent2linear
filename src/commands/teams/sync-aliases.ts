@@ -29,6 +29,7 @@ export function syncTeamAliases(program: Command) {
     .option('-p, --project', 'Create aliases in project config')
     .option('--dry-run', 'Preview aliases without creating them')
     .option('-f, --force', 'Overwrite existing aliases')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .addHelpText('after', `
 Examples:
   $ agent2linear teams sync-aliases           # Preview aliases
@@ -39,6 +40,9 @@ Examples:
 
 This command will create aliases for all teams in your workspace,
 using the team name converted to lowercase with hyphens (e.g., "Engineering Team" → "engineering-team").
+
+When multiple teams have names that slug to the same alias, auto-numbering is applied.
+Use --no-auto-suffix to disable this and skip duplicates instead.
 `)
     .action(async (options) => {
       await syncTeamAliasesCore(options);

@@ -28,6 +28,7 @@ export function syncInitiativeAliases(program: Command) {
     .option('-p, --project', 'Create aliases in project config')
     .option('--dry-run', 'Preview aliases without creating them')
     .option('-f, --force', 'Overwrite existing aliases')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .addHelpText('after', `
 Examples:
   $ agent2linear initiatives sync-aliases           # Preview aliases
@@ -38,6 +39,10 @@ Examples:
 
 This command will create aliases for all initiatives in your workspace,
 using the initiative name converted to lowercase with hyphens (e.g., "Backend API" → "backend-api").
+
+When multiple initiatives have names that slug to the same alias (e.g., "Design System" and "Design‑System"),
+auto-numbering is applied: the first gets "design-system", subsequent ones get "design-system-2", "design-system-3", etc.
+Use --no-auto-suffix to disable this and skip duplicates instead.
 `)
     .action(async (options) => {
       await syncInitiativeAliasesCore(options);

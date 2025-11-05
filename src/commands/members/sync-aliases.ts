@@ -39,7 +39,6 @@ export async function syncMemberAliasesCore(options: SyncMemberAliasesOptions): 
     entities: members,
     formatEntityDisplay: (member) => `${member.name} <${member.email}>`,
     options,
-    detectDuplicates: true, // Members can have duplicate names
   });
 
   // Add filter hint if in dry-run mode
@@ -66,6 +65,7 @@ export function syncMemberAliases(program: Command) {
     .option('-f, --force', 'Overwrite existing aliases')
     .option('-t, --team <id>', 'Only sync members for specific team')
     .option('--org-wide', 'Sync all organization members (default)')
+    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
     .addHelpText('after', `
 Examples:
   $ agent2linear members sync-aliases                  # Preview all org members
@@ -78,7 +78,8 @@ Examples:
 This command will create aliases for members in your workspace,
 using the member name converted to lowercase with hyphens (e.g., "John Doe" → "john-doe").
 
-Note: Members with duplicate names will be skipped to avoid conflicts.
+When multiple members have names that slug to the same alias, auto-numbering is applied.
+Use --no-auto-suffix to disable this and skip duplicates instead.
 `)
     .action(async (options) => {
       await syncMemberAliasesCore(options);
