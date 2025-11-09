@@ -1,6 +1,10 @@
 # agent2linear
 
-Command-line tool for creating Linear issues and projects with support for initiatives. Designed for AI agents and automation.
+**agent2linear** is a command-line interface for Linear designed to work seamlessly with both humans and AI agents. Unlike Linear's web interface or standard APIs, agent2linear is built to **minimize token usage and context window waste** - critical for AI workflows where every token counts.
+
+**Why it exists**: Linear uses long UUIDs (`team_9b2e5f8a-c3d1-4e6f-8a9b-2c3d4e5f6a7b`) that consume tokens and confuse agents. agent2linear replaces them with memorable aliases (`--team backend`), persistent config defaults (global or project-local), and natural date formats (`Q1 2025`). Set your `defaultTeam`, `defaultInitiative`, and other preferences once, then create issues and projects without repeating the same parameters. The result: **10x fewer tokens** for the same operations, cleaner agent prompts, and workflows that just work.
+
+**Use `agent2linear` or the short `a2l` alias - both commands work identically.**
 
 ---
 
