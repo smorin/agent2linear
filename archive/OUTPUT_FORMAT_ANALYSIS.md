@@ -1,5 +1,11 @@
 # Project Commands Output Format Analysis
 
+> **ARCHIVED:** This analysis has been superseded by OUTPUT_STREAMS_PROPOSAL.md.
+> Key findings from this document have been merged into the proposal's "Current State Analysis" section (1.3 Format Machine-Readability Analysis).
+> Archived: 2025-11-09
+
+---
+
 ## Executive Summary
 
 **Current State:** Only `project list` supports machine-readable output formats (JSON, TSV). Other commands (`view`, `update`, `create`, dependency commands) use human-friendly formatted output only.

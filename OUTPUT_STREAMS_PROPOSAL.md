@@ -11,6 +11,10 @@
 ## Table of Contents
 
 1. [Current State Analysis](#1-current-state-analysis)
+   - 1.1 [Current Output Library](#11-current-output-library)
+   - 1.2 [Current Format Support](#12-current-format-support)
+   - 1.3 [Format Machine-Readability Analysis](#13-format-machine-readability-analysis)
+   - 1.4 [Current Output Examples](#14-current-output-examples)
 2. [The Problem: Mixed Output Streams](#2-the-problem-mixed-output-streams)
 3. [Best Practices from Major CLIs](#3-best-practices-from-major-clis)
 4. [Proposed Solution: Stream Separation](#4-proposed-solution-stream-separation)
@@ -53,19 +57,96 @@
 ### 1.2 Current Format Support
 
 **Commands with Format Support:**
-- ✅ `project list` - Supports `--format table|json|tsv`
+- ✅ `project list` - Supports `--format table|json|tsv` (`list.tsx:352`)
 
 **Commands without Format Support:**
-- ❌ `project view`
-- ❌ `project create`
-- ❌ `project update`
-- ❌ `project add-milestones`
-- ❌ `project dependencies list`
+- ❌ `project view` (`view.ts`) - Human-formatted console output only
+- ❌ `project create` (`create.tsx`) - Human-formatted via `displaySuccess()`
+- ❌ `project update` (`update.ts`) - Human-formatted via `showSuccess()`
+- ❌ `project add-milestones` (`add-milestones.ts`) - Human-formatted via `showSuccess()`
+- ❌ `project dependencies list` (`dependencies/list.ts`) - Plain console output
+- ❌ `project dependencies add/remove/clear` - Human-formatted via `showSuccess()`
 - ❌ All other entity commands (issues, teams, initiatives, etc.)
+
+**Impact:** These commands cannot be used in automated scripts without fragile text parsing.
 
 ---
 
-### 1.3 Current Output Examples
+### 1.3 Format Machine-Readability Analysis
+
+**Key Finding:** TSV is **NOT 100% machine-readable** due to inconsistencies with the default table format.
+
+**Comparison Table:**
+
+| Aspect | Default (Table) | TSV | JSON |
+|--------|----------------|-----|------|
+| **Machine-Readable** | ❌ No | ⚠️ Partial (80%) | ✅ Yes (100%) |
+| **Field Truncation** | ✅ Yes (Status/Team/Lead) | ❌ No truncation | ❌ No truncation |
+| **Summary Line** | ✅ Yes (`Total: N projects`) | ❌ No | ❌ No |
+| **Header Row** | ✅ Yes | ✅ Yes | ❌ N/A |
+| **Preview Truncation** | ✅ 60 chars | ✅ 60 chars | ✅ 60 chars |
+| **Tab Escaping** | ❌ N/A | ❌ **MISSING** | ✅ N/A (JSON) |
+| **Structured Data** | ❌ No | ❌ No | ✅ Yes |
+| **Parseable by Standard Tools** | ❌ No | ⚠️ Partial | ✅ Yes (jq, etc.) |
+| **Consistent Schema** | ❌ No | ⚠️ Partial | ✅ Yes |
+
+**TSV Issues (Why Only 80% Machine-Readable):**
+
+1. **No Tab Escaping:** If project title or description contains tab characters, TSV parsing breaks
+   - No escaping/quoting mechanism implemented
+   - Standard TSV parsers would fail or misalign columns
+
+2. **Content Truncation:** Preview content still limited to 60 characters (same as table format)
+   - Code: `list.tsx:160-163`
+   ```typescript
+   return cleaned.length > 60
+     ? cleaned.substring(0, 57) + '...'
+     : cleaned;
+   ```
+
+3. **Field Length Inconsistency:** Table truncates fields, TSV doesn't
+   - **Table format** (`list.tsx:186-188`):
+     ```typescript
+     const status = (project.status?.name || '').substring(0, 11);
+     const team = (project.team?.name || '').substring(0, 14);
+     const lead = (project.lead?.name || '').substring(0, 19);
+     ```
+   - **TSV format** (`list.tsx:227-229`):
+     ```typescript
+     const status = project.status?.name || '';
+     const team = project.team?.name || '';
+     const lead = project.lead?.name || '';
+     ```
+   - **Impact:** Same headers, different data lengths; parsers expecting 11-char status get 30-char status
+
+4. **Code Duplication:** ~70% of code duplicated between `formatTableOutput()` and `formatTSVOutput()`
+   - Header generation: `list.tsx:176-180` vs `219-223`
+   - Dependency column handling: `list.tsx:191-196` vs `232-237`
+   - Loop structure: `list.tsx:183-202` vs `226-243`
+   - **Maintenance Risk:** Changes require updating 2 functions; easy to introduce bugs
+
+**JSON Excellence (100% Machine-Readable):**
+- ✅ Standard format, parseable by any JSON library
+- ✅ No truncation (except preview - same 60 char limit as others)
+- ✅ No summary lines, pure data output
+- ✅ Structured data with nested objects for status/team/lead
+- ✅ Works perfectly with `jq`, `jd`, and other JSON tools
+
+**Example Usage:**
+```bash
+# Count projects
+a2l project list --format json | jq 'length'
+
+# Get project IDs
+a2l project list --format json | jq -r '.[].id'
+
+# Filter by team
+a2l project list --format json | jq '.[] | select(.team.name == "Engineering")'
+```
+
+---
+
+### 1.4 Current Output Examples
 
 **Example 1: `project create` (mixed output)**
 ```bash
@@ -1473,16 +1554,12 @@ echo "All tests passed!"
    - Discuss any concerns
    - Approve implementation plan
 
-2. **Update OUTPUT_FORMAT_ANALYSIS.md:**
-   - Reference this proposal
-   - Mark issues as "will be fixed"
-
-3. **Create Implementation Issues:**
+2. **Create Implementation Issues:**
    - Create milestone for "Output Format Standardization"
    - Break down into tasks
    - Assign priorities
 
-4. **Start Implementation:**
+3. **Start Implementation:**
    - Begin with Phase 1 (core output.ts changes)
    - Add format support to 2-3 commands
    - Test thoroughly
