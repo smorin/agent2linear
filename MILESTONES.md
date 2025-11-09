@@ -15,6 +15,221 @@
 
 ## Backlog (Future Milestones)
 
+## [ ] Milestone M26: Output Format Standardization & Stream Separation (v0.26.0)
+**Goal**: Standardize output formatting across all commands by separating data (stdout) from human messages (stderr), fixing machine-readability issues, and extending format support to all read/write commands following Unix conventions.
+
+**Reference**: See [OUTPUT_STREAMS_PROPOSAL.md](OUTPUT_STREAMS_PROPOSAL.md) for complete design rationale and technical details.
+
+### Requirements
+- Separate data output (stdout) from human messages (stderr) for all commands
+- Route all progress, success, info, and warning messages to stderr via `console.error`
+- Extend `--format json|tsv|table` support to all read commands (view, dependencies list)
+- Add `--format json` support to mutation commands (create, update) for automation
+- Fix TSV format issues: add proper tab escaping, remove field truncation inconsistencies
+- Consolidate duplicated table/TSV formatting code into unified implementation
+- Add global `--quiet` flag to suppress non-error messages
+- Maintain 100% backward compatibility - no breaking changes to default output
+- Follow Unix conventions and best practices from kubectl, gh, aws-cli, jq
+
+### Out of Scope
+- YAML format support (future consideration)
+- CSV format (TSV is sufficient for now)
+- NDJSON streaming format (future consideration)
+- Color output detection and auto-disable when piped (future enhancement)
+- Verbose mode (`--verbose` flag) - defer to future milestone
+- Changes to interactive mode output (Ink components handle their own rendering)
+
+### Tasks
+
+#### Phase 1: Core Stream Separation & Output Library
+- [ ] [M26-T01] Update `src/lib/output.ts` to route all messages to stderr
+  - Change `showResolvedAlias()`: `console.log` → `console.error`
+  - Change `showValidating()`: `console.log` → `console.error`
+  - Change `showValidated()`: `console.log` → `console.error`
+  - Change `showSuccess()`: `console.log` → `console.error`
+  - Change `showInfo()`: `console.log` → `console.error`
+  - Change `showWarning()`: `console.log` → `console.error`
+  - Verify `showError()` already uses `console.error` ✅
+
+- [ ] [M26-T02] Add new output helper functions to `src/lib/output.ts`
+  - Add `outputJSON(data: any)` for structured JSON output to stdout
+  - Add `outputTSV(items: any[], fields: string[])` for TSV output to stdout
+  - Add `formatTSVField(value: any)` with proper escaping (tabs, newlines, carriage returns)
+  - Add `showProgress(message: string, options: { quiet?: boolean })` for conditional output
+
+- [ ] [M26-T03] Add global `--quiet` flag to CLI
+  - Add `-q, --quiet` option to main program in `src/cli.ts`
+  - Pass quiet flag through to all commands via options
+  - Update all commands to respect quiet flag when showing progress messages
+  - Errors always display regardless of quiet flag
+
+#### Phase 2: Fix Existing Format Support Issues
+- [ ] [M26-T04] Fix TSV escaping in `project list` command
+  - Implement proper tab character escaping in TSV output (`\t`)
+  - Implement newline escaping (`\n`) and carriage return escaping (`\r`)
+  - Test with project titles/descriptions containing tabs and newlines
+  - Ensure TSV output is RFC 4180 compliant
+
+- [ ] [M26-T05] Consolidate table/TSV formatting code in `project list`
+  - Merge `formatTableOutput()` and `formatTSVOutput()` into unified function
+  - Add `truncate: boolean` parameter to control field truncation
+  - Add `showSummary: boolean` parameter to control summary line
+  - Reduce code duplication from ~70% to <10%
+  - Ensure both formats produce identical output except for truncation/summary
+
+- [ ] [M26-T06] Remove summary line from TSV/JSON formats in `project list`
+  - Verify JSON output has no summary line (already correct)
+  - Remove "Total: N projects" line from TSV output
+  - Keep summary line only in default table format for humans
+  - Ensure TSV/JSON are pure data streams
+
+#### Phase 3: Extend Format Support to Read Commands
+- [ ] [M26-T07] Add format support to `project view` command
+  - Add `--format json|tsv|table` option to command definition
+  - Implement JSON output: full project object as JSON to stdout
+  - Implement TSV output: single row with key fields (id, name, status, team, lead, url)
+  - Route all messages (validation, success) to stderr
+  - Test with `--quiet` flag for clean automation
+
+- [ ] [M26-T08] Add format support to `project dependencies list` command
+  - Add `--format json|tsv|table` option
+  - Implement JSON output: array of dependency objects
+  - Implement TSV output: tab-separated rows with headers
+  - Ensure proper field escaping for TSV
+  - Route messages to stderr, data to stdout
+
+#### Phase 4: Add Format Support to Mutation Commands
+- [ ] [M26-T09] Add format support to `project create` command
+  - Add `--format json|tsv` option (table format doesn't make sense for single item)
+  - JSON format: output created project object to stdout
+  - TSV format: output single row with created project data
+  - Keep human-friendly success message as default (backward compatible)
+  - Progress messages go to stderr, created data to stdout
+  - Test automation workflow: extract ID from JSON output
+
+- [ ] [M26-T10] Add format support to `project update` command
+  - Add `--format json|tsv` option
+  - JSON format: output updated project object to stdout
+  - TSV format: output single row with updated project data
+  - Progress/success messages to stderr
+  - Test updating and piping output to next command
+
+- [ ] [M26-T11] Add format support to `issue create` command (if time permits)
+  - Add `--format json|tsv` option
+  - JSON format: output created issue object
+  - Enable automation: `ISSUE_ID=$(a2l issue create ... --format json | jq -r '.id')`
+
+- [ ] [M26-T12] Add format support to `issue update` command (if time permits)
+  - Add `--format json|tsv` option
+  - JSON format: output updated issue object
+  - Enable chaining: update issue and extract specific field
+
+#### Phase 5: Documentation & Cleanup
+- [ ] [M26-T13] Update README.md with output format documentation
+  - Add "Output Formats" section explaining table/json/tsv
+  - Document stream separation (stdout vs stderr)
+  - Add automation examples with jq
+  - Document `--quiet` flag usage
+
+- [ ] [M26-T14] Update command help text for format options
+  - Ensure all commands with `--format` have clear help descriptions
+  - Document which formats are supported per command
+  - Add examples to help output
+
+- [ ] [M26-T15] Archive or update related documentation
+  - Verify OUTPUT_STREAMS_PROPOSAL.md is referenced in README
+  - Add implementation notes to proposal marking completed phases
+  - Update CLAUDE.md if needed
+
+### Test Tasks
+- [ ] [M26-TS01] Create integration test for stream separation
+  - Test that JSON output on stdout is valid JSON (pipe to jq)
+  - Test that progress messages appear on stderr
+  - Test that `2>/dev/null` suppresses all messages, keeps data
+  - Test that `--quiet` suppresses progress messages
+  - Add to `tests/scripts/test-output-streams.sh`
+
+- [ ] [M26-TS02] Create integration test for TSV escaping
+  - Create project with tab character in title
+  - Create project with newline in description
+  - Verify TSV output properly escapes special characters
+  - Verify TSV can be parsed by standard tools (cut, awk, Python csv module)
+
+- [ ] [M26-TS03] Test automation workflows
+  - Test: Create project, extract ID with jq, use in next command
+  - Test: List projects in JSON, filter with jq, count results
+  - Test: Update project, verify output matches expected format
+  - Document working examples in test output
+
+- [ ] [M26-TS04] Verify backward compatibility
+  - Test default output (no --format flag) remains unchanged
+  - Verify existing scripts without --format still work
+  - Check that table format still has summary lines
+  - Ensure human-readable output is identical to previous version
+
+### Deliverable
+```bash
+# BEFORE (M26): Mixed output makes automation difficult
+$ a2l project create --title "API v2" --team eng
+🔍 Validating team ID: eng...
+✅ Project created successfully!
+   ID: proj_123
+# Cannot cleanly extract ID
+
+# AFTER (M26): Clean machine-readable output
+$ PROJECT_ID=$(a2l project create --title "API v2" --team eng --format json --quiet | jq -r '.id')
+$ echo "Created: $PROJECT_ID"
+Created: proj_123
+
+# View project as JSON for automation
+$ a2l project view $PROJECT_ID --format json | jq '.status.name'
+"In Progress"
+
+# List and filter with jq
+$ a2l project list --team eng --format json | jq '.[] | select(.state == "active") | .name'
+"API v2"
+"Mobile App"
+
+# TSV export for spreadsheets
+$ a2l project list --format tsv > projects.tsv
+$ head -2 projects.tsv
+id	name	status	team	lead	preview
+proj_123	API v2	In Progress	Engineering	John Doe	Redesign the API...
+
+# Messages to stderr, data to stdout (stream separation)
+$ a2l project create --title "Test" --team eng --format json 2>/dev/null
+{"id": "proj_456", "name": "Test", ...}
+
+# Quiet mode for clean scripting
+$ a2l project create --title "Test" --team eng --format json --quiet | jq -r '.url'
+https://linear.app/myorg/project/test-abc
+```
+
+### Verification
+
+**Automated:**
+- `npm run build` succeeds with no errors
+- `npm run typecheck` passes with no type errors
+- `npm run lint` passes with no new warnings
+
+**Integration Tests:**
+- All existing project/issue tests pass (backward compatibility)
+- New stream separation tests pass (`M26-TS01`)
+- TSV escaping tests pass (`M26-TS02`)
+- Automation workflow tests pass (`M26-TS03`)
+- Backward compatibility tests pass (`M26-TS04`)
+
+**Manual Verification:**
+- Create project with `--format json`, verify valid JSON with jq
+- Pipe project list JSON through jq filters successfully
+- Export project list as TSV, open in Excel/Numbers without issues
+- Test that default output (no --format) looks identical to previous version
+- Verify `--quiet` suppresses all non-error messages
+- Test stream redirection: `2>/dev/null` hides messages, data remains
+- Verify progress messages appear on terminal when piping data (stderr visible)
+
+---
+
 ## [ ] Milestone M25: Issue Interactive Enhancements (v0.25.0)
 **Goal**: Add Ink-powered interactive experiences for all issue commands
 
