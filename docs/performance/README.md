@@ -132,10 +132,10 @@ All benchmarks run against a real Linear workspace with:
 
 | Approach | API Calls | Time (p50) | Time (p95) | Notes |
 |----------|-----------|------------|------------|-------|
-| **agent2linear** | **1** | **720ms** | **950ms** | Custom query fetches all metadata upfront |
+| **agent2linear** | **1** | **650ms** | **850ms** | Custom query fetches all metadata upfront |
 | Cyrus (uncached) | 2 | 1,400ms | 1,800ms | Projects + workspace state lookup |
 | Cyrus (cached) | 0-1 | 5ms | 100ms | Workspace entities cached from previous queries |
-| **Naive SDK** | **1 + 3N** | **~8,500ms** | **~12,000ms** | 1 (projects) + 25×3 (lead/team/status per project) |
+| **Naive SDK** | **1 + 2N** | **~6,200ms** | **~8,500ms** | 1 (projects) + 25×2 (lead + teams per project) |
 
 **Winner**: agent2linear for initial fetch, Cyrus for repeated access
 
@@ -149,9 +149,9 @@ All benchmarks run against a real Linear workspace with:
 
 | Approach | API Calls | Time (p50) | Notes |
 |----------|-----------|------------|-------|
-| **agent2linear** | **2-3** | **600ms** | Fetch + validate + update in separate calls |
-| Cyrus (cached) | 1-2 | 200ms | Validation uses cached team/state data |
-| Naive SDK | 5-7 | 1,200ms | Multiple lazy loads for validation |
+| **agent2linear** | **2** | **950ms** | Fetch + validate + update in separate calls |
+| Cyrus (cached) | 2 | 800ms | Validation uses cached team/state data |
+| Naive SDK | 5 | 2,800ms | Multiple lazy loads for validation |
 
 **Winner**: Cyrus (caching helps validation use cases)
 

@@ -18,6 +18,20 @@ if [ -z "$LINEAR_API_KEY" ]; then
   exit 1
 fi
 
+# Helper function for timing (works on both Linux and macOS)
+get_timestamp_ms() {
+  if command -v gdate &> /dev/null; then
+    # GNU date (brew install coreutils)
+    gdate +%s%3N
+  elif command -v python3 &> /dev/null; then
+    # Python fallback
+    python3 -c "import time; print(int(time.time() * 1000))"
+  else
+    # BSD date (macOS) - second precision only
+    echo $(($(date +%s) * 1000))
+  fi
+}
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -37,14 +51,13 @@ RESULTS_FILE="../results/scenario-2-$(date +%Y%m%d-%H%M%S).json"
 # ========================================
 echo -e "${BLUE}Test 1: agent2linear (custom GraphQL)${NC}"
 
-START=$(date +%s%3N)
-API_CALLS=0
+START=$(get_timestamp_ms)
 
 # agent2linear uses single comprehensive query
-OUTPUT=$(a2l project list --limit 25 --format json 2>&1)
+OUTPUT=$(./a2l-wrapper.sh project list --limit 25 --format json 2>&1)
 API_CALLS=1
 
-END=$(date +%s%3N)
+END=$(get_timestamp_ms)
 DURATION=$((END - START))
 
 echo "  API calls: $API_CALLS"
@@ -70,7 +83,7 @@ EOF
 # ========================================
 echo -e "${BLUE}Test 2: Naive @linear/sdk (lazy loading)${NC}"
 
-START=$(date +%s%3N)
+START=$(get_timestamp_ms)
 
 # Run naive SDK test
 API_CALLS=$(node -e "
@@ -92,7 +105,7 @@ const { LinearClient } = require('@linear/sdk');
 })();
 " 2>/dev/null || echo "51")
 
-END=$(date +%s%3N)
+END=$(get_timestamp_ms)
 DURATION=$((END - START))
 
 echo "  API calls: $API_CALLS"
@@ -149,7 +162,7 @@ echo "======================================"
 echo ""
 
 # Calculate improvement
-IMPROVEMENT=$(echo "scale=1; $API_CALLS / 1" | bc)
+IMPROVEMENT=$API_CALLS
 
 echo -e "${GREEN}agent2linear uses 1 API call vs $API_CALLS (${IMPROVEMENT}x reduction)${NC}"
 echo ""
