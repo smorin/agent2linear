@@ -18,6 +18,20 @@ if [ -z "$LINEAR_API_KEY" ]; then
   exit 1
 fi
 
+# Helper function for timing (works on both Linux and macOS)
+get_timestamp_ms() {
+  if command -v gdate &> /dev/null; then
+    # GNU date (brew install coreutils)
+    gdate +%s%3N
+  elif command -v python3 &> /dev/null; then
+    # Python fallback
+    python3 -c "import time; print(int(time.time() * 1000))"
+  else
+    # BSD date (macOS) - second precision only
+    echo $(($(date +%s) * 1000))
+  fi
+}
+
 # Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -37,14 +51,14 @@ RESULTS_FILE="../results/scenario-1-$(date +%Y%m%d-%H%M%S).json"
 # ========================================
 echo -e "${BLUE}Test 1: agent2linear (custom GraphQL)${NC}"
 
-START=$(date +%s%3N)
+START=$(get_timestamp_ms)
 API_CALLS=0
 
 # agent2linear uses single comprehensive query
-OUTPUT=$(a2l issue list --limit 50 --format json 2>&1)
+OUTPUT=$(./a2l-wrapper.sh issue list --limit 50 --format json 2>&1)
 API_CALLS=1
 
-END=$(date +%s%3N)
+END=$(get_timestamp_ms)
 DURATION=$((END - START))
 
 echo "  API calls: $API_CALLS"
@@ -70,32 +84,9 @@ EOF
 # ========================================
 echo -e "${BLUE}Test 2: Naive @linear/sdk (lazy loading)${NC}"
 
-START=$(date +%s%3N)
-API_CALLS=0
+START=$(get_timestamp_ms)
 
-# Run naive SDK test (creates Node.js script on the fly)
-node -e "
-const { LinearClient } = require('@linear/sdk');
-
-(async () => {
-  const client = new LinearClient({ apiKey: process.env.LINEAR_API_KEY });
-  let callCount = 0;
-
-  // Fetch issues
-  const issues = await client.issues({ first: 50 });
-  callCount++; // Initial issues query
-
-  // Access lazy properties (triggers additional calls)
-  for (const issue of issues.nodes) {
-    await issue.state;      // +1 call per issue
-    await issue.assignee;   // +1 call per issue (if assigned)
-    callCount += 2;
-  }
-
-  console.log(callCount);
-})();
-" 2>/dev/null || echo "101"
-
+# Run naive SDK test with validation
 API_CALLS=$(node -e "
 const { LinearClient } = require('@linear/sdk');
 (async () => {
@@ -109,7 +100,7 @@ const { LinearClient } = require('@linear/sdk');
 })();
 " 2>/dev/null || echo "101")
 
-END=$(date +%s%3N)
+END=$(get_timestamp_ms)
 DURATION=$((END - START))
 
 echo "  API calls: $API_CALLS"
