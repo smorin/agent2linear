@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { Config, ResolvedConfig } from './types.js';
 
 const GLOBAL_CONFIG_DIR = join(homedir(), '.config', 'agent2linear');
@@ -27,7 +27,7 @@ function readConfigFile(path: string): Partial<Config> {
  * Write JSON config file
  */
 function writeConfigFile(path: string, config: Partial<Config>): void {
-  const dir = path.substring(0, path.lastIndexOf('/'));
+  const dir = dirname(path);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }

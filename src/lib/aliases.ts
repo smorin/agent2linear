@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { Aliases, AliasEntityType, ResolvedAliases, AliasLocation } from './types.js';
 import {
   validateInitiativeExists,
@@ -12,6 +12,7 @@ import {
   getIssueLabelById,
   getProjectLabelById,
   getWorkflowStateById,
+  getCycleById,
 } from './linear-client.js';
 
 const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'agent2linear');
@@ -78,7 +79,7 @@ function readAliasesFile(path: string): Aliases {
  * Write aliases to a JSON file
  */
 function writeAliasesFile(path: string, aliases: Aliases): void {
-  const dir = path.substring(0, path.lastIndexOf('/'));
+  const dir = dirname(path);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }
@@ -120,6 +121,9 @@ function normalizeEntityType(type: string): AliasEntityType | null {
   if (normalized === 'workflow-state' || normalized === 'workflow-states' || normalized === 'workflowstate' || normalized === 'workflowstates') {
     return 'workflow-state';
   }
+  if (normalized === 'cycle' || normalized === 'cycles') {
+    return 'cycle';
+  }
   return null;
 }
 
@@ -137,7 +141,8 @@ function getAliasesKey(type: AliasEntityType): keyof Aliases {
   if (type === 'issue-label') return 'issueLabels';
   if (type === 'project-label') return 'projectLabels';
   if (type === 'workflow-state') return 'workflowStates';
-  return 'projects'; // fallback
+  if (type === 'cycle') return 'cycles';
+  throw new Error(`Unknown alias entity type: ${type}`);
 }
 
 /**
@@ -324,6 +329,8 @@ function looksLikeLinearId(input: string, type: AliasEntityType): boolean {
         return lowerInput.startsWith('label_');
       case 'workflow-state':
         return lowerInput.startsWith('state_') || lowerInput.startsWith('workflow_');
+      case 'cycle':
+        return lowerInput.startsWith('cycle_');
       default:
         return true; // Accept any prefix format for unknown types
     }
@@ -444,6 +451,13 @@ async function validateEntity(
           return { valid: false, error: `Workflow state with ID "${id}" not found` };
         }
         return { valid: true, name: state.name };
+      }
+      case 'cycle': {
+        const cycle = await getCycleById(id);
+        if (!cycle) {
+          return { valid: false, error: `Cycle with ID "${id}" not found` };
+        }
+        return { valid: true, name: cycle.name };
       }
       default:
         return { valid: false, error: 'Invalid entity type' };
@@ -746,6 +760,21 @@ export async function validateAllAliases(): Promise<{
         alias,
         id,
         location: aliases.locations['workflow-state'][alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
+  // Check cycles
+  for (const [alias, id] of Object.entries(aliases.cycles)) {
+    total++;
+    const validation = await validateEntity('cycle', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'cycle',
+        alias,
+        id,
+        location: aliases.locations['cycle'][alias],
         error: validation.error || 'Unknown error',
       });
     }

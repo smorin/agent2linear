@@ -179,20 +179,20 @@ export function validateISODate(value: string): ValidationResult<string> {
     };
   }
 
-  // Validate it's a real date
-  const date = new Date(value);
-  if (isNaN(date.getTime())) {
-    return {
-      valid: false,
-      error: `Invalid date: ${value}\n` +
-             'Date must be a valid calendar date'
-    };
-  }
+  // Validate it's a real date using UTC to avoid timezone rollover issues
+  // (new Date("2025-01-15") in UTC-negative timezones rolls back a day)
+  const parts = value.split('-');
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  const date = new Date(Date.UTC(year, month - 1, day));
 
-  // Check for date rollover (e.g., Feb 30 -> Mar 1)
-  // JavaScript's Date constructor silently rolls over invalid dates
-  const isoString = date.toISOString().split('T')[0];
-  if (isoString !== value) {
+  if (
+    isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
     return {
       valid: false,
       error: `Invalid date: ${value}\n` +
