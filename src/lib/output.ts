@@ -209,3 +209,28 @@ export function formatListTSV(items: Array<Record<string, unknown>>, fields: str
 export function formatListJSON(items: Array<Record<string, unknown>>): string {
   return JSON.stringify(items, null, 2);
 }
+
+/**
+ * Format a text preview by stripping markdown, collapsing whitespace, and truncating.
+ *
+ * @param text - The text to preview (description, content, etc.)
+ * @param maxLength - Maximum length before truncation (default: 80)
+ * @returns Cleaned, truncated text or empty string if input is empty/null
+ *
+ * @example
+ * formatContentPreview('# Hello\n\nThis is a **long** description...', 40)
+ * // Output: "Hello This is a long description..."
+ */
+export function formatContentPreview(text: string | undefined | null, maxLength = 80): string {
+  if (!text) return '';
+
+  const cleaned = text
+    .replace(/[#*_~`]/g, '')   // Remove markdown syntax
+    .replace(/\n+/g, ' ')      // Replace newlines with spaces
+    .replace(/\s+/g, ' ')      // Collapse whitespace
+    .trim();
+
+  if (cleaned.length <= maxLength) return cleaned;
+
+  return cleaned.substring(0, maxLength - 3) + '...';
+}

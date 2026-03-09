@@ -11,7 +11,7 @@
 
 import type { Command } from 'commander';
 import { getAllIssues } from '../../lib/linear-client.js';
-import { showError } from '../../lib/output.js';
+import { showError, formatContentPreview } from '../../lib/output.js';
 import { getConfig } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import { resolveProjectId } from '../../lib/project-resolver.js';
@@ -164,14 +164,19 @@ async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
 // ========================================
 // HELPER: Format table output
 // ========================================
-function formatTableOutput(issues: IssueListItem[]): void {
+function formatTableOutput(issues: IssueListItem[], descConfig?: { show: boolean; length?: number; full?: boolean }): void {
   if (issues.length === 0) {
     console.log('No issues found.');
     return;
   }
 
+  const showDesc = descConfig?.show || false;
+
   // Header - tab-separated
-  console.log('Identifier\tTitle\tState\tPriority\tAssignee\tTeam');
+  const header = showDesc
+    ? 'Identifier\tTitle\tState\tPriority\tAssignee\tTeam\tDescription'
+    : 'Identifier\tTitle\tState\tPriority\tAssignee\tTeam';
+  console.log(header);
 
   // Rows - tab-separated
   for (const issue of issues) {
@@ -182,9 +187,16 @@ function formatTableOutput(issues: IssueListItem[]): void {
     const assignee = issue.assignee?.name || 'Unassigned';
     const team = issue.team?.key || '';
 
-    console.log(
-      `${identifier}\t${title}\t${state}\t${priority}\t${assignee}\t${team}`
-    );
+    let row = `${identifier}\t${title}\t${state}\t${priority}\t${assignee}\t${team}`;
+
+    if (showDesc) {
+      const desc = descConfig?.full
+        ? (issue.description || '').replace(/\t/g, ' ').replace(/\n/g, ' ')
+        : formatContentPreview(issue.description, descConfig?.length);
+      row += `\t${desc}`;
+    }
+
+    console.log(row);
   }
 }
 
@@ -198,9 +210,14 @@ function formatJsonOutput(issues: IssueListItem[]): void {
 // ========================================
 // HELPER: Format TSV output
 // ========================================
-function formatTsvOutput(issues: IssueListItem[]): void {
+function formatTsvOutput(issues: IssueListItem[], descConfig?: { show: boolean; length?: number; full?: boolean }): void {
+  const showDesc = descConfig?.show || false;
+
   // Header
-  console.log('identifier\ttitle\tstate\tpriority\tassignee\tteam\turl');
+  const header = showDesc
+    ? 'identifier\ttitle\tstate\tpriority\tassignee\tteam\turl\tdescription'
+    : 'identifier\ttitle\tstate\tpriority\tassignee\tteam\turl';
+  console.log(header);
 
   // Rows
   for (const issue of issues) {
@@ -212,9 +229,16 @@ function formatTsvOutput(issues: IssueListItem[]): void {
     const team = issue.team?.key || '';
     const url = issue.url;
 
-    console.log(
-      `${identifier}\t${title}\t${state}\t${priority}\t${assignee}\t${team}\t${url}`
-    );
+    let row = `${identifier}\t${title}\t${state}\t${priority}\t${assignee}\t${team}\t${url}`;
+
+    if (showDesc) {
+      const desc = descConfig?.full
+        ? (issue.description || '').replace(/\t/g, ' ').replace(/\n/g, ' ')
+        : formatContentPreview(issue.description, descConfig?.length);
+      row += `\t${desc}`;
+    }
+
+    console.log(row);
   }
 }
 
@@ -308,6 +332,11 @@ async function listIssues(options: {
 
   // Phase 3: Web mode
   web?: boolean;
+
+  // Description preview
+  desc?: boolean;
+  descLength?: string;
+  descFull?: boolean;
 }): Promise<void> {
   try {
     // Build filters with smart defaults
@@ -341,6 +370,16 @@ async function listIssues(options: {
     // Fetch issues
     const issues = await getAllIssues(filters);
 
+    // Description display config
+    const showDesc = options.desc || options.descFull || !!options.descLength;
+    const descConfig = showDesc
+      ? {
+          show: true,
+          length: options.descLength ? parseInt(options.descLength, 10) : undefined,
+          full: options.descFull,
+        }
+      : undefined;
+
     // Output based on format
     const format = options.format || 'table';
 
@@ -349,11 +388,11 @@ async function listIssues(options: {
         formatJsonOutput(issues);
         break;
       case 'tsv':
-        formatTsvOutput(issues);
+        formatTsvOutput(issues, descConfig);
         break;
       case 'table':
       default:
-        formatTableOutput(issues);
+        formatTableOutput(issues, descConfig);
         // Summary only for table format
         console.log(`\nTotal: ${issues.length} issue(s)`);
         break;
@@ -410,6 +449,12 @@ export function registerIssueListCommand(program: Command): void {
 
     // Phase 3: Web mode
     .option('-w, --web', 'Open Linear in browser with filters applied instead of listing')
+
+    // Description preview
+    .option('--desc', 'Show description preview column (default 80 chars)')
+    .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
+    .option('--desc-full', 'Show full description column (no truncation)')
+    .option('--no-desc', 'Hide description column')
 
     .addHelpText('after', `
 Smart Defaults (applied automatically unless overridden):
@@ -476,6 +521,15 @@ Examples:
 
   $ agent2linear issue list --team backend --priority 1 --web
   # Opens Linear in browser with filters applied
+
+  $ agent2linear issue list --desc
+  # Shows issues with a truncated description preview (80 chars)
+
+  $ agent2linear issue list --desc-length 40
+  # Shows issues with a shorter description preview (40 chars)
+
+  $ agent2linear issue list --desc-full
+  # Shows issues with the full description
 
 Set defaults with:
   $ agent2linear config set defaultTeam <team-id>

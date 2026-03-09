@@ -2152,6 +2152,8 @@ export interface ProjectCreateInput {
 export interface ProjectResult {
   id: string;
   name: string;
+  description?: string;
+  content?: string;
   url: string;
   state: string;
   initiative?: {
@@ -2711,6 +2713,8 @@ export async function getFullProjectDetails(projectId: string): Promise<{
         project(id: $projectId) {
           id
           name
+          description
+          content
           url
           state
 
@@ -2795,6 +2799,8 @@ export async function getFullProjectDetails(projectId: string): Promise<{
       project: {
         id: projectData.id,
         name: projectData.name,
+        description: projectData.description || undefined,
+        content: projectData.content || undefined,
         url: projectData.url,
         state: projectData.state,
         initiative,

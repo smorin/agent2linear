@@ -3,7 +3,7 @@ import { render, Box, Text } from 'ink';
 import type { Command } from 'commander';
 import { getAllProjects } from '../../lib/linear-client.js';
 import { getEntityCache } from '../../lib/entity-cache.js';
-import { showError } from '../../lib/output.js';
+import { showError, formatContentPreview } from '../../lib/output.js';
 import { getConfig } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import type { ProjectListFilters, ProjectListItem } from '../../lib/types.js';
@@ -146,42 +146,22 @@ function applyDependencyFilters(
 }
 
 // ========================================
-// HELPER: Format content preview
-// ========================================
-function formatContentPreview(project: ProjectListItem): string {
-  // Prefer description over content
-  const text = project.description || project.content || '';
-
-  if (!text) return '';
-
-  // Remove markdown formatting, newlines
-  const cleaned = text
-    .replace(/[#*_~`]/g, '')  // Remove markdown syntax
-    .replace(/\n+/g, ' ')      // Replace newlines with spaces
-    .replace(/\s+/g, ' ')      // Collapse whitespace
-    .trim();
-
-  // Truncate to 60 chars
-  return cleaned.length > 60
-    ? cleaned.substring(0, 57) + '...'
-    : cleaned;
-}
-
-// ========================================
 // HELPER: Format table output
 // ========================================
-function formatTableOutput(projects: ProjectListItem[], showDependencies = false): void {
+function formatTableOutput(projects: ProjectListItem[], showDependencies = false, descConfig?: { show: boolean; length?: number; full?: boolean; hide?: boolean }): void {
   if (projects.length === 0) {
     console.log('No projects found.');
     return;
   }
 
-  // Header - tab-separated (with optional dependency columns)
-  if (showDependencies) {
-    console.log('ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks\tPreview');
-  } else {
-    console.log('ID\tTitle\tStatus\tTeam\tLead\tPreview');
-  }
+  // Description preview: shown by default unless --no-desc
+  const showPreview = !descConfig?.hide;
+
+  // Header - tab-separated (with optional dependency and preview columns)
+  const baseHeader = showDependencies
+    ? 'ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks'
+    : 'ID\tTitle\tStatus\tTeam\tLead';
+  console.log(showPreview ? `${baseHeader}\tPreview` : baseHeader);
 
   // Rows - tab-separated with full ID and Title (no truncation)
   for (const project of projects) {
@@ -190,19 +170,25 @@ function formatTableOutput(projects: ProjectListItem[], showDependencies = false
     const status = (project.status?.name || project.state || '').substring(0, 11);
     const team = (project.team?.name || '').substring(0, 14);
     const lead = (project.lead?.name || '').substring(0, 19);
-    const preview = formatContentPreview(project);
 
+    let row: string;
     if (showDependencies) {
       const depsOn = project.dependsOnCount !== undefined ? project.dependsOnCount.toString() : '0';
       const blocks = project.blocksCount !== undefined ? project.blocksCount.toString() : '0';
-      console.log(
-        `${id}\t${title}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}\t${preview}`
-      );
+      row = `${id}\t${title}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}`;
     } else {
-      console.log(
-        `${id}\t${title}\t${status}\t${team}\t${lead}\t${preview}`
-      );
+      row = `${id}\t${title}\t${status}\t${team}\t${lead}`;
     }
+
+    if (showPreview) {
+      const text = project.description || project.content || '';
+      const preview = descConfig?.full
+        ? text.replace(/\t/g, ' ').replace(/\n/g, ' ')
+        : formatContentPreview(text, descConfig?.length);
+      row += `\t${preview}`;
+    }
+
+    console.log(row);
   }
 
   console.log(`\nTotal: ${projects.length} project${projects.length !== 1 ? 's' : ''}`);
@@ -218,32 +204,39 @@ function formatJSONOutput(projects: ProjectListItem[]): void {
 // ========================================
 // HELPER: Format TSV output
 // ========================================
-function formatTSVOutput(projects: ProjectListItem[], showDependencies = false): void {
-  // Headers (with optional dependency columns)
-  if (showDependencies) {
-    console.log('ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks\tPreview');
-  } else {
-    console.log('ID\tTitle\tStatus\tTeam\tLead\tPreview');
-  }
+function formatTSVOutput(projects: ProjectListItem[], showDependencies = false, descConfig?: { show: boolean; length?: number; full?: boolean; hide?: boolean }): void {
+  const showPreview = !descConfig?.hide;
+
+  // Headers (with optional dependency and preview columns)
+  const baseHeader = showDependencies
+    ? 'ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks'
+    : 'ID\tTitle\tStatus\tTeam\tLead';
+  console.log(showPreview ? `${baseHeader}\tPreview` : baseHeader);
 
   // Rows
   for (const project of projects) {
     const status = project.status?.name || project.state || '';
     const team = project.team?.name || '';
     const lead = project.lead?.name || '';
-    const preview = formatContentPreview(project);
 
+    let row: string;
     if (showDependencies) {
       const depsOn = project.dependsOnCount !== undefined ? project.dependsOnCount.toString() : '0';
       const blocks = project.blocksCount !== undefined ? project.blocksCount.toString() : '0';
-      console.log(
-        `${project.id}\t${project.name}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}\t${preview}`
-      );
+      row = `${project.id}\t${project.name}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}`;
     } else {
-      console.log(
-        `${project.id}\t${project.name}\t${status}\t${team}\t${lead}\t${preview}`
-      );
+      row = `${project.id}\t${project.name}\t${status}\t${team}\t${lead}`;
     }
+
+    if (showPreview) {
+      const text = project.description || project.content || '';
+      const preview = descConfig?.full
+        ? text.replace(/\t/g, ' ').replace(/\n/g, ' ')
+        : formatContentPreview(text, descConfig?.length);
+      row += `\t${preview}`;
+    }
+
+    console.log(row);
   }
 }
 
@@ -310,7 +303,7 @@ function ProjectList({ filters }: ProjectListProps): React.ReactElement {
           </Text>
 
           {(project.description || project.content) && (
-            <Text dimColor>{formatContentPreview(project)}</Text>
+            <Text dimColor>{formatContentPreview(project.description || project.content || '')}</Text>
           )}
         </Box>
       ))}
@@ -364,6 +357,12 @@ export function listProjectsCommand(program: Command): void {
     .option('--depends-on-others', 'Filter: show only projects that depend on others')
     .option('--blocks-others', 'Filter: show only projects that block others')
 
+    // Description preview (shown by default; use --no-desc to hide)
+    .option('--desc', 'Show description preview column (default, 80 chars)')
+    .option('--desc-length <n>', 'Description preview length in characters')
+    .option('--desc-full', 'Show full description column (no truncation)')
+    .option('--no-desc', 'Hide description preview column')
+
     .action(async (options) => {
       try {
         // M23: Validate conflicting dependency filters
@@ -403,6 +402,14 @@ export function listProjectsCommand(program: Command): void {
           process.exit(1);
         }
 
+        // Build description config
+        const descConfig = {
+          show: true,
+          length: options.descLength ? parseInt(options.descLength, 10) : undefined,
+          full: options.descFull || false,
+          hide: options.desc === false, // --no-desc sets this to false
+        };
+
         // Non-interactive formats - handle synchronously before Ink
         if (options.format !== 'table' && !options.interactive) {
           let projects = await getAllProjects(filters);
@@ -418,10 +425,10 @@ export function listProjectsCommand(program: Command): void {
           if (options.format === 'json') {
             formatJSONOutput(projects);
           } else if (options.format === 'tsv') {
-            formatTSVOutput(projects, options.showDependencies);
+            formatTSVOutput(projects, options.showDependencies, descConfig);
           } else {
             // Default: table
-            formatTableOutput(projects, options.showDependencies);
+            formatTableOutput(projects, options.showDependencies, descConfig);
           }
 
           process.exit(0);
@@ -439,7 +446,7 @@ export function listProjectsCommand(program: Command): void {
             blocksOthers: options.blocksOthers,
           });
 
-          formatTableOutput(projects, options.showDependencies);
+          formatTableOutput(projects, options.showDependencies, descConfig);
           process.exit(0);
         }
 

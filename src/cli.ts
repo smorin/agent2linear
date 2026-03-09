@@ -322,6 +322,10 @@ project
   .description('View details of a specific project (by name, ID, or alias)')
   .option('-w, --web', 'Open project in browser instead of displaying in terminal')
   .option('-a, --auto-alias', 'Automatically create an alias if resolving by name')
+  .option('--desc', 'Show description preview (default 80 chars)')
+  .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
+  .option('--desc-full', 'Show full description (no truncation)')
+  .option('--no-desc', 'Hide description')
   .addHelpText('after', `
 Examples:
   $ agent2linear project view PRJ-123                    # By ID
@@ -329,6 +333,8 @@ Examples:
   $ agent2linear project view proj_abc123 --web          # By ID, open in browser
   $ agent2linear proj view myalias --web                 # By alias
   $ agent2linear proj view "Project X" --auto-alias      # Create alias automatically
+  $ agent2linear project view PRJ-123 --desc             # Show 80-char description preview
+  $ agent2linear project view PRJ-123 --desc-full        # Show full description
 `)
   .action(async (nameOrId: string, options) => {
     await viewProject(nameOrId, options);
@@ -1427,6 +1433,10 @@ issue
   .option('-w, --web', 'Open issue in web browser')
   .option('--show-comments', 'Display issue comments')
   .option('--show-history', 'Display issue history')
+  .option('--desc', 'Show truncated description preview (default 80 chars)')
+  .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
+  .option('--desc-full', 'Show full description (default behavior, explicit)')
+  .option('--no-desc', 'Hide description from output')
   .addHelpText('after', `
 Examples:
   $ agent2linear issue view ENG-123                    # View issue by identifier
@@ -1435,6 +1445,9 @@ Examples:
   $ agent2linear issue view ENG-123 --web              # Open in browser
   $ agent2linear issue view ENG-123 --show-comments    # Include comments
   $ agent2linear issue view ENG-123 --show-history     # Include history
+  $ agent2linear issue view ENG-123 --desc             # Show 80-char description preview
+  $ agent2linear issue view ENG-123 --no-desc          # Hide description
+  $ agent2linear issue view ENG-123 --desc-length 120  # Show 120-char description preview
 
 The view command displays comprehensive issue information including:
   • Core details: title, description, status, priority

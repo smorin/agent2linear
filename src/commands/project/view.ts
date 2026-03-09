@@ -1,9 +1,9 @@
 import { getFullProjectDetails } from '../../lib/linear-client.js';
 import { resolveProject } from '../../lib/project-resolver.js';
-import { showResolvedAlias, showEntityNotFound } from '../../lib/output.js';
+import { showResolvedAlias, showEntityNotFound, formatContentPreview } from '../../lib/output.js';
 import { openInBrowser } from '../../lib/browser.js';
 
-export async function viewProject(nameOrId: string, options: { web?: boolean; autoAlias?: boolean } = {}) {
+export async function viewProject(nameOrId: string, options: { web?: boolean; autoAlias?: boolean; desc?: boolean; descLength?: string; descFull?: boolean; noDesc?: boolean } = {}) {
   // Use smart resolver to handle ID, alias, or name
   console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
 
@@ -69,6 +69,21 @@ export async function viewProject(nameOrId: string, options: { web?: boolean; au
     }
 
     console.log(`   URL: ${project.url}`);
+
+    // Description display
+    const descText = project.description || project.content;
+    if (descText && !options.noDesc && (options.desc || options.descLength || options.descFull)) {
+      console.log('');
+      console.log('📝 Description:');
+      console.log('─'.repeat(80));
+      if (options.descFull) {
+        console.log(descText);
+      } else {
+        const length = options.descLength ? parseInt(options.descLength, 10) : undefined;
+        console.log(formatContentPreview(descText, length));
+      }
+      console.log('─'.repeat(80));
+    }
 
     // Display milestones
     if (milestones.length > 0) {
