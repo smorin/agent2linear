@@ -2,6 +2,7 @@ import { getFullIssueById, getIssueComments, getIssueHistory } from '../../lib/l
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { handleLinearError, isLinearError } from '../../lib/error-handler.js';
+import { formatContentPreview } from '../../lib/output.js';
 
 interface ViewOptions {
   json?: boolean;
@@ -9,6 +10,10 @@ interface ViewOptions {
   showComments?: boolean;
   showHistory?: boolean;
   quiet?: boolean;
+  desc?: boolean;
+  descLength?: string;
+  descFull?: boolean;
+  noDesc?: boolean;
 }
 
 /**
@@ -208,10 +213,16 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
     }
 
     // Description
-    if (issue.description) {
+    if (issue.description && !options.noDesc) {
       console.log('📝 Description:');
       console.log('─'.repeat(80));
-      console.log(issue.description);
+      if (options.desc || options.descLength) {
+        const length = options.descLength ? parseInt(options.descLength, 10) : undefined;
+        console.log(formatContentPreview(issue.description, length));
+      } else {
+        // Default: show full description (--desc-full is also explicit full)
+        console.log(issue.description);
+      }
       console.log('─'.repeat(80));
       console.log('');
     }
