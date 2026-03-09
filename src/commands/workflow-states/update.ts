@@ -66,7 +66,14 @@ export function updateWorkflowStateCommand(program: Command) {
           updateInput.color = colorResult.value!;
         }
         if (options.description !== undefined) updateInput.description = options.description;
-        if (options.position !== undefined) updateInput.position = parseInt(options.position, 10);
+        if (options.position !== undefined) {
+          const position = parseInt(options.position, 10);
+          if (isNaN(position)) {
+            console.error('❌ Position must be a valid number');
+            process.exit(1);
+          }
+          updateInput.position = position;
+        }
 
         console.log('📝 Updating workflow state...');
 

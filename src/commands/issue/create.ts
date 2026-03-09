@@ -388,11 +388,12 @@ async function createIssueNonInteractive(options: CreateOptions) {
         // Validate team compatibility
         const teams = await project.teams();
         const teamsList = await teams.nodes;
-        const projectTeam = teamsList && teamsList.length > 0 ? teamsList[0] : null;
+        const teamBelongsToProject = teamsList && teamsList.some((t: { id: string }) => t.id === teamId);
 
-        if (projectTeam && projectTeam.id !== teamId) {
+        if (teamsList && teamsList.length > 0 && !teamBelongsToProject) {
+          const teamNames = teamsList.map((t: { name: string }) => `"${t.name}"`).join(', ');
           console.error(`❌ Error: Project-team compatibility validation failed\n`);
-          console.error(`   Project "${project.name}" belongs to team "${projectTeam.name}"`);
+          console.error(`   Project "${project.name}" belongs to team(s): ${teamNames}`);
           console.error(`   but issue team is "${teamCheck.name}"`);
 
           // Check if this came from defaultProject config

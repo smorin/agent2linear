@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { platform } from 'os';
 
 /**
@@ -7,19 +7,23 @@ import { platform } from 'os';
 export function openInBrowser(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const platformName = platform();
-    let command: string;
+    let cmd: string;
+    let args: string[];
 
     // Determine the command based on the platform
     if (platformName === 'darwin') {
-      command = `open "${url}"`;
+      cmd = 'open';
+      args = [url];
     } else if (platformName === 'win32') {
-      command = `start "${url}"`;
+      cmd = 'cmd';
+      args = ['/c', 'start', '', url];
     } else {
       // Linux and other Unix-like systems
-      command = `xdg-open "${url}"`;
+      cmd = 'xdg-open';
+      args = [url];
     }
 
-    exec(command, (error) => {
+    execFile(cmd, args, (error) => {
       if (error) {
         reject(new Error(`Failed to open browser: ${error.message}`));
       } else {

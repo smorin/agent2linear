@@ -72,7 +72,14 @@ export function createWorkflowStateCommand(program: Command) {
           type: options.type,
           color,
           description: options.description,
-          position: parseInt(options.position, 10),
+          position: (() => {
+            const pos = parseInt(options.position, 10);
+            if (isNaN(pos)) {
+              console.error('❌ Position must be a valid number');
+              process.exit(1);
+            }
+            return pos;
+          })(),
         });
 
         console.log('');

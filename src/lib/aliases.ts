@@ -79,11 +79,16 @@ function readAliasesFile(path: string): Aliases {
  * Write aliases to a JSON file
  */
 function writeAliasesFile(path: string, aliases: Aliases): void {
-  const dir = dirname(path);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  try {
+    const dir = dirname(path);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(path, JSON.stringify(aliases, null, 2), 'utf-8');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to write aliases file ${path}: ${msg}`);
   }
-  writeFileSync(path, JSON.stringify(aliases, null, 2), 'utf-8');
 }
 
 /**
@@ -491,11 +496,13 @@ export async function addAlias(
   // Validate entity exists via API (unless skipped)
   // Note: We rely on API validation rather than client-side format checks
   // because Linear ID formats can vary (UUIDs, prefixes, etc.)
+  let validationName: string | undefined;
   if (!options.skipValidation) {
     const validation = await validateEntity(type, id);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
+    validationName = validation.name;
   }
 
   // Load existing aliases from the target scope
@@ -522,14 +529,7 @@ export async function addAlias(
   existingAliases[key][alias] = id;
   writeAliasesFile(filePath, existingAliases);
 
-  // Get entity name for confirmation
-  let entityName: string | undefined;
-  if (!options.skipValidation) {
-    const validation = await validateEntity(type, id);
-    entityName = validation.name;
-  }
-
-  return { success: true, entityName };
+  return { success: true, entityName: validationName };
 }
 
 /**
@@ -808,25 +808,20 @@ export async function updateAliasId(
   const oldId = existingAliases[key][alias];
 
   // Validate new ID exists via API (unless skipped)
+  let validationName: string | undefined;
   if (!options.skipValidation) {
     const validation = await validateEntity(type, newId);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
+    validationName = validation.name;
   }
 
   // Update the alias
   existingAliases[key][alias] = newId;
   writeAliasesFile(filePath, existingAliases);
 
-  // Get entity name for confirmation
-  let entityName: string | undefined;
-  if (!options.skipValidation) {
-    const validation = await validateEntity(type, newId);
-    entityName = validation.name;
-  }
-
-  return { success: true, entityName, oldId };
+  return { success: true, entityName: validationName, oldId };
 }
 
 /**
