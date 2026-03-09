@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { Aliases, AliasEntityType, ResolvedAliases, AliasLocation } from './types.js';
 import {
   validateInitiativeExists,
@@ -12,6 +12,7 @@ import {
   getIssueLabelById,
   getProjectLabelById,
   getWorkflowStateById,
+  getCycleById,
 } from './linear-client.js';
 
 const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'agent2linear');
@@ -78,11 +79,16 @@ function readAliasesFile(path: string): Aliases {
  * Write aliases to a JSON file
  */
 function writeAliasesFile(path: string, aliases: Aliases): void {
-  const dir = path.substring(0, path.lastIndexOf('/'));
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  try {
+    const dir = dirname(path);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    writeFileSync(path, JSON.stringify(aliases, null, 2), 'utf-8');
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to write aliases file ${path}: ${msg}`);
   }
-  writeFileSync(path, JSON.stringify(aliases, null, 2), 'utf-8');
 }
 
 /**
@@ -120,6 +126,9 @@ function normalizeEntityType(type: string): AliasEntityType | null {
   if (normalized === 'workflow-state' || normalized === 'workflow-states' || normalized === 'workflowstate' || normalized === 'workflowstates') {
     return 'workflow-state';
   }
+  if (normalized === 'cycle' || normalized === 'cycles') {
+    return 'cycle';
+  }
   return null;
 }
 
@@ -137,7 +146,8 @@ function getAliasesKey(type: AliasEntityType): keyof Aliases {
   if (type === 'issue-label') return 'issueLabels';
   if (type === 'project-label') return 'projectLabels';
   if (type === 'workflow-state') return 'workflowStates';
-  return 'projects'; // fallback
+  if (type === 'cycle') return 'cycles';
+  throw new Error(`Unknown alias entity type: ${type}`);
 }
 
 /**
@@ -324,6 +334,8 @@ function looksLikeLinearId(input: string, type: AliasEntityType): boolean {
         return lowerInput.startsWith('label_');
       case 'workflow-state':
         return lowerInput.startsWith('state_') || lowerInput.startsWith('workflow_');
+      case 'cycle':
+        return lowerInput.startsWith('cycle_');
       default:
         return true; // Accept any prefix format for unknown types
     }
@@ -445,6 +457,13 @@ async function validateEntity(
         }
         return { valid: true, name: state.name };
       }
+      case 'cycle': {
+        const cycle = await getCycleById(id);
+        if (!cycle) {
+          return { valid: false, error: `Cycle with ID "${id}" not found` };
+        }
+        return { valid: true, name: cycle.name };
+      }
       default:
         return { valid: false, error: 'Invalid entity type' };
     }
@@ -477,11 +496,13 @@ export async function addAlias(
   // Validate entity exists via API (unless skipped)
   // Note: We rely on API validation rather than client-side format checks
   // because Linear ID formats can vary (UUIDs, prefixes, etc.)
+  let validationName: string | undefined;
   if (!options.skipValidation) {
     const validation = await validateEntity(type, id);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
+    validationName = validation.name;
   }
 
   // Load existing aliases from the target scope
@@ -508,14 +529,7 @@ export async function addAlias(
   existingAliases[key][alias] = id;
   writeAliasesFile(filePath, existingAliases);
 
-  // Get entity name for confirmation
-  let entityName: string | undefined;
-  if (!options.skipValidation) {
-    const validation = await validateEntity(type, id);
-    entityName = validation.name;
-  }
-
-  return { success: true, entityName };
+  return { success: true, entityName: validationName };
 }
 
 /**
@@ -751,6 +765,21 @@ export async function validateAllAliases(): Promise<{
     }
   }
 
+  // Check cycles
+  for (const [alias, id] of Object.entries(aliases.cycles)) {
+    total++;
+    const validation = await validateEntity('cycle', id);
+    if (!validation.valid) {
+      broken.push({
+        type: 'cycle',
+        alias,
+        id,
+        location: aliases.locations['cycle'][alias],
+        error: validation.error || 'Unknown error',
+      });
+    }
+  }
+
   return { broken, total };
 }
 
@@ -779,25 +808,20 @@ export async function updateAliasId(
   const oldId = existingAliases[key][alias];
 
   // Validate new ID exists via API (unless skipped)
+  let validationName: string | undefined;
   if (!options.skipValidation) {
     const validation = await validateEntity(type, newId);
     if (!validation.valid) {
       return { success: false, error: validation.error };
     }
+    validationName = validation.name;
   }
 
   // Update the alias
   existingAliases[key][alias] = newId;
   writeAliasesFile(filePath, existingAliases);
 
-  // Get entity name for confirmation
-  let entityName: string | undefined;
-  if (!options.skipValidation) {
-    const validation = await validateEntity(type, newId);
-    entityName = validation.name;
-  }
-
-  return { success: true, entityName, oldId };
+  return { success: true, entityName: validationName, oldId };
 }
 
 /**

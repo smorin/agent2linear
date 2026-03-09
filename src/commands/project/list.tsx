@@ -63,7 +63,11 @@ async function buildDefaultFilters(options: any): Promise<ProjectListFilters> {
   }
 
   if (options.priority !== undefined) {
-    filters.priority = parseInt(options.priority, 10);
+    const priority = parseInt(options.priority, 10);
+    if (isNaN(priority) || priority < 0 || priority > 4) {
+      throw new Error('Priority must be a number between 0 (None) and 4 (Low)');
+    }
+    filters.priority = priority;
   }
 
   if (options.member) {
@@ -375,7 +379,11 @@ export function listProjectsCommand(program: Command): void {
         const filters = await buildDefaultFilters(options);
 
         // Add pagination options (M21.1)
-        filters.limit = parseInt(options.limit, 10);
+        const limit = parseInt(options.limit, 10);
+        if (isNaN(limit) || limit < 1) {
+          throw new Error('Limit must be a positive number');
+        }
+        filters.limit = limit;
         filters.fetchAll = options.all || false;
 
         // M23: Add dependency fetching flag

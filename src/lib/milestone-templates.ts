@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { MilestoneTemplates, MilestoneTemplate, MilestoneDefinition } from './types.js';
 
 const GLOBAL_TEMPLATES_DIR = join(homedir(), '.config', 'agent2linear');
@@ -188,7 +188,7 @@ export function hasProjectTemplates(): boolean {
  * Write milestone templates to a JSON file with auto-create directories
  */
 function writeTemplatesFile(path: string, templates: MilestoneTemplates): void {
-  const dir = path.substring(0, path.lastIndexOf('/'));
+  const dir = dirname(path);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }

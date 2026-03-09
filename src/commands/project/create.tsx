@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text } from 'ink';
-import { readFileSync } from 'fs';
+import { readContentFile } from '../../lib/file-utils.js';
 import { ProjectForm } from '../../ui/components/ProjectForm.js';
 import {
   createProject,
@@ -65,22 +65,13 @@ async function createProjectNonInteractive(options: CreateOptions) {
     // Read content from file if --content-file is provided
     let content = options.content;
     if (options.contentFile) {
-      try {
-        content = readFileSync(options.contentFile, 'utf-8');
-        console.log(`📄 Read content from: ${options.contentFile}`);
-      } catch (error) {
-        console.error(`❌ Error reading file: ${options.contentFile}\n`);
-        if (error instanceof Error) {
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-            console.error('   File not found. Please check the path and try again.');
-          } else if ((error as NodeJS.ErrnoException).code === 'EACCES') {
-            console.error('   Permission denied. Please check file permissions.');
-          } else {
-            console.error(`   ${error.message}`);
-          }
-        }
+      const fileResult = await readContentFile(options.contentFile);
+      if (!fileResult.success) {
+        console.error(`❌ ${fileResult.error}`);
         process.exit(1);
       }
+      content = fileResult.content;
+      console.log(`📄 Read content from: ${options.contentFile}`);
     }
 
     // Validate required fields
@@ -327,7 +318,6 @@ async function createProjectNonInteractive(options: CreateOptions) {
       leadId = undefined;
     } else {
       // Check config setting for auto-assign
-      const config = getConfig();
       if (config.defaultAutoAssignLead !== false) {  // Default is true
         try {
           const currentUser = await getCurrentUser();

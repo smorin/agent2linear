@@ -210,14 +210,17 @@ export async function syncAliasesCore<T extends SyncableEntity>(
       }
 
       try {
-        await addAlias(entityType, alias.slug, alias.id, scope!, { skipValidation: true as boolean });
-        created++;
-      } catch (error) {
-        // Alias might already exist with same ID
-        if (error instanceof Error && error.message.includes('already points to')) {
-          // This is fine, skip it
-          continue;
+        const result = await addAlias(entityType, alias.slug, alias.id, scope!, { skipValidation: true as boolean });
+        if (result.success) {
+          created++;
+        } else {
+          if (result.error?.includes('already points to')) {
+            continue;
+          }
+          console.error(`   ❌ Failed to create alias ${alias.slug}: ${result.error}`);
+          failed++;
         }
+      } catch (error) {
         console.error(`   ❌ Failed to create alias ${alias.slug}:`, error instanceof Error ? error.message : 'Unknown error');
         failed++;
       }

@@ -791,7 +791,7 @@ export async function createIssue(input: IssueCreateInput): Promise<{
       parentId: input.parentId,
       labelIds: input.labelIds,
       dueDate: input.dueDate,
-      createAsUser: input.templateId, // Note: createAsUser is deprecated, using templateId differently
+      templateId: input.templateId,
     });
 
     const createdIssue = await issue.issue;

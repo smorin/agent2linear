@@ -319,9 +319,9 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
         console.error(`❌ ${priorityResult.error}`);
         process.exit(1);
       }
-      updates.priority = options.priority;
+      updates.priority = priorityResult.value;
       const priorityNames = ['None', 'Urgent', 'High', 'Normal', 'Low'];
-      console.log(`🎯 Updating priority: ${priorityNames[options.priority]} (${options.priority})`);
+      console.log(`🎯 Updating priority: ${priorityNames[priorityResult.value!]} (${priorityResult.value})`);
     }
 
     if (options.estimate !== undefined) {
