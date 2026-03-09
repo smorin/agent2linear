@@ -5,6 +5,29 @@
 
 ---
 
+## Bug 0: `createIssue` passes `templateId` to `createAsUser` API field
+
+**File:** `src/lib/linear-client.ts:794`
+**Priority:** HIGH | **Worth fixing:** YES
+
+```typescript
+const issue = await client.createIssue({
+  // ...
+  createAsUser: input.templateId, // BUG: templateId assigned to wrong field
+});
+```
+
+The `templateId` from issue creation is passed as `createAsUser` (a deprecated field for user impersonation). The template is never actually applied. If the template ID happens to match a user ID, the issue would be created as if that user created it.
+
+**Fix:** Pass `templateId` correctly (Linear SDK may support it as a direct field), or remove `createAsUser` and handle templates via a different mechanism.
+
+| Pros | Cons |
+|------|------|
+| Fixes completely broken `--template` feature | Need to verify Linear SDK's template API |
+| Prevents accidental user impersonation | |
+
+---
+
 ## Bug 1: `validateISODate` timezone bug causes false rejections
 
 **File:** `src/lib/validators.ts:183-195`
@@ -299,6 +322,7 @@ URL is interpolated into a shell command. A URL containing `$(...)` or backticks
 
 | # | Bug | Priority | Fix? | Category |
 |---|-----|----------|------|----------|
+| 0 | `createIssue` templateId → createAsUser | HIGH | YES | Wrong API field |
 | 1 | `validateISODate` timezone | HIGH | YES | Logic bug |
 | 2 | `issue update --priority` raw value | MEDIUM | YES | Type bug |
 | 3 | `addAlias` double API call | MEDIUM | YES | Performance |
@@ -316,4 +340,4 @@ URL is interpolated into a shell command. A URL containing `$(...)` or backticks
 | 15 | `browser.ts` command injection | LOW | Optional | Security |
 | 16 | Write functions no error handling | LOW | Optional | Error handling |
 
-**Recommended fix order:** 1, 2, 5+6, 7, 3+4, 8, 9, 11
+**Recommended fix order:** 0, 1, 2, 5+6, 7, 3+4, 8, 9, 11
