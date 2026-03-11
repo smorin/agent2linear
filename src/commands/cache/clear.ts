@@ -1,15 +1,15 @@
-import { getEntityCache, clearGlobalCache } from '../../lib/entity-cache.js';
+import type { CacheableEntityType } from '../../lib/entity-cache.js';
+import { clearGlobalCache,getEntityCache } from '../../lib/entity-cache.js';
 import {
   clearAllCache,
-  clearTeamsCache,
   clearInitiativesCache,
-  clearMembersCache,
-  clearTemplatesCache,
-  clearStatusCache,
-  clearWorkflowStatesCache,
   clearIssueLabelsCache,
-  clearProjectLabelsCache
-} from '../../lib/status-cache.js';
+  clearMembersCache,
+  clearProjectLabelsCache,
+  clearStatusCache,
+  clearTeamsCache,
+  clearTemplatesCache,
+  clearWorkflowStatesCache} from '../../lib/status-cache.js';
 
 /**
  * Clear all cached entities (both session and persistent)
@@ -31,7 +31,7 @@ export async function clearCache(options?: { entity?: string }) {
     console.log(`🗑️  Clearing ${options.entity} cache...`);
 
     // Clear session cache (in-memory)
-    cache.clearEntity(options.entity as any);
+    cache.clearEntity(options.entity as CacheableEntityType);
 
     // Clear persistent cache (file-based)
     switch (options.entity) {

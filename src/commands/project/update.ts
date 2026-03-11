@@ -1,9 +1,10 @@
 import { readFileSync } from 'fs';
-import { resolveProject } from '../../lib/project-resolver.js';
-import { updateProject } from '../../lib/linear-client.js';
-import { showEntityNotFound, showError, showSuccess } from '../../lib/output.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
+import { updateProject } from '../../lib/linear-client.js';
+import { showEntityNotFound, showError, showSuccess } from '../../lib/output.js';
+import { resolveProject } from '../../lib/project-resolver.js';
 
 interface UpdateOptions {
   status?: string;

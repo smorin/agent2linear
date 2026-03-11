@@ -1,7 +1,8 @@
 import { Command } from 'commander';
+
+import { resolveAlias } from '../../lib/aliases.js';
 import { getAllIssueLabels } from '../../lib/linear-client.js';
 import { syncAliasesCore, type SyncAliasesOptions } from '../../lib/sync-aliases.js';
-import { resolveAlias } from '../../lib/aliases.js';
 
 /**
  * Extended options for issue-label sync (includes team filtering)

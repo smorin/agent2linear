@@ -1,11 +1,12 @@
-import { Command, Argument } from 'commander';
+import { Argument,Command } from 'commander';
+
 import { addAliasCommand } from './add.js';
+import { clearAliasCommand } from './clear.js';
+import { editAlias } from './edit.js';
+import { getAliasCommand } from './get.js';
 import { listAliasCommand } from './list.js';
 import { removeAliasCommand } from './remove.js';
-import { getAliasCommand } from './get.js';
-import { editAlias } from './edit.js';
 import { aliasSyncCommand } from './sync.js';
-import { clearAliasCommand } from './clear.js';
 
 export function registerAliasCommands(cli: Command): void {
   const alias = cli

@@ -1,9 +1,10 @@
 import { Command } from 'commander';
+
 import { listTeams } from './list.js';
 import { selectTeam } from './select.js';
 import { setTeam } from './set.js';
-import { viewTeam } from './view.js';
 import { syncTeamAliases } from './sync-aliases.js';
+import { viewTeam } from './view.js';
 
 export function registerTeamsCommands(cli: Command): void {
   const teams = cli

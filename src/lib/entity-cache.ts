@@ -14,14 +14,14 @@
 
 import { getConfig } from './config.js';
 import {
-  getAllTeams,
   getAllInitiatives,
   getAllMembers,
+  getAllTeams,
   getAllTemplates,
   getCurrentUser as getLinearCurrentUser,
-  Team,
   Initiative,
   Member,
+  Team,
   Template
 } from './linear-client.js';
 
@@ -33,17 +33,17 @@ export interface User {
   name: string;
   email: string;
 }
-import { IssueLabel, ProjectLabel } from './types.js';
 import {
-  getCachedTeams,
-  saveTeamsCache,
   getCachedInitiatives,
-  saveInitiativesCache,
   getCachedMembers,
-  saveMembersCache,
+  getCachedTeams,
   getCachedTemplates,
+  saveInitiativesCache,
+  saveMembersCache,
+  saveTeamsCache,
   saveTemplatesCache,
 } from './status-cache.js';
+import { IssueLabel, ProjectLabel } from './types.js';
 
 /**
  * Cached entity with timestamp

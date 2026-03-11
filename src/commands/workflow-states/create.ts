@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { createWorkflowState } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { getConfig } from '../../lib/config.js';
+import { createWorkflowState } from '../../lib/linear-client.js';
 
 export function createWorkflowStateCommand(program: Command) {
   program

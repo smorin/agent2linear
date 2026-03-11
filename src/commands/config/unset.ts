@@ -1,11 +1,11 @@
 import {
-  isValidConfigKey,
-  unsetConfigValue,
-  hasGlobalConfig,
-  hasProjectConfig,
+  type ConfigKey,
   getGlobalConfigPath,
   getProjectConfigPath,
-  type ConfigKey,
+  hasGlobalConfig,
+  hasProjectConfig,
+  isValidConfigKey,
+  unsetConfigValue,
 } from '../../lib/config.js';
 import { getScopeInfo } from '../../lib/scope.js';
 

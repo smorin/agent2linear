@@ -1,10 +1,11 @@
-import { Command, Argument } from 'commander';
-import { listConfig } from './list.js';
-import { getConfigValue } from './get.js';
+import { Argument,Command } from 'commander';
+
 import type { ConfigKey } from '../../lib/config.js';
+import { editConfig } from './edit.js';
+import { getConfigValue } from './get.js';
+import { listConfig } from './list.js';
 import { setConfig } from './set.js';
 import { unsetConfig } from './unset.js';
-import { editConfig } from './edit.js';
 
 export function registerConfigCommands(cli: Command): void {
   const config = cli

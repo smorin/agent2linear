@@ -1,9 +1,10 @@
 import { Command } from 'commander';
+
 import { listInitiatives } from './list.js';
-import { viewInitiative } from './view.js';
 import { selectInitiative } from './select.js';
 import { setInitiative } from './set.js';
 import { syncInitiativeAliases } from './sync-aliases.js';
+import { viewInitiative } from './view.js';
 
 export function registerInitiativesCommands(cli: Command): void {
   const initiatives = cli

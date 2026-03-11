@@ -1,6 +1,6 @@
-import { createIssueComment } from '../../lib/linear-client.js';
-import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import { readContentFile } from '../../lib/file-utils.js';
+import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
+import { createIssueComment } from '../../lib/linear-client.js';
 import { showError, showSuccess } from '../../lib/output.js';
 
 interface CommentOptions {

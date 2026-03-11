@@ -1,9 +1,10 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+
 import { resolveAlias } from './aliases.js';
-import { findProjectByName, getProjectById } from './linear-client.js';
 import { getConfig } from './config.js';
 import type { ProjectResult } from './linear-client.js';
+import { findProjectByName, getProjectById } from './linear-client.js';
 
 const PROJECT_CACHE_DIR = '.agent2linear';
 const PROJECT_CACHE_FILE = join(PROJECT_CACHE_DIR, 'project-cache.json');

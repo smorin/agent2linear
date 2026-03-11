@@ -1,10 +1,11 @@
 import { Command } from 'commander';
-import { listMilestoneTemplates } from './list.js';
-import { viewMilestoneTemplate } from './view.js';
+
 import { createTemplate } from './create.js';
 import { createTemplateInteractive } from './create-interactive.js';
-import { removeTemplate } from './remove.js';
 import { editTemplateInteractive } from './edit-interactive.js';
+import { listMilestoneTemplates } from './list.js';
+import { removeTemplate } from './remove.js';
+import { viewMilestoneTemplate } from './view.js';
 
 export function registerMilestoneTemplatesCommands(cli: Command): void {
   const milestoneTemplates = cli

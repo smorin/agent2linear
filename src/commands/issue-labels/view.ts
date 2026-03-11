@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { getIssueLabelById } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { formatColorPreview } from '../../lib/colors.js';
+import { getIssueLabelById } from '../../lib/linear-client.js';
 
 export function viewIssueLabel(program: Command) {
   program

@@ -1,4 +1,5 @@
 import { LinearClient as SDKClient } from '@linear/sdk';
+
 import { getApiKey } from '../config.js';
 
 export class LinearClientError extends Error {

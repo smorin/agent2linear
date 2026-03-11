@@ -7,9 +7,9 @@ import {
   maskApiKey,
 } from '../../lib/config.js';
 import {
+  getTemplateById,
   validateInitiativeExists,
   validateTeamExists,
-  getTemplateById,
 } from '../../lib/linear-client.js';
 import { getMilestoneTemplate } from '../../lib/milestone-templates.js';
 

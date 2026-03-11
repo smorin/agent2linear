@@ -1,5 +1,5 @@
-import { getLinearClient, LinearClientError } from './client.js';
 import type { WorkflowState } from '../types.js';
+import { getLinearClient, LinearClientError } from './client.js';
 
 /**
  * Workflow State input types
@@ -75,7 +75,7 @@ export async function getAllWorkflowStates(teamId?: string): Promise<WorkflowSta
         }
       `;
 
-      const response: any = await client.client.rawRequest(statesQuery);
+      const response = await client.client.rawRequest(statesQuery) as { data?: { teams?: { nodes?: Array<{ id: string; states: { nodes: Array<{ id: string; name: string; type: string; color: string; description?: string; position: number }> } }> } } };
       const teamsData = response.data?.teams?.nodes || [];
 
       for (const team of teamsData) {

@@ -1,8 +1,8 @@
-import { getProjectStatusById } from '../../lib/linear-client.js';
 import { resolveAlias } from '../../lib/aliases.js';
-import { resolveProjectStatusId } from '../../lib/status-cache.js';
-import { showResolvedAlias, showEntityNotFound } from '../../lib/output.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getProjectStatusById } from '../../lib/linear-client.js';
+import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
+import { resolveProjectStatusId } from '../../lib/status-cache.js';
 
 export async function viewProjectStatus(nameOrId: string, options: { web?: boolean } = {}) {
   try {

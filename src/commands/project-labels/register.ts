@@ -1,10 +1,11 @@
 import { Command } from 'commander';
-import { listProjectLabels } from './list.js';
-import { viewProjectLabel } from './view.js';
+
 import { createProjectLabelCommand } from './create.js';
-import { updateProjectLabelCommand } from './update.js';
 import { deleteProjectLabelCommand } from './delete.js';
+import { listProjectLabels } from './list.js';
 import { syncProjectLabelAliases } from './sync-aliases.js';
+import { updateProjectLabelCommand } from './update.js';
+import { viewProjectLabel } from './view.js';
 
 export function registerProjectLabelsCommands(cli: Command): void {
   const projectLabels = cli

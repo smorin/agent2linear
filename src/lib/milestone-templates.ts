@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
-import type { MilestoneTemplates, MilestoneTemplate, MilestoneDefinition } from './types.js';
+
+import type { MilestoneDefinition,MilestoneTemplate, MilestoneTemplates } from './types.js';
 
 const GLOBAL_TEMPLATES_DIR = join(homedir(), '.config', 'agent2linear');
 const GLOBAL_TEMPLATES_FILE = join(GLOBAL_TEMPLATES_DIR, 'milestone-templates.json');

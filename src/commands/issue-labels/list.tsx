@@ -1,10 +1,11 @@
-import React from 'react';
-import { render, Text, Box } from 'ink';
 import { Command } from 'commander';
-import { getAllIssueLabels } from '../../lib/linear-client.js';
-import { getConfig } from '../../lib/config.js';
-import { formatColorPreview } from '../../lib/colors.js';
+import { Box,render, Text } from 'ink';
+import React from 'react';
+
 import { resolveAlias } from '../../lib/aliases.js';
+import { formatColorPreview } from '../../lib/colors.js';
+import { getConfig } from '../../lib/config.js';
+import { getAllIssueLabels } from '../../lib/linear-client.js';
 
 interface IssueLabelsListProps {
   teamId?: string;

@@ -1,5 +1,5 @@
-import type { Icon } from './types.js';
 import { getAllIssueLabels, getAllProjectLabels, getAllWorkflowStates } from './linear-client.js';
+import type { Icon } from './types.js';
 
 /**
  * Curated list of common Linear icons/emojis

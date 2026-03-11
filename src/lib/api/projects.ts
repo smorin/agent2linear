@@ -1,5 +1,5 @@
 import type { LinearClient as SDKClient } from '@linear/sdk';
-import { getLinearClient, LinearClientError } from './client.js';
+
 import { getRelationDirection } from '../parsers.js';
 import type {
   ProjectListFilters,
@@ -7,6 +7,7 @@ import type {
   ProjectRelation,
   ProjectRelationCreateInput,
 } from '../types.js';
+import { getLinearClient, LinearClientError } from './client.js';
 
 /**
  * Project creation input
@@ -153,7 +154,8 @@ export async function getAllProjects(filters?: ProjectListFilters): Promise<Proj
     const client = getLinearClient();
 
     // Build GraphQL filter object
-    const graphqlFilter: any = {};
+    interface DateRangeFilter { gte?: string; lte?: string }
+    const graphqlFilter: Record<string, unknown> & { startDate?: DateRangeFilter; targetDate?: DateRangeFilter } = {};
 
     if (filters?.teamId) {
       graphqlFilter.accessibleTeams = { some: { id: { eq: filters.teamId } } };
@@ -300,7 +302,38 @@ ${relationsFragment}
     // ========================================
     // PAGINATION LOOP (M21.1)
     // ========================================
-    let rawProjects: any[] = [];
+    interface RawProjectRelation {
+      id: string;
+      type: 'dependency';
+      anchorType: 'start' | 'end';
+      relatedAnchorType: 'start' | 'end';
+      project: { id: string; name: string };
+      relatedProject: { id: string; name: string };
+      createdAt: string;
+      updatedAt: string;
+    }
+
+    interface RawProject {
+      id: string;
+      name: string;
+      description?: string;
+      content?: string;
+      icon?: string;
+      color?: string;
+      state: string;
+      priority?: number;
+      startDate?: string;
+      targetDate?: string;
+      completedAt?: string;
+      url: string;
+      createdAt: string;
+      updatedAt: string;
+      teams?: { nodes: Array<{ id: string; name: string; key: string }> };
+      lead?: { id: string; name: string; email: string };
+      relations?: { nodes: RawProjectRelation[] };
+    }
+
+    let rawProjects: RawProject[] = [];
     let cursor: string | null = null;
     let hasNextPage = true;
     let pageCount = 0;
@@ -315,8 +348,7 @@ ${relationsFragment}
         after: cursor
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const minimalResponse: any = await client.client.rawRequest(minimalQuery, variables);
+      const minimalResponse = await client.client.rawRequest(minimalQuery, variables) as { data?: { projects?: { nodes?: RawProject[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } } } };
 
       const nodes = minimalResponse.data?.projects?.nodes || [];
       const pageInfo = minimalResponse.data?.projects?.pageInfo;
@@ -339,11 +371,14 @@ ${relationsFragment}
     // ========================================
     // QUERY 2: CONDITIONAL - Batch fetch labels+members IF filters use them
     // ========================================
-    const labelsMap: Map<string, any[]> = new Map();
-    const membersMap: Map<string, any[]> = new Map();
+    interface RawLabel { id: string; name: string; color?: string }
+    interface RawMember { id: string; name: string; email: string }
+
+    const labelsMap: Map<string, RawLabel[]> = new Map();
+    const membersMap: Map<string, RawMember[]> = new Map();
 
     if (needsAdditionalData && rawProjects.length > 0) {
-      const projectIds = rawProjects.map((p: any) => p.id);
+      const projectIds = rawProjects.map((p: RawProject) => p.id);
 
       const batchQuery = `
         query GetProjectsLabelsAndMembers($ids: [String!]!) {
@@ -369,8 +404,7 @@ ${relationsFragment}
         }
       `;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const batchResponse: any = await client.client.rawRequest(batchQuery, {});
+      const batchResponse = await client.client.rawRequest(batchQuery, {}) as { data?: Record<string, { id: string; labels?: { nodes: RawLabel[] }; members?: { nodes: RawMember[] } }> };
 
       if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
         console.error('[agent2linear] Batch query fetched labels+members for', projectIds.length, 'projects');
@@ -399,7 +433,7 @@ ${relationsFragment}
     // ========================================
     // BUILD FINAL PROJECT LIST (IN-CODE JOIN)
     // ========================================
-    const projectList: ProjectListItem[] = rawProjects.map((project: any) => {
+    const projectList: ProjectListItem[] = rawProjects.map((project: RawProject) => {
       const labels = labelsMap.get(project.id) || [];
       const members = membersMap.get(project.id) || [];
 
@@ -416,7 +450,7 @@ ${relationsFragment}
         if (project.relations?.nodes) {
           const relations = project.relations.nodes;
 
-          dependsOnCount = relations.filter((rel: any) => {
+          dependsOnCount = relations.filter((rel: RawProjectRelation) => {
             try {
               return getRelationDirection(rel, project.id) === 'depends-on';
             } catch {
@@ -424,7 +458,7 @@ ${relationsFragment}
             }
           }).length;
 
-          blocksCount = relations.filter((rel: any) => {
+          blocksCount = relations.filter((rel: RawProjectRelation) => {
             try {
               return getRelationDirection(rel, project.id) === 'blocks';
             } catch {
@@ -460,13 +494,13 @@ ${relationsFragment}
 
         initiative: undefined, // Initiative relationship needs to be fetched differently
 
-        labels: labels.map((label: any) => ({
+        labels: labels.map((label: RawLabel) => ({
           id: label.id,
           name: label.name,
           color: label.color || undefined
         })),
 
-        members: members.map((member: any) => ({
+        members: members.map((member: RawMember) => ({
           id: member.id,
           name: member.name,
           email: member.email
@@ -866,7 +900,18 @@ export async function getProjectById(
       }
     `;
 
-    const response: any = await client.client.rawRequest(projectQuery, { projectId });
+    interface RawProjectById {
+      id: string;
+      name: string;
+      description?: string;
+      content?: string;
+      url: string;
+      state: string;
+      initiatives?: { nodes?: Array<{ id: string; name: string }> };
+      teams?: { nodes?: Array<{ id: string; name: string }> };
+    }
+
+    const response = await client.client.rawRequest(projectQuery, { projectId }) as { data?: { project?: RawProjectById } };
     const project = response.data?.project;
 
     if (!project) {
@@ -1062,7 +1107,21 @@ export async function getFullProjectDetails(projectId: string): Promise<{
       }
     `;
 
-    const response: any = await client.client.rawRequest(projectQuery, { projectId });
+    interface RawProjectDetails {
+      id: string;
+      name: string;
+      description?: string;
+      content?: string;
+      url: string;
+      state: string;
+      initiatives?: { nodes?: Array<{ id: string; name: string }> };
+      teams?: { nodes?: Array<{ id: string; name: string }> };
+      lastAppliedTemplate?: { id: string; name: string };
+      projectMilestones?: { nodes?: Array<{ id: string; name: string }> };
+      issues?: { nodes?: Array<{ id: string; identifier: string; title: string }> };
+    }
+
+    const response = await client.client.rawRequest(projectQuery, { projectId }) as { data?: { project?: RawProjectDetails } };
     const projectData = response.data?.project;
 
     if (!projectData) {
@@ -1091,12 +1150,12 @@ export async function getFullProjectDetails(projectId: string): Promise<{
         }
       : undefined;
 
-    const milestones = (projectData.projectMilestones?.nodes || []).map((milestone: any) => ({
+    const milestones = (projectData.projectMilestones?.nodes || []).map((milestone: { id: string; name: string }) => ({
       id: milestone.id,
       name: milestone.name,
     }));
 
-    const issues = (projectData.issues?.nodes || []).map((issue: any) => ({
+    const issues = (projectData.issues?.nodes || []).map((issue: { id: string; identifier: string; title: string }) => ({
       id: issue.id,
       identifier: issue.identifier,
       title: issue.title,

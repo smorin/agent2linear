@@ -290,7 +290,7 @@ export interface IssueCreateInput {
 
   // Content fields
   description?: string;
-  descriptionData?: any; // Linear's Prosemirror JSON format
+  descriptionData?: Record<string, unknown>; // Linear's Prosemirror JSON format
 
   // Priority & estimation
   priority?: number; // 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
@@ -324,7 +324,7 @@ export interface IssueUpdateInput {
   // Basic fields
   title?: string;
   description?: string;
-  descriptionData?: any;
+  descriptionData?: Record<string, unknown>;
 
   // Priority & estimation
   priority?: number;

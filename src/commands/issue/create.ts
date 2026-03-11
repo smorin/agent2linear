@@ -1,16 +1,16 @@
+import { resolveAlias } from '../../lib/aliases.js';
+import { openInBrowser } from '../../lib/browser.js';
+import { getConfig } from '../../lib/config.js';
+import { readContentFile } from '../../lib/file-utils.js';
+import { resolveIssueId } from '../../lib/issue-resolver.js';
 import {
   createIssue,
   getCurrentUser,
-  resolveMemberIdentifier,
   getTemplateById,
+  resolveMemberIdentifier,
   validateTeamExists,
 } from '../../lib/linear-client.js';
 import type { IssueCreateInput } from '../../lib/types.js';
-import { getConfig } from '../../lib/config.js';
-import { openInBrowser } from '../../lib/browser.js';
-import { resolveAlias } from '../../lib/aliases.js';
-import { resolveIssueId } from '../../lib/issue-resolver.js';
-import { readContentFile } from '../../lib/file-utils.js';
 
 interface CreateOptions {
   // Required

@@ -1,6 +1,6 @@
-import { getTemplateById } from '../../lib/linear-client.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getTemplateById } from '../../lib/linear-client.js';
 
 export async function viewTemplate(templateId: string, options: { web?: boolean } = {}) {
   // Resolve alias to ID if needed

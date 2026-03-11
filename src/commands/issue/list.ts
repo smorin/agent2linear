@@ -10,20 +10,49 @@
  */
 
 import type { Command } from 'commander';
-import { getAllIssues } from '../../lib/linear-client.js';
-import { showError, formatContentPreview, filterColumns } from '../../lib/output.js';
-import { getConfig } from '../../lib/config.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
-import { resolveProjectId } from '../../lib/project-resolver.js';
-import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
-import { getEntityCache } from '../../lib/entity-cache.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getConfig } from '../../lib/config.js';
+import { getEntityCache } from '../../lib/entity-cache.js';
+import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
+import { getAllIssues } from '../../lib/linear-client.js';
+import { filterColumns,formatContentPreview, showError } from '../../lib/output.js';
+import { resolveProjectId } from '../../lib/project-resolver.js';
 import type { IssueListFilters, IssueListItem } from '../../lib/types.js';
+
+interface IssueListCommandOptions {
+  allAssignees?: boolean;
+  assignee?: string;
+  team?: string;
+  completed?: boolean;
+  canceled?: boolean;
+  allStates?: boolean;
+  archived?: boolean;
+  project?: string;
+  state?: string;
+  priority?: string;
+  label?: string | string[];
+  parent?: string;
+  rootOnly?: boolean;
+  cycle?: string;
+  search?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+  sort?: string;
+  order?: string;
+  limit?: string;
+  format?: string;
+  web?: boolean;
+  columns?: string;
+}
 
 // ========================================
 // HELPER: Build filters with smart defaults
 // ========================================
-async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
+async function buildDefaultFilters(options: IssueListCommandOptions): Promise<IssueListFilters> {
   const config = getConfig();
   const filters: IssueListFilters = {};
 
@@ -155,7 +184,7 @@ async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
         `Invalid sort field: ${options.sort}. Valid options: ${validSortFields.join(', ')}`
       );
     }
-    filters.sortField = options.sort as any;
+    filters.sortField = options.sort as IssueListFilters['sortField'];
   } else {
     // Default sort: priority descending
     filters.sortField = 'priority';
@@ -274,7 +303,7 @@ function formatPriority(priority?: number): string {
 // ========================================
 // HELPER: Build Linear web URL with filters
 // ========================================
-async function buildLinearWebUrl(filters: IssueListFilters, options: any): Promise<string> {
+async function buildLinearWebUrl(filters: IssueListFilters, options: IssueListCommandOptions): Promise<string> {
   // For now, construct a basic URL to the team's active issues view
   // Linear's URL structure for filtered views is complex and not fully documented
   // We'll open to the team view which will show filtered results
@@ -414,7 +443,7 @@ async function listIssues(options: {
         description: issue.description || '',
         id: issue.id,
         estimate: issue.estimate,
-        dueDate: (issue as any).dueDate || '',
+        dueDate: issue.dueDate || '',
       }));
       const filtered = filterColumns(flattened, cols);
 

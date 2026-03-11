@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
-import type { Member } from '../../lib/linear-client.js';
+import React, { useState } from 'react';
+
 import { getAliasesForId } from '../../lib/aliases.js';
+import type { Member } from '../../lib/linear-client.js';
 
 interface MemberListProps {
   members: Member[];

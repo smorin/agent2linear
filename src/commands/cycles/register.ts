@@ -1,7 +1,8 @@
 import { Command } from 'commander';
+
 import { listCyclesCommand } from './list.js';
-import { viewCycleCommand } from './view.js';
 import { syncCycleAliasesCore } from './sync-aliases.js';
+import { viewCycleCommand } from './view.js';
 
 export function registerCyclesCommands(cli: Command): void {
   const cycles = cli

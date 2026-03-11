@@ -4,10 +4,10 @@
  * Add dependency relations to a project
  */
 
-import { resolveProject } from '../../../lib/project-resolver.js';
-import { getLinearClient, createProjectRelation } from '../../../lib/linear-client.js';
-import { resolveDependencyProjects, parseAdvancedDependency } from '../../../lib/parsers.js';
+import { createProjectRelation,getLinearClient } from '../../../lib/linear-client.js';
 import { showError, showSuccess } from '../../../lib/output.js';
+import { parseAdvancedDependency,resolveDependencyProjects } from '../../../lib/parsers.js';
+import { resolveProject } from '../../../lib/project-resolver.js';
 
 interface AddDependenciesOptions {
   dependsOn?: string;

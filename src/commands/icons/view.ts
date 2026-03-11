@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { findIconByName, findIconByEmoji } from '../../lib/icons.js';
+
+import { findIconByEmoji,findIconByName } from '../../lib/icons.js';
 
 export function viewIcon(program: Command) {
   program

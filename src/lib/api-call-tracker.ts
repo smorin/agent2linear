@@ -19,7 +19,7 @@ export interface ApiCallRecord {
   operationType: 'query' | 'mutation' | 'unknown';
   source: 'main' | 'validation' | 'cache' | 'unknown';
   durationMs?: number;
-  variables?: Record<string, any>;
+  variables?: Record<string, unknown>;
   error?: string;
 }
 
@@ -82,7 +82,7 @@ export function logCall(
   operationType: 'query' | 'mutation' | 'unknown' = 'unknown',
   source: 'main' | 'validation' | 'cache' | 'unknown' = 'unknown',
   durationMs?: number,
-  variables?: Record<string, any>,
+  variables?: Record<string, unknown>,
   error?: string
 ): void {
   if (!trackingEnabled) return;

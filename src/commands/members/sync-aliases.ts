@@ -1,8 +1,9 @@
 import { Command } from 'commander';
-import { getAllMembers } from '../../lib/linear-client.js';
-import { syncAliasesCore, type SyncAliasesOptions } from '../../lib/sync-aliases.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { getConfig } from '../../lib/config.js';
+import { getAllMembers } from '../../lib/linear-client.js';
+import { syncAliasesCore, type SyncAliasesOptions } from '../../lib/sync-aliases.js';
 
 /**
  * Extended options for member sync (includes team filtering)

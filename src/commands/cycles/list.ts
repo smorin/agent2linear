@@ -1,7 +1,7 @@
-import { getAllCycles } from '../../lib/linear-client.js';
-import { getConfig } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
-import { showError, formatListTSV, formatListJSON } from '../../lib/output.js';
+import { getConfig } from '../../lib/config.js';
+import { getAllCycles } from '../../lib/linear-client.js';
+import { formatListJSON,formatListTSV, showError } from '../../lib/output.js';
 
 interface ListCyclesOptions {
   team?: string;

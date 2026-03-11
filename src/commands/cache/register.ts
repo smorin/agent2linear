@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { showCacheStats } from './stats.js';
+
 import { clearCache } from './clear.js';
+import { showCacheStats } from './stats.js';
 
 export function registerCacheCommands(cli: Command): void {
   const cache = cli

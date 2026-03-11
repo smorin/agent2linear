@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+
 import { listMembers } from './list.js';
 import { syncMemberAliases } from './sync-aliases.js';
 

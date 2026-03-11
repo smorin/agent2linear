@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { handleLinearError, isLinearError, formatLinearErrorForLogging } from './error-handler.js';
+import { describe, expect,it } from 'vitest';
+
+import { formatLinearErrorForLogging,handleLinearError, isLinearError } from './error-handler.js';
 
 describe('handleLinearError', () => {
   it('handles 401 authentication errors', () => {

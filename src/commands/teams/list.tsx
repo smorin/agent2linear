@@ -1,9 +1,10 @@
+import { Box, render, Text } from 'ink';
 import React, { useEffect, useState } from 'react';
-import { render, Box, Text } from 'ink';
-import { getAllTeams, type Team } from '../../lib/linear-client.js';
-import { openInBrowser } from '../../lib/browser.js';
-import { formatListTSV, formatListJSON } from '../../lib/output.js';
+
 import { getAliasesForId } from '../../lib/aliases.js';
+import { openInBrowser } from '../../lib/browser.js';
+import { getAllTeams, type Team } from '../../lib/linear-client.js';
+import { formatListJSON,formatListTSV } from '../../lib/output.js';
 
 interface ListOptions {
   interactive?: boolean;

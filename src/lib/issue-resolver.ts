@@ -10,7 +10,7 @@ import { getLinearClient } from './linear-client.js';
  */
 export interface IssueResolveResult {
   issueId: string;
-  issue?: any; // Linear Issue object
+  issue?: unknown; // Linear SDK Issue object
   resolvedBy: 'uuid' | 'identifier';
   originalInput: string;
 }
@@ -124,7 +124,7 @@ async function resolveIdentifierToUUID(identifier: string): Promise<string | nul
  * @param uuid - Issue UUID
  * @returns Issue object or null if not found
  */
-async function fetchIssueByUUID(uuid: string): Promise<any | null> {
+async function fetchIssueByUUID(uuid: string): Promise<unknown> {
   try {
     const client = getLinearClient();
     const issue = await client.issue(uuid);

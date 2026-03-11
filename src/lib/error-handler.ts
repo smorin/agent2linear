@@ -7,14 +7,17 @@
  * Extract HTTP status code from error object
  * Works with various error formats from Linear SDK
  */
-function getStatusCode(error: any): number | null {
+function getStatusCode(error: unknown): number | null {
+  const err = error as Record<string, unknown>;
   // Try common locations for status code
-  if (error.status) return error.status;
-  if (error.response?.status) return error.response.status;
-  if (error.statusCode) return error.statusCode;
-  if (error.extensions?.code) {
+  if (typeof err.status === 'number') return err.status;
+  const response = err.response as Record<string, unknown> | undefined;
+  if (typeof response?.status === 'number') return response.status;
+  if (typeof err.statusCode === 'number') return err.statusCode;
+  const extensions = err.extensions as Record<string, unknown> | undefined;
+  if (extensions?.code) {
     // GraphQL errors sometimes use extensions.code
-    const code = error.extensions.code;
+    const code = extensions.code;
     if (code === 'UNAUTHENTICATED') return 401;
     if (code === 'FORBIDDEN') return 403;
     if (code === 'NOT_FOUND') return 404;
@@ -26,12 +29,15 @@ function getStatusCode(error: any): number | null {
 /**
  * Extract retry-after header value for rate limiting
  */
-function getRetryAfter(error: any): string | null {
-  if (error.response?.headers?.['retry-after']) {
-    return error.response.headers['retry-after'];
+function getRetryAfter(error: unknown): string | null {
+  const err = error as Record<string, unknown>;
+  const response = err.response as Record<string, unknown> | undefined;
+  const headers = response?.headers as Record<string, string> | undefined;
+  if (headers?.['retry-after']) {
+    return headers['retry-after'];
   }
-  if (error.retryAfter) {
-    return error.retryAfter.toString();
+  if (err.retryAfter) {
+    return String(err.retryAfter);
   }
   return null;
 }
@@ -39,15 +45,20 @@ function getRetryAfter(error: any): string | null {
 /**
  * Extract Linear validation error message if available
  */
-function getValidationMessage(error: any): string | null {
+function getValidationMessage(error: unknown): string | null {
+  const err = error as Record<string, unknown>;
   // Try common locations for validation messages
-  if (error.message) return error.message;
-  if (error.response?.data?.message) return error.response.data.message;
-  if (error.response?.data?.errors?.[0]?.message) {
-    return error.response.data.errors[0].message;
+  if (typeof err.message === 'string') return err.message;
+  const response = err.response as Record<string, unknown> | undefined;
+  const data = response?.data as Record<string, unknown> | undefined;
+  if (typeof data?.message === 'string') return data.message;
+  const errors = data?.errors as Array<{ message?: string }> | undefined;
+  if (typeof errors?.[0]?.message === 'string') {
+    return errors[0].message;
   }
-  if (error.graphQLErrors?.[0]?.message) {
-    return error.graphQLErrors[0].message;
+  const graphQLErrors = err.graphQLErrors as Array<{ message?: string }> | undefined;
+  if (typeof graphQLErrors?.[0]?.message === 'string') {
+    return graphQLErrors[0].message;
   }
   return null;
 }
@@ -76,7 +87,7 @@ function getValidationMessage(error: any): string | null {
  * }
  * ```
  */
-export function handleLinearError(error: any, context?: string): string {
+export function handleLinearError(error: unknown, context?: string): string {
   const statusCode = getStatusCode(error);
   const entityContext = context ? ` ${context}` : ' resource';
 
@@ -135,8 +146,9 @@ export function handleLinearError(error: any, context?: string): string {
       }
 
       // Generic error fallback
-      if (error.message) {
-        return `❌ Error: ${error.message}`;
+      const errObj = error as Record<string, unknown>;
+      if (typeof errObj.message === 'string') {
+        return `❌ Error: ${errObj.message}`;
       }
 
       return '❌ An unexpected error occurred while communicating with Linear';
@@ -148,13 +160,14 @@ export function handleLinearError(error: any, context?: string): string {
  * Check if an error is a Linear API error
  * Useful for determining if handleLinearError should be used
  */
-export function isLinearError(error: any): boolean {
+export function isLinearError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as Record<string, unknown>;
   return (
-    error &&
-    (error.name === 'LinearClientError' ||
-      error.constructor?.name === 'LinearClientError' ||
+    err.name === 'LinearClientError' ||
+      (err.constructor as { name?: string } | undefined)?.name === 'LinearClientError' ||
       getStatusCode(error) !== null ||
-      getValidationMessage(error) !== null)
+      getValidationMessage(error) !== null
   );
 }
 
@@ -162,7 +175,7 @@ export function isLinearError(error: any): boolean {
  * Format a Linear API error for logging/debugging
  * Includes more technical details than handleLinearError
  */
-export function formatLinearErrorForLogging(error: any): string {
+export function formatLinearErrorForLogging(error: unknown): string {
   const parts: string[] = ['Linear API Error:'];
 
   const statusCode = getStatusCode(error);
@@ -175,8 +188,9 @@ export function formatLinearErrorForLogging(error: any): string {
     parts.push(`  Message: ${message}`);
   }
 
-  if (error.stack) {
-    parts.push(`  Stack: ${error.stack}`);
+  const errObj = error as Record<string, unknown>;
+  if (typeof errObj.stack === 'string') {
+    parts.push(`  Stack: ${errObj.stack}`);
   }
 
   return parts.join('\n');

@@ -1,7 +1,8 @@
 import { Command } from 'commander';
+
 import { listProjectStatuses } from './list.js';
-import { viewProjectStatus } from './view.js';
 import { syncProjectStatusAliases } from './sync-aliases.js';
+import { viewProjectStatus } from './view.js';
 
 export function registerProjectStatusCommands(cli: Command): void {
   const projectStatus = cli

@@ -1,15 +1,15 @@
+import { resolveAlias } from '../../lib/aliases.js';
+import { openInBrowser } from '../../lib/browser.js';
+import { readContentFile } from '../../lib/file-utils.js';
 import {
-  updateIssue,
-  getFullIssueById,
-  resolveMemberIdentifier,
-  validateTeamExists,
-  getLinearClient,
   findProjectByName,
+  getFullIssueById,
+  getLinearClient,
+  resolveMemberIdentifier,
+  updateIssue,
+  validateTeamExists,
 } from '../../lib/linear-client.js';
 import type { IssueUpdateInput } from '../../lib/types.js';
-import { openInBrowser } from '../../lib/browser.js';
-import { resolveAlias } from '../../lib/aliases.js';
-import { readContentFile } from '../../lib/file-utils.js';
 
 interface UpdateOptions {
   // Basic Fields

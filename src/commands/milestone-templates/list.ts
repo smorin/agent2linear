@@ -1,4 +1,4 @@
-import { loadMilestoneTemplates, hasGlobalTemplates, hasProjectTemplates } from '../../lib/milestone-templates.js';
+import { hasGlobalTemplates, hasProjectTemplates,loadMilestoneTemplates } from '../../lib/milestone-templates.js';
 import { formatListJSON } from '../../lib/output.js';
 
 interface ListOptions {

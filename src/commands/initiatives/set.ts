@@ -1,7 +1,7 @@
-import { validateInitiativeExists } from '../../lib/linear-client.js';
-import { setConfigValue } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
-import { showResolvedAlias, showValidating, showValidated, showSuccess, showError, showInfo } from '../../lib/output.js';
+import { setConfigValue } from '../../lib/config.js';
+import { validateInitiativeExists } from '../../lib/linear-client.js';
+import { showError, showInfo,showResolvedAlias, showSuccess, showValidated, showValidating } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
 interface SetInitiativeOptions {

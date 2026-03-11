@@ -1,5 +1,5 @@
-import { testConnection, getCurrentUser, getOrganization } from '../lib/linear-client.js';
 import { getApiKey, maskApiKey } from '../lib/config.js';
+import { getCurrentUser, getOrganization,testConnection } from '../lib/linear-client.js';
 import { showError } from '../lib/output.js';
 
 /**

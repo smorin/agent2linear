@@ -1,9 +1,10 @@
+import { Box, render, Text } from 'ink';
 import React, { useEffect, useState } from 'react';
-import { render, Box, Text } from 'ink';
-import { TeamList } from '../../ui/components/TeamList.js';
-import { getAllTeams, type Team } from '../../lib/linear-client.js';
+
 import { setConfigValue } from '../../lib/config.js';
+import { getAllTeams, type Team } from '../../lib/linear-client.js';
 import { getScopeInfo } from '../../lib/scope.js';
+import { TeamList } from '../../ui/components/TeamList.js';
 
 interface SelectOptions {
   global?: boolean;

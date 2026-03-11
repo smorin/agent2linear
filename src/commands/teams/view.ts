@@ -1,7 +1,7 @@
-import { getTeamById } from '../../lib/linear-client.js';
 import { resolveAlias } from '../../lib/aliases.js';
-import { showResolvedAlias, showEntityNotFound } from '../../lib/output.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getTeamById } from '../../lib/linear-client.js';
+import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
 
 export async function viewTeam(id: string, options: { web?: boolean } = {}) {
   try {

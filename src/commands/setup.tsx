@@ -1,27 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { render, Box, Text, useInput } from 'ink';
+import { Box, render, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
+import React, { useEffect,useState } from 'react';
+
 import {
 	getConfig,
-	setConfigValue,
-	hasGlobalConfig,
-	hasProjectConfig,
 	getGlobalConfigPath,
 	getProjectConfigPath,
+	hasGlobalConfig,
+	hasProjectConfig,
 	maskApiKey,
+	setConfigValue,
 } from '../lib/config.js';
 import {
-	validateApiKey,
-	getAllTeams,
 	getAllInitiatives,
-	type Team,
+	getAllTeams,
 	type Initiative,
+	type Team,
+	validateApiKey,
 } from '../lib/linear-client.js';
 import { WalkthroughScreen } from '../ui/components/WalkthroughScreen.js';
-import { syncWorkflowStateAliasesCore } from './workflow-states/sync-aliases.js';
-import { syncProjectStatusAliases } from './project-status/sync-aliases.js';
 import { syncMemberAliasesCore } from './members/sync-aliases.js';
+import { syncProjectStatusAliases } from './project-status/sync-aliases.js';
+import { syncWorkflowStateAliasesCore } from './workflow-states/sync-aliases.js';
 
 type SetupStep =
 	| 'welcome'

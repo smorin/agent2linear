@@ -1,11 +1,11 @@
-import { getLinearClient, LinearClientError } from './client.js';
 import type {
   IssueCreateInput,
-  IssueUpdateInput,
   IssueListFilters,
   IssueListItem,
+  IssueUpdateInput,
   IssueViewData,
 } from '../types.js';
+import { getLinearClient, LinearClientError } from './client.js';
 
 /**
  * Create a comment on an issue
@@ -224,7 +224,8 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
     // ========================================
     // BUILD GRAPHQL FILTER
     // ========================================
-    const graphqlFilter: any = {};
+    interface GraphQLDateFilter { gte?: string; lte?: string }
+    const graphqlFilter: Record<string, unknown> & { createdAt?: GraphQLDateFilter; updatedAt?: GraphQLDateFilter } = {};
 
     if (filters?.teamId) {
       graphqlFilter.team = { id: { eq: filters.teamId } };
@@ -387,7 +388,30 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
     // ========================================
     // PAGINATION LOOP (M15.5 Phase 1)
     // ========================================
-    let rawIssues: any[] = [];
+    interface RawIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      description?: string;
+      priority?: number;
+      estimate?: number;
+      dueDate?: string;
+      createdAt: string;
+      updatedAt: string;
+      completedAt?: string;
+      canceledAt?: string;
+      archivedAt?: string;
+      url: string;
+      assignee?: { id: string; name: string; email: string };
+      team?: { id: string; key: string; name: string };
+      state?: { id: string; name: string; type: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled' };
+      project?: { id: string; name: string };
+      cycle?: { id: string; name: string; number: number };
+      labels?: { nodes: Array<{ id: string; name: string; color?: string }> };
+      parent?: { id: string; identifier: string; title: string };
+    }
+
+    let rawIssues: RawIssue[] = [];
     let cursor: string | null = null;
     let hasNextPage = true;
     let pageCount = 0;
@@ -401,8 +425,7 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
         after: cursor
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response: any = await client.client.rawRequest(issuesQuery, variables);
+      const response = await client.client.rawRequest(issuesQuery, variables) as { data?: { issues?: { nodes?: RawIssue[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } } } };
 
       // Track API call if tracking enabled
       if (tracking) {
@@ -445,9 +468,9 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
       const sortOrder = filters.sortOrder;
       const ascending = sortOrder === 'asc';
 
-      rawIssues.sort((a: any, b: any) => {
-        let aVal: any;
-        let bVal: any;
+      rawIssues.sort((a: RawIssue, b: RawIssue) => {
+        let aVal: number;
+        let bVal: number;
 
         switch (sortField) {
           case 'priority':
@@ -486,7 +509,7 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
     // ========================================
     // BUILD FINAL ISSUE LIST
     // ========================================
-    const issueList: IssueListItem[] = rawIssues.map((issue: any) => ({
+    const issueList: IssueListItem[] = rawIssues.map((issue: RawIssue) => ({
       id: issue.id,
       identifier: issue.identifier,
       title: issue.title,
@@ -524,7 +547,7 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
         number: issue.cycle.number
       } : undefined,
 
-      labels: (issue.labels?.nodes || []).map((label: any) => ({
+      labels: (issue.labels?.nodes || []).map((label: { id: string; name: string; color?: string }) => ({
         id: label.id,
         name: label.name,
         color: label.color || undefined
@@ -694,7 +717,33 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
       }
     `;
 
-    const response: any = await client.client.rawRequest(issueQuery, { issueId });
+    interface RawFullIssue {
+      id: string;
+      identifier: string;
+      title: string;
+      description?: string;
+      url: string;
+      priority?: number;
+      estimate?: number;
+      dueDate?: string;
+      createdAt: string;
+      updatedAt: string;
+      completedAt?: string;
+      canceledAt?: string;
+      archivedAt?: string;
+      state?: { id: string; name: string; type: string; color: string };
+      team?: { id: string; key: string; name: string };
+      assignee?: { id: string; name: string; email: string };
+      project?: { id: string; name: string };
+      cycle?: { id: string; name: string; number: number };
+      parent?: { id: string; identifier: string; title: string };
+      children: { nodes: Array<{ id: string; identifier: string; title: string; state?: { id: string; name: string } }> };
+      labels: { nodes: Array<{ id: string; name: string; color: string }> };
+      subscribers: { nodes: Array<{ id: string; name: string; email: string }> };
+      creator?: { id: string; name: string; email: string };
+    }
+
+    const response = await client.client.rawRequest(issueQuery, { issueId }) as { data?: { issue?: RawFullIssue } };
     const issueData = response.data?.issue;
 
     if (!issueData) {
@@ -732,7 +781,7 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
             email: issueData.assignee.email,
           }
         : undefined,
-      subscribers: issueData.subscribers.nodes.map((sub: any) => ({
+      subscribers: issueData.subscribers.nodes.map((sub: { id: string; name: string; email: string }) => ({
         id: sub.id,
         name: sub.name,
         email: sub.email,
@@ -766,13 +815,13 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
             title: issueData.parent.title,
           }
         : undefined,
-      children: issueData.children.nodes.map((child: any) => ({
+      children: issueData.children.nodes.map((child: { id: string; identifier: string; title: string; state?: { id: string; name: string } }) => ({
         id: child.id,
         identifier: child.identifier,
         title: child.title,
         state: child.state?.name || 'Unknown',
       })),
-      labels: issueData.labels.nodes.map((label: any) => ({
+      labels: issueData.labels.nodes.map((label: { id: string; name: string; color: string }) => ({
         id: label.id,
         name: label.name,
         color: label.color,
@@ -848,14 +897,22 @@ export async function getIssueComments(issueId: string): Promise<
       }
     `;
 
-    const response: any = await client.client.rawRequest(commentsQuery, { issueId });
+    interface RawComment {
+      id: string;
+      body: string;
+      createdAt: string;
+      updatedAt: string;
+      user?: { id: string; name: string; email: string };
+    }
+
+    const response = await client.client.rawRequest(commentsQuery, { issueId }) as { data?: { issue?: { id: string; comments?: { nodes: RawComment[] } } } };
     const issueData = response.data?.issue;
 
     if (!issueData || !issueData.comments) {
       return [];
     }
 
-    return issueData.comments.nodes.map((comment: any) => ({
+    return issueData.comments.nodes.map((comment: RawComment) => ({
       id: comment.id,
       body: comment.body,
       createdAt: comment.createdAt,
@@ -947,14 +1004,26 @@ export async function getIssueHistory(issueId: string): Promise<
       }
     `;
 
-    const response: any = await client.client.rawRequest(historyQuery, { issueId });
+    interface RawHistoryEntry {
+      id: string;
+      createdAt: string;
+      actor?: { id: string; name: string; email: string };
+      fromState?: { id: string; name: string };
+      toState?: { id: string; name: string };
+      fromAssignee?: { id: string; name: string };
+      toAssignee?: { id: string; name: string };
+      addedLabels?: Array<{ id: string; name: string }>;
+      removedLabels?: Array<{ id: string; name: string }>;
+    }
+
+    const response = await client.client.rawRequest(historyQuery, { issueId }) as { data?: { issue?: { id: string; history?: { nodes: RawHistoryEntry[] } } } };
     const issueData = response.data?.issue;
 
     if (!issueData || !issueData.history) {
       return [];
     }
 
-    return issueData.history.nodes.map((entry: any) => ({
+    return issueData.history.nodes.map((entry: RawHistoryEntry) => ({
       id: entry.id,
       createdAt: entry.createdAt,
       actor: entry.actor
@@ -968,8 +1037,8 @@ export async function getIssueHistory(issueId: string): Promise<
       toState: entry.toState?.name,
       fromAssignee: entry.fromAssignee?.name,
       toAssignee: entry.toAssignee?.name,
-      addedLabels: entry.addedLabels ? entry.addedLabels.map((l: any) => l.name) : undefined,
-      removedLabels: entry.removedLabels ? entry.removedLabels.map((l: any) => l.name) : undefined,
+      addedLabels: entry.addedLabels ? entry.addedLabels.map((l: { id: string; name: string }) => l.name) : undefined,
+      removedLabels: entry.removedLabels ? entry.removedLabels.map((l: { id: string; name: string }) => l.name) : undefined,
     }));
   } catch (error) {
     return [];

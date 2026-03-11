@@ -1,12 +1,13 @@
-import { Command, Argument } from 'commander';
+import { Argument,Command } from 'commander';
+
 import { normalizeEntityType } from '../../lib/aliases.js';
 import { syncInitiativeAliasesCore } from '../initiatives/sync-aliases.js';
-import { syncTeamAliasesCore } from '../teams/sync-aliases.js';
-import { syncMemberAliasesCore, type SyncMemberAliasesOptions } from '../members/sync-aliases.js';
-import { syncWorkflowStateAliasesCore, type SyncWorkflowStateAliasesOptions } from '../workflow-states/sync-aliases.js';
 import { syncIssueLabelAliasesCore, type SyncIssueLabelAliasesOptions } from '../issue-labels/sync-aliases.js';
+import { syncMemberAliasesCore, type SyncMemberAliasesOptions } from '../members/sync-aliases.js';
 import { syncProjectLabelAliasesCore } from '../project-labels/sync-aliases.js';
 import { syncProjectStatusAliases } from '../project-status/sync-aliases.js';
+import { syncTeamAliasesCore } from '../teams/sync-aliases.js';
+import { syncWorkflowStateAliasesCore, type SyncWorkflowStateAliasesOptions } from '../workflow-states/sync-aliases.js';
 
 /**
  * Register the centralized sync command for aliases

@@ -1,29 +1,28 @@
 import { Command } from 'commander';
-import { whoamiCommand } from './commands/whoami.js';
+
+import { registerAliasCommands } from './commands/alias/register.js';
+import { registerCacheCommands } from './commands/cache/register.js';
+import { registerColorsCommands } from './commands/colors/register.js';
+import { registerConfigCommands } from './commands/config/register.js';
+import { registerCyclesCommands } from './commands/cycles/register.js';
 import { doctorCommand } from './commands/doctor.js';
-import { setup } from './commands/setup.js';
-
-import { setLogLevel } from './lib/logger.js';
-import { setNoColor } from './lib/output.js';
-
+import { registerIconsCommands } from './commands/icons/register.js';
 // Per-entity command registrations
 import { registerInitiativesCommands } from './commands/initiatives/register.js';
-import { registerProjectCommands } from './commands/project/register.js';
 import { registerIssueCommands } from './commands/issue/register.js';
-import { registerTeamsCommands } from './commands/teams/register.js';
-import { registerMembersCommands } from './commands/members/register.js';
-import { registerProjectStatusCommands } from './commands/project-status/register.js';
-import { registerAliasCommands } from './commands/alias/register.js';
-import { registerMilestoneTemplatesCommands } from './commands/milestone-templates/register.js';
-import { registerTemplatesCommands } from './commands/templates/register.js';
-import { registerConfigCommands } from './commands/config/register.js';
-import { registerWorkflowStatesCommands } from './commands/workflow-states/register.js';
 import { registerIssueLabelsCommands } from './commands/issue-labels/register.js';
+import { registerMembersCommands } from './commands/members/register.js';
+import { registerMilestoneTemplatesCommands } from './commands/milestone-templates/register.js';
+import { registerProjectCommands } from './commands/project/register.js';
 import { registerProjectLabelsCommands } from './commands/project-labels/register.js';
-import { registerIconsCommands } from './commands/icons/register.js';
-import { registerColorsCommands } from './commands/colors/register.js';
-import { registerCacheCommands } from './commands/cache/register.js';
-import { registerCyclesCommands } from './commands/cycles/register.js';
+import { registerProjectStatusCommands } from './commands/project-status/register.js';
+import { setup } from './commands/setup.js';
+import { registerTeamsCommands } from './commands/teams/register.js';
+import { registerTemplatesCommands } from './commands/templates/register.js';
+import { whoamiCommand } from './commands/whoami.js';
+import { registerWorkflowStatesCommands } from './commands/workflow-states/register.js';
+import { setLogLevel } from './lib/logger.js';
+import { setNoColor } from './lib/output.js';
 
 const cli = new Command();
 

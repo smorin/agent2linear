@@ -1,19 +1,20 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join } from 'path';
-import type { Aliases, AliasEntityType, ResolvedAliases, AliasLocation } from './types.js';
+
 import {
-  validateInitiativeExists,
-  validateTeamExists,
+  getCycleById,
+  getIssueLabelById,
+  getMemberById,
   getProjectById,
+  getProjectLabelById,
   getProjectStatusById,
   getTemplateById,
-  getMemberById,
-  getIssueLabelById,
-  getProjectLabelById,
   getWorkflowStateById,
-  getCycleById,
+  validateInitiativeExists,
+  validateTeamExists,
 } from './linear-client.js';
+import type { AliasEntityType, Aliases, AliasLocation,ResolvedAliases } from './types.js';
 
 const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'agent2linear');
 const GLOBAL_ALIASES_FILE = join(GLOBAL_ALIASES_DIR, 'aliases.json');
@@ -1085,4 +1086,4 @@ export function getAliasSuggestionError(
 /**
  * Export for testing and advanced usage
  */
-export { normalizeEntityType, getAliasesKey };
+export { getAliasesKey,normalizeEntityType };

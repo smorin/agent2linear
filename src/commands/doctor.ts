@@ -1,7 +1,7 @@
-import { testConnection, getCurrentUser } from '../lib/linear-client.js';
-import { getConfig, getApiKey } from '../lib/config.js';
-import { getEntityCache } from '../lib/entity-cache.js';
 import { getAliasesForType } from '../lib/aliases.js';
+import { getApiKey,getConfig } from '../lib/config.js';
+import { getEntityCache } from '../lib/entity-cache.js';
+import { getCurrentUser,testConnection } from '../lib/linear-client.js';
 import type { AliasEntityType } from '../lib/types.js';
 
 /**

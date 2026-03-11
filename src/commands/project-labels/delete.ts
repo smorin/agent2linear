@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { getProjectLabelById, deleteProjectLabel } from '../../lib/linear-client.js';
-import { resolveAlias } from '../../lib/aliases.js';
 import * as readline from 'readline';
+
+import { resolveAlias } from '../../lib/aliases.js';
+import { deleteProjectLabel,getProjectLabelById } from '../../lib/linear-client.js';
 
 async function confirm(message: string): Promise<boolean> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });

@@ -1,23 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { render, Box, Text } from 'ink';
+import { Box, render, Text } from 'ink';
+import React, { useEffect,useState } from 'react';
+
+import { resolveAlias } from '../../lib/aliases.js';
+import { openInBrowser } from '../../lib/browser.js';
+import { getConfig } from '../../lib/config.js';
+import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
 import { readContentFile } from '../../lib/file-utils.js';
-import { ProjectForm } from '../../ui/components/ProjectForm.js';
 import {
-  createProject,
-  getProjectByName,
-  validateInitiativeExists,
-  validateTeamExists,
-  getTemplateById,
-  getCurrentUser,
-  resolveMemberIdentifier,
   createExternalLink,
+  createProject,
+  getCurrentUser,
+  getProjectByName,
+  getTemplateById,
   type ProjectCreateInput,
   type ProjectResult,
+  resolveMemberIdentifier,
+  validateInitiativeExists,
+  validateTeamExists,
 } from '../../lib/linear-client.js';
-import { getConfig } from '../../lib/config.js';
-import { openInBrowser } from '../../lib/browser.js';
-import { resolveAlias } from '../../lib/aliases.js';
-import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
+import { ProjectForm } from '../../ui/components/ProjectForm.js';
 
 interface CreateOptions {
   title?: string;

@@ -4,11 +4,12 @@
  * Remove all dependency relations from a project with confirmation
  */
 
-import { resolveProject } from '../../../lib/project-resolver.js';
-import { getLinearClient, getProjectRelations, deleteProjectRelation } from '../../../lib/linear-client.js';
-import { getRelationDirection } from '../../../lib/parsers.js';
-import { showError, showSuccess } from '../../../lib/output.js';
 import * as readline from 'readline';
+
+import { deleteProjectRelation,getLinearClient, getProjectRelations } from '../../../lib/linear-client.js';
+import { showError, showSuccess } from '../../../lib/output.js';
+import { getRelationDirection } from '../../../lib/parsers.js';
+import { resolveProject } from '../../../lib/project-resolver.js';
 
 interface ClearDependenciesOptions {
   direction?: 'depends-on' | 'blocks';

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+
 import { createProjectLabel } from '../../lib/linear-client.js';
 
 export function createProjectLabelCommand(program: Command) {

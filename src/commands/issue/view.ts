@@ -1,7 +1,7 @@
-import { getFullIssueById, getIssueComments, getIssueHistory } from '../../lib/linear-client.js';
-import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { handleLinearError, isLinearError } from '../../lib/error-handler.js';
+import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
+import { getFullIssueById, getIssueComments, getIssueHistory } from '../../lib/linear-client.js';
 import { formatContentPreview } from '../../lib/output.js';
 
 interface ViewOptions {

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { render, Box, Text } from 'ink';
+import { Box, render, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import React, { useState } from 'react';
+
 import { createMilestoneTemplate } from '../../lib/milestone-templates.js';
 import { getScopeInfo } from '../../lib/scope.js';
-import type { MilestoneTemplate, MilestoneDefinition } from '../../lib/types.js';
+import type { MilestoneDefinition,MilestoneTemplate } from '../../lib/types.js';
 
 interface CreateInteractiveOptions {
   global?: boolean;

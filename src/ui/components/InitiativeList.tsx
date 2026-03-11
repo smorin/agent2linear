@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
-import type { Initiative } from '../../lib/linear-client.js';
+import React, { useState } from 'react';
+
 import { getAliasesForId } from '../../lib/aliases.js';
+import type { Initiative } from '../../lib/linear-client.js';
 
 interface InitiativeListProps {
   initiatives: Initiative[];

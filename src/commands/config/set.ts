@@ -1,12 +1,12 @@
-import { isValidConfigKey, setConfigValue, type ConfigKey } from '../../lib/config.js';
+import { type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
 import {
+  getTemplateById,
   validateApiKey,
   validateInitiativeExists,
   validateTeamExists,
-  getTemplateById,
 } from '../../lib/linear-client.js';
 import { getMilestoneTemplate } from '../../lib/milestone-templates.js';
-import { showValidated, showSuccess, showError } from '../../lib/output.js';
+import { showError,showSuccess, showValidated } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
 interface SetConfigOptions {

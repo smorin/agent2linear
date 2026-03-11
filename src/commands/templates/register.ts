@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+
 import { listTemplates } from './list.js';
 import { viewTemplate } from './view.js';
 

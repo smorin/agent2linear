@@ -1,5 +1,5 @@
-import { getCycleById } from '../../lib/linear-client.js';
 import { resolveAlias } from '../../lib/aliases.js';
+import { getCycleById } from '../../lib/linear-client.js';
 import { showError } from '../../lib/output.js';
 
 /**

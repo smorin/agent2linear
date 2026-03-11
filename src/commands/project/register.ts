@@ -1,9 +1,10 @@
 import { Command, Option } from 'commander';
-import { createProjectCommand } from './create.js';
-import { viewProject } from './view.js';
-import { updateProjectCommand } from './update.js';
-import { listProjectsCommand } from './list.js';
+
 import { addMilestones } from './add-milestones.js';
+import { createProjectCommand } from './create.js';
+import { listProjectsCommand } from './list.js';
+import { updateProjectCommand } from './update.js';
+import { viewProject } from './view.js';
 
 export function registerProjectCommands(cli: Command): void {
   const project = cli

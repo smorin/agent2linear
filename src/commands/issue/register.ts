@@ -1,9 +1,10 @@
 import { Command } from 'commander';
-import { viewIssue } from './view.js';
-import { createIssueCommand } from './create.js';
-import { updateIssueCommand } from './update.js';
-import { registerIssueListCommand } from './list.js';
+
 import { commentIssueCommand } from './comment.js';
+import { createIssueCommand } from './create.js';
+import { registerIssueListCommand } from './list.js';
+import { updateIssueCommand } from './update.js';
+import { viewIssue } from './view.js';
 
 export function registerIssueCommands(cli: Command): void {
   const issue = cli

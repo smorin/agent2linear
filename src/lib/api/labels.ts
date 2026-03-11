@@ -1,5 +1,5 @@
-import { getLinearClient, LinearClientError } from './client.js';
 import type { IssueLabel, ProjectLabel } from '../types.js';
+import { getLinearClient, LinearClientError } from './client.js';
 
 /**
  * Issue Label types
@@ -80,7 +80,7 @@ export async function getAllIssueLabels(teamId?: string): Promise<IssueLabel[]> 
         }
       `;
 
-      const response: any = await client.client.rawRequest(labelsQuery);
+      const response = await client.client.rawRequest(labelsQuery) as { data?: { issueLabels?: { nodes?: Array<{ id: string; name: string; color: string; description?: string; team?: { id: string } }> } } };
       const labelsData = response.data?.issueLabels?.nodes || [];
 
       for (const label of labelsData) {
@@ -260,8 +260,7 @@ export async function getAllProjectLabels(includeAll?: boolean): Promise<Project
         }
       `;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response: any = await client.client.rawRequest(query);
+      const response = await client.client.rawRequest(query) as { data?: { organization?: { projectLabels?: { nodes?: Array<{ id: string; name: string; color: string; description?: string; lastAppliedAt?: string }> } } } };
 
       if (process.env.DEBUG) {
         console.log(`DEBUG: Raw GraphQL response:`, JSON.stringify(response.data, null, 2));

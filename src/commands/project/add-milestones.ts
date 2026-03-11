@@ -1,8 +1,8 @@
-import { getMilestoneTemplate, resolveMilestoneDates } from '../../lib/milestone-templates.js';
-import { validateProjectExists, createProjectMilestone } from '../../lib/linear-client.js';
-import { resolveProject } from '../../lib/project-resolver.js';
 import { getConfig } from '../../lib/config.js';
-import { showResolvedAlias, showValidating, showValidated, showSuccess, showError, showEntityNotFound } from '../../lib/output.js';
+import { createProjectMilestone,validateProjectExists } from '../../lib/linear-client.js';
+import { getMilestoneTemplate, resolveMilestoneDates } from '../../lib/milestone-templates.js';
+import { showEntityNotFound,showError, showResolvedAlias, showSuccess, showValidated, showValidating } from '../../lib/output.js';
+import { resolveProject } from '../../lib/project-resolver.js';
 
 interface AddMilestonesOptions {
   template?: string;

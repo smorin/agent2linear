@@ -1,9 +1,10 @@
+import { Box, render, Text } from 'ink';
 import React, { useEffect, useState } from 'react';
-import { render, Box, Text } from 'ink';
-import { InitiativeList } from '../../ui/components/InitiativeList.js';
-import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
+
 import { setConfigValue } from '../../lib/config.js';
+import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
 import { getScopeInfo } from '../../lib/scope.js';
+import { InitiativeList } from '../../ui/components/InitiativeList.js';
 
 interface SelectOptions {
   global?: boolean;

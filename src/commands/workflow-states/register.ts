@@ -1,10 +1,11 @@
 import { Command } from 'commander';
-import { listWorkflowStates } from './list.js';
-import { viewWorkflowState } from './view.js';
+
 import { createWorkflowStateCommand } from './create.js';
-import { updateWorkflowStateCommand } from './update.js';
 import { deleteWorkflowStateCommand } from './delete.js';
+import { listWorkflowStates } from './list.js';
 import { syncWorkflowStateAliases } from './sync-aliases.js';
+import { updateWorkflowStateCommand } from './update.js';
+import { viewWorkflowState } from './view.js';
 
 export function registerWorkflowStatesCommands(cli: Command): void {
   const workflowStates = cli
