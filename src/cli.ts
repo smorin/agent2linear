@@ -1,4 +1,10 @@
 import { Command, Option, Argument } from 'commander';
+import { whoamiCommand } from './commands/whoami.js';
+import { doctorCommand } from './commands/doctor.js';
+import { listCyclesCommand } from './commands/cycles/list.js';
+import { viewCycleCommand } from './commands/cycles/view.js';
+import { syncCycleAliasesCore } from './commands/cycles/sync-aliases.js';
+import { commentIssueCommand } from './commands/issue/comment.js';
 import { listConfig } from './commands/config/list.js';
 import { getConfigValue } from './commands/config/get.js';
 import type { ConfigKey } from './lib/config.js';
@@ -72,12 +78,24 @@ import { createIssueCommand } from './commands/issue/create.js';
 import { updateIssueCommand } from './commands/issue/update.js';
 import { registerIssueListCommand } from './commands/issue/list.js';
 
+import { setLogLevel } from './lib/logger.js';
+import { setNoColor } from './lib/output.js';
+
 const cli = new Command();
 
 cli
   .name('agent2linear')
   .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
-  .version('0.24.0')
+  .version('0.24.1')
+  .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
+  .option('-v, --verbose', 'Show debug output')
+  .option('--no-color', 'Disable emojis and colored output')
+  .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.quiet) setLogLevel('quiet');
+    if (opts.verbose) setLogLevel('verbose');
+    if (opts.color === false) setNoColor(true);
+  })
   .action(() => {
     cli.help();
   });
@@ -211,6 +229,7 @@ project
   .option('--depends-on <projects>', 'Projects this depends on (comma-separated IDs/aliases) - end→start anchor')
   .option('--blocks <projects>', 'Projects this blocks (comma-separated IDs/aliases) - creates dependencies where other projects depend on this')
   .option('--dependency <spec>', 'Advanced: "project:myAnchor:theirAnchor" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
+  .option('--dry-run', 'Preview the payload without creating the project')
   .addHelpText('after', `
 Examples:
   Basic (auto-assigns you as lead):
@@ -367,6 +386,7 @@ project
   .option('--remove-blocks <projects>', 'Remove "blocks" relations (comma-separated IDs/aliases)')
   .option('--remove-dependency <project>', 'Remove all dependencies with project (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
   .option('-w, --web', 'Open project in browser after update')
+  .option('--dry-run', 'Preview the payload without updating the project')
   .addHelpText('after', `
 Examples:
   $ agent2linear project update "My Project" --status "In Progress"
@@ -671,6 +691,7 @@ members
   .option('--active', 'Show only active members')
   .option('--inactive', 'Show only inactive members')
   .option('--admin', 'Show only admin users')
+  .option('--columns <fields>', 'Comma-separated list of columns to display (e.g., "id,name,email")')
   .addHelpText('after', `
 Examples:
   $ agent2linear members list                    # List default team members
@@ -1484,6 +1505,7 @@ issue
   .option('--labels <list>', 'Comma-separated list of label IDs or aliases')
   .option('--template <id|alias>', 'Issue template ID or alias')
   .option('-w, --web', 'Open created issue in browser')
+  .option('--dry-run', 'Preview the payload without creating the issue')
   .addHelpText('after', `
 Examples:
   # Minimal (uses defaultTeam, auto-assigns to you)
@@ -1591,6 +1613,8 @@ issue
   .option('--trash', 'Move issue to trash')
   .option('--untrash', 'Restore issue from trash')
   .option('-w, --web', 'Open updated issue in browser')
+  .option('--dry-run', 'Preview the payload without updating the issue')
+  .option('--bulk <identifiers>', 'Apply same update to multiple issues (comma-separated identifiers)')
   .addHelpText('after', `
 Examples:
   # Update single field
@@ -1678,6 +1702,113 @@ Member Resolution:
 
 // Register issue list command (M15.5 Phase 1)
 registerIssueListCommand(issue);
+
+// Issue comment subcommand
+issue
+  .command('comment <identifier>')
+  .description('Add a comment to an issue')
+  .option('--body <text>', 'Comment body (markdown)')
+  .option('--body-file <path>', 'Read comment body from file')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear issue comment ENG-123 --body "This is done"
+  $ agent2linear issue comment ENG-123 --body-file notes.md
+
+The identifier can be an issue identifier (ENG-123) or UUID.
+Comment body supports markdown formatting.
+`)
+  .action(async (identifier, options) => {
+    await commentIssueCommand(identifier, options);
+  });
+
+// Cycles commands
+const cycles = cli
+  .command('cycles')
+  .alias('cycle')
+  .description('Manage Linear cycles (sprints)')
+  .action(() => {
+    cycles.help();
+  });
+
+cycles
+  .command('list')
+  .alias('ls')
+  .description('List cycles')
+  .option('--team <id|alias>', 'Filter by team')
+  .option('-f, --format <type>', 'Output format: json, tsv')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear cycles list                    # List cycles for default team
+  $ agent2linear cycles list --team backend     # List cycles for specific team
+  $ agent2linear cycles list --format json      # JSON output
+`)
+  .action(async (options) => {
+    await listCyclesCommand(options);
+  });
+
+cycles
+  .command('view <id>')
+  .description('View cycle details')
+  .option('--json', 'Output as JSON')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear cycles view cycle_abc123
+  $ agent2linear cycles view sprint-1          # Using alias
+  $ agent2linear cycles view sprint-1 --json   # JSON output
+`)
+  .action(async (id, options) => {
+    await viewCycleCommand(id, options);
+  });
+
+cycles
+  .command('sync-aliases')
+  .description('Create aliases for all cycles')
+  .option('-g, --global', 'Create aliases in global config')
+  .option('-p, --project', 'Create aliases in project config')
+  .option('--dry-run', 'Preview aliases without creating them')
+  .option('-f, --force', 'Overwrite existing aliases')
+  .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear cycles sync-aliases --global    # Create global aliases
+  $ agent2linear cycles sync-aliases --dry-run   # Preview changes
+`)
+  .action(async (options) => {
+    await syncCycleAliasesCore(options);
+  });
+
+// Whoami command
+cli
+  .command('whoami')
+  .description('Display authenticated user info')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear whoami    # Show your name, email, organization, and API key
+
+Displays the identity associated with your configured Linear API key.
+`)
+  .action(async () => {
+    await whoamiCommand();
+  });
+
+// Doctor command
+cli
+  .command('doctor')
+  .description('Run diagnostic checks on your agent2linear environment')
+  .addHelpText('after', `
+Examples:
+  $ agent2linear doctor    # Run all diagnostic checks
+
+Checks:
+  • API key configuration
+  • API connectivity
+  • Default team/initiative settings
+  • Cache health
+  • Alias counts
+`)
+  .action(async () => {
+    await doctorCommand();
+  });
 
 // Setup command
 cli

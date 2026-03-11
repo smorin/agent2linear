@@ -387,6 +387,12 @@ export interface IssueListFilters {
   // Search
   search?: string; // Full-text search in title and description
 
+  // Date range filters
+  createdAfter?: string;  // ISO date string
+  createdBefore?: string; // ISO date string
+  updatedAfter?: string;  // ISO date string
+  updatedBefore?: string; // ISO date string
+
   // Pagination
   limit?: number; // Max results (default: 50, max: 250)
   fetchAll?: boolean; // Fetch all pages with cursor pagination

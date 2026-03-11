@@ -47,6 +47,7 @@ interface CreateOptions {
 
   // Mode
   web?: boolean; // Open in browser after creation
+  dryRun?: boolean; // Print payload without creating
 }
 
 /**
@@ -80,11 +81,31 @@ async function createIssueNonInteractive(options: CreateOptions) {
       console.log(`📄 Read description from: ${options.descriptionFile}`);
     }
 
+    // Read title from stdin if piped and --title not provided
+    if (!options.title && !process.stdin.isTTY) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      const stdinContent = Buffer.concat(chunks).toString('utf-8').trim();
+      if (stdinContent) {
+        // First line is the title, rest is description
+        const lines = stdinContent.split('\n');
+        options.title = lines[0].trim();
+        if (lines.length > 1 && !description) {
+          description = lines.slice(1).join('\n').trim() || undefined;
+        }
+        console.log(`📥 Read title from stdin: "${options.title}"`);
+      }
+    }
+
     // Validate required field: title
     if (!options.title) {
       console.error('❌ Error: --title is required\n');
       console.error('Provide the title:');
       console.error('  agent2linear issue create --title "Fix bug"\n');
+      console.error('Or pipe from stdin:');
+      console.error('  echo "Fix login bug" | agent2linear issue create\n');
       console.error('For all options, see:');
       console.error('  agent2linear issue create --help\n');
       process.exit(1);
@@ -492,8 +513,6 @@ async function createIssueNonInteractive(options: CreateOptions) {
     // PHASE 15: CREATE THE ISSUE
     // ═══════════════════════════════════════════════════════════════════
 
-    console.log('\n🚀 Creating issue...');
-
     const issueData: IssueCreateInput = {
       title,
       teamId,
@@ -510,6 +529,15 @@ async function createIssueNonInteractive(options: CreateOptions) {
       dueDate,
       templateId,
     };
+
+    // Dry-run mode: print payload and exit without creating
+    if (options.dryRun) {
+      console.error('\n[dry-run] Would create issue with:');
+      console.log(JSON.stringify(issueData, null, 2));
+      return;
+    }
+
+    console.log('\n🚀 Creating issue...');
 
     const result = await createIssue(issueData);
 

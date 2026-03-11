@@ -60,6 +60,8 @@ interface UpdateOptions {
 
   // Mode
   web?: boolean; // Open in browser after update
+  dryRun?: boolean; // Print payload without updating
+  bulk?: string; // Comma-separated identifiers for bulk update
 }
 
 /**
@@ -233,8 +235,16 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
       process.exit(1);
     }
 
-    // Read description from file if --description-file is provided
+    // Read description from stdin if --description is "-"
     let description = options.description;
+    if (description === '-' && !process.stdin.isTTY) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      description = Buffer.concat(chunks).toString('utf-8');
+      console.log(`📥 Read description from stdin`);
+    }
     if (options.descriptionFile) {
       const result = await readContentFile(options.descriptionFile);
       if (!result.success) {
@@ -826,6 +836,13 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
     // PHASE 16: UPDATE THE ISSUE
     // ═══════════════════════════════════════════════════════════════════
 
+    // Dry-run mode: print payload and exit without updating
+    if (options.dryRun) {
+      console.error('\n[dry-run] Would update issue with:');
+      console.log(JSON.stringify({ issueId, ...updates }, null, 2));
+      return;
+    }
+
     console.log('\n🚀 Updating issue...');
 
     const result = await updateIssue(issueId, updates);
@@ -858,5 +875,23 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
  * Main entry point for issue update command
  */
 export async function updateIssueCommand(identifier: string, options: UpdateOptions) {
-  await updateIssueNonInteractive(identifier, options);
+  if (options.bulk) {
+    // Bulk mode: apply same update to multiple issues sequentially
+    // Note: errors in individual updates will halt the process (due to process.exit in handlers).
+    // A future refactor (C10) will make error handling non-fatal for bulk operations.
+    const { parseCommaSeparated } = await import('../../lib/parsers.js');
+    const identifiers = [identifier, ...parseCommaSeparated(options.bulk)];
+
+    console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);
+
+    for (let i = 0; i < identifiers.length; i++) {
+      const id = identifiers[i].trim();
+      console.log(`\n─── [${i + 1}/${identifiers.length}] ${id} ───`);
+      await updateIssueNonInteractive(id, { ...options, bulk: undefined, web: undefined });
+    }
+
+    console.log(`\n📦 Bulk update complete: ${identifiers.length} issue(s) updated\n`);
+  } else {
+    await updateIssueNonInteractive(identifier, options);
+  }
 }

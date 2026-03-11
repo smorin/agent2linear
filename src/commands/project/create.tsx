@@ -48,6 +48,8 @@ interface CreateOptions {
   dependsOn?: string;
   blocks?: string;
   dependency?: string[];
+  // Dry-run mode
+  dryRun?: boolean;
 }
 
 // Non-interactive mode
@@ -391,6 +393,13 @@ async function createProjectNonInteractive(options: CreateOptions) {
       priority: options.priority,
       memberIds,
     };
+
+    // Dry-run mode: print payload and exit without creating
+    if (options.dryRun) {
+      console.error('\n[dry-run] Would create project with:');
+      console.log(JSON.stringify(projectData, null, 2));
+      return;
+    }
 
     const result = await createProject(projectData);
 

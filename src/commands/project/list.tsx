@@ -3,7 +3,7 @@ import { render, Box, Text } from 'ink';
 import type { Command } from 'commander';
 import { getAllProjects } from '../../lib/linear-client.js';
 import { getEntityCache } from '../../lib/entity-cache.js';
-import { showError, formatContentPreview } from '../../lib/output.js';
+import { showError, formatContentPreview, filterColumns } from '../../lib/output.js';
 import { getConfig } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import type { ProjectListFilters, ProjectListItem } from '../../lib/types.js';
@@ -362,6 +362,7 @@ export function listProjectsCommand(program: Command): void {
     .option('--desc-length <n>', 'Description preview length in characters')
     .option('--desc-full', 'Show full description column (no truncation)')
     .option('--no-desc', 'Hide description preview column')
+    .option('--columns <fields>', 'Comma-separated list of columns to display (e.g., "id,name,status")')
 
     .action(async (options) => {
       try {
@@ -409,6 +410,43 @@ export function listProjectsCommand(program: Command): void {
           full: options.descFull || false,
           hide: options.desc === false, // --no-desc sets this to false
         };
+
+        // Column selection mode
+        if (options.columns) {
+          let projects = await getAllProjects(filters);
+          projects = applyDependencyFilters(projects, {
+            hasDependencies: options.hasDependencies,
+            withoutDependencies: options.withoutDependencies,
+            dependsOnOthers: options.dependsOnOthers,
+            blocksOthers: options.blocksOthers,
+          });
+
+          const cols = options.columns.split(',').map((c: string) => c.trim());
+          const flattened = projects.map(p => ({
+            id: p.id,
+            name: p.name,
+            status: p.status?.name || p.state || '',
+            team: p.team?.name || '',
+            lead: p.lead?.name || '',
+            description: p.description || '',
+            priority: p.priority,
+            url: (p as any).url || '',
+            dependsOnCount: p.dependsOnCount || 0,
+            blocksCount: p.blocksCount || 0,
+          }));
+          const filtered = filterColumns(flattened, cols);
+
+          if (options.format === 'json') {
+            console.log(JSON.stringify(filtered, null, 2));
+          } else {
+            console.log(cols.join('\t'));
+            for (const row of filtered) {
+              console.log(cols.map((c: string) => String(row[c] ?? '')).join('\t'));
+            }
+            console.log(`\nTotal: ${projects.length} project${projects.length !== 1 ? 's' : ''}`);
+          }
+          process.exit(0);
+        }
 
         // Non-interactive formats - handle synchronously before Ink
         if (options.format !== 'table' && !options.interactive) {

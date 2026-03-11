@@ -60,6 +60,7 @@
     "@vitest/coverage-v8": "^4.0.4",
     "@vitest/ui": "^4.0.4",
     "eslint": "^8.0.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
     "np": "^10.2.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",

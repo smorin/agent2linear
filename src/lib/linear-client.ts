@@ -21,9 +21,16 @@ export class LinearClientError extends Error {
 }
 
 /**
- * Get authenticated Linear client
+ * Cached singleton Linear client instance
+ */
+let cachedClient: SDKClient | null = null;
+
+/**
+ * Get authenticated Linear client (singleton - reuses same instance)
  */
 export function getLinearClient(): SDKClient {
+  if (cachedClient) return cachedClient;
+
   const apiKey = getApiKey();
 
   if (!apiKey) {
@@ -39,7 +46,98 @@ export function getLinearClient(): SDKClient {
     );
   }
 
-  return new SDKClient({ apiKey });
+  cachedClient = new SDKClient({ apiKey });
+  return cachedClient;
+}
+
+/**
+ * Get the current user's organization
+ */
+export async function getOrganization(): Promise<{
+  id: string;
+  name: string;
+  urlKey: string;
+}> {
+  try {
+    const client = getLinearClient();
+    const org = await client.organization;
+    return {
+      id: org.id,
+      name: org.name,
+      urlKey: org.urlKey,
+    };
+  } catch (error) {
+    throw new LinearClientError(
+      `Failed to get organization: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Create a comment on an issue
+ */
+export async function createIssueComment(
+  issueId: string,
+  body: string
+): Promise<{ id: string; body: string }> {
+  try {
+    const client = getLinearClient();
+    const result = await client.createComment({ issueId, body });
+    const comment = await result.comment;
+    if (!comment) {
+      throw new Error('Comment creation returned no comment');
+    }
+    return { id: comment.id, body: comment.body };
+  } catch (error) {
+    if (error instanceof LinearClientError) throw error;
+    throw new LinearClientError(
+      `Failed to create comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get all cycles, optionally filtered by team
+ */
+export async function getAllCycles(teamId?: string): Promise<Array<{
+  id: string;
+  name: string;
+  number: number;
+  startsAt?: string;
+  endsAt?: string;
+  teamId?: string;
+  teamName?: string;
+}>> {
+  try {
+    const client = getLinearClient();
+    let cycles;
+    if (teamId) {
+      const team = await client.team(teamId);
+      cycles = await team.cycles();
+    } else {
+      cycles = await client.cycles();
+    }
+
+    const results = [];
+    for (const cycle of cycles.nodes) {
+      const team = await cycle.team;
+      results.push({
+        id: cycle.id,
+        name: cycle.name || `Cycle ${cycle.number}`,
+        number: cycle.number,
+        startsAt: cycle.startsAt instanceof Date ? cycle.startsAt.toISOString().split('T')[0] : undefined,
+        endsAt: cycle.endsAt instanceof Date ? cycle.endsAt.toISOString().split('T')[0] : undefined,
+        teamId: team?.id,
+        teamName: team?.name,
+      });
+    }
+    return results;
+  } catch (error) {
+    if (error instanceof LinearClientError) throw error;
+    throw new LinearClientError(
+      `Failed to fetch cycles: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
 }
 
 /**
@@ -1005,6 +1103,19 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
 
     if (filters?.search) {
       graphqlFilter.searchableContent = { contains: filters.search };
+    }
+
+    // Date range filters
+    if (filters?.createdAfter || filters?.createdBefore) {
+      graphqlFilter.createdAt = {};
+      if (filters.createdAfter) graphqlFilter.createdAt.gte = new Date(filters.createdAfter).toISOString();
+      if (filters.createdBefore) graphqlFilter.createdAt.lte = new Date(filters.createdBefore).toISOString();
+    }
+
+    if (filters?.updatedAfter || filters?.updatedBefore) {
+      graphqlFilter.updatedAt = {};
+      if (filters.updatedAfter) graphqlFilter.updatedAt.gte = new Date(filters.updatedAfter).toISOString();
+      if (filters.updatedBefore) graphqlFilter.updatedAt.lte = new Date(filters.updatedBefore).toISOString();
     }
 
     // Handle status filters

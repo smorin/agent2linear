@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { render, Box, Text } from 'ink';
 import { getAllMembers, type Member } from '../../lib/linear-client.js';
 import { openInBrowser } from '../../lib/browser.js';
-import { formatListTSV, formatListJSON } from '../../lib/output.js';
+import { formatListTSV, formatListJSON, filterColumns } from '../../lib/output.js';
 import { getAliasesForId } from '../../lib/aliases.js';
 import { getConfig } from '../../lib/config.js';
 import { resolveAlias } from '../../lib/aliases.js';
@@ -18,6 +18,7 @@ interface ListOptions {
   active?: boolean;
   inactive?: boolean;
   admin?: boolean;
+  columns?: string;
 }
 
 function App({ options }: { options: ListOptions }) {
@@ -196,6 +197,30 @@ export async function listMembers(options: ListOptions = {}) {
         activeStatus: member.active ? 'Active' : 'Inactive',
         adminStatus: member.admin ? 'Admin' : 'User',
       }));
+
+      // Handle --columns option
+      if (options.columns) {
+        const cols = options.columns.split(',').map(c => c.trim());
+        const flattened = membersWithAliases.map(m => ({
+          id: m.id,
+          name: m.name,
+          email: m.email,
+          active: m.activeStatus,
+          admin: m.adminStatus,
+          aliases: m.aliases.map(a => `@${a}`).join(', ') || '(none)',
+        }));
+        const filtered = filterColumns(flattened, cols);
+
+        if (options.format === 'json') {
+          console.log(JSON.stringify(filtered, null, 2));
+        } else {
+          console.log(cols.join('\t'));
+          for (const row of filtered) {
+            console.log(cols.map(c => String(row[c] ?? '')).join('\t'));
+          }
+        }
+        return;
+      }
 
       // Handle format option
       if (options.format === 'json') {

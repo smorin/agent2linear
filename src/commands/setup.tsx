@@ -18,7 +18,7 @@ import {
 	type Team,
 	type Initiative,
 } from '../lib/linear-client.js';
-import { WalkthroughScreen } from '../components/setup/WalkthroughScreen.js';
+import { WalkthroughScreen } from '../ui/components/WalkthroughScreen.js';
 import { syncWorkflowStateAliasesCore } from './workflow-states/sync-aliases.js';
 import { syncProjectStatusAliases } from './project-status/sync-aliases.js';
 import { syncMemberAliasesCore } from './members/sync-aliases.js';

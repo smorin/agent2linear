@@ -378,6 +378,61 @@ export class EntityCache {
   }
 
   /**
+   * Generic cache fetch helper - reduces duplication for new entity types.
+   *
+   * Checks session cache → persistent cache → API fetch.
+   * New entity types should use this instead of duplicating the pattern.
+   */
+  async fetchWithCache<T>(
+    sessionCache: CachedEntity<T> | undefined,
+    setSessionCache: (entry: CachedEntity<T>) => void,
+    fetcher: () => Promise<T[]>,
+    persistentGet?: () => Promise<Array<T & { timestamp: number }> | null>,
+    persistentSave?: (entries: Array<T & { timestamp: number }>) => void
+  ): Promise<T[]> {
+    const config = getConfig();
+
+    // Check session cache
+    if (this.isCacheEnabled() && this.isValid(sessionCache)) {
+      return sessionCache!.data;
+    }
+
+    // Check persistent cache
+    if (persistentGet && config.enablePersistentCache !== false) {
+      try {
+        const persistent = await persistentGet();
+        if (persistent && persistent.length > 0) {
+          const items = persistent.map(({ timestamp: _ts, ...item }) => item as T);
+          if (this.isCacheEnabled()) {
+            setSessionCache({ data: items, timestamp: persistent[0].timestamp });
+          }
+          return items;
+        }
+      } catch {
+        // Fall through to API fetch
+      }
+    }
+
+    // Fetch from API
+    const items = await fetcher();
+
+    if (this.isCacheEnabled()) {
+      const timestamp = Date.now();
+      setSessionCache({ data: items, timestamp });
+
+      if (persistentSave && config.enablePersistentCache !== false) {
+        try {
+          persistentSave(items.map(item => ({ ...item, timestamp })));
+        } catch {
+          // Ignore save errors
+        }
+      }
+    }
+
+    return items;
+  }
+
+  /**
    * Find team by ID
    *
    * @param id - Team ID
