@@ -1,41 +1,42 @@
-import React, { useState } from 'react';
-import { render, Box, Text } from 'ink';
+import { Box, render, Text } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
+import React, { useState } from 'react';
+
 import {
-  loadAliases,
-  updateAliasId,
-  renameAlias,
-  removeAlias,
   addAlias,
+  loadAliases,
+  removeAlias,
+  renameAlias,
+  updateAliasId,
 } from '../../lib/aliases.js';
-import type { AliasEntityType } from '../../lib/types.js';
 import {
+  getAllInitiatives,
+  getAllIssueLabels,
+  getAllMembers,
+  getAllProjectLabels,
+  getAllProjects,
+  getAllProjectStatuses,
+  getAllTeams,
+  getAllTemplates,
+  getAllWorkflowStates,
+  getIssueLabelById,
+  getMemberById,
+  getProjectById,
+  getProjectLabelById,
+  getProjectStatusById,
+  getTemplateById,
+  getWorkflowStateById,
+  type Initiative,
+  type Member,
+  type Project,
+  type ProjectStatus,
+  type Team,
+  type Template,
   validateInitiativeExists,
   validateTeamExists,
-  getProjectById,
-  getTemplateById,
-  getProjectStatusById,
-  getMemberById,
-  getIssueLabelById,
-  getProjectLabelById,
-  getWorkflowStateById,
-  getAllInitiatives,
-  getAllTeams,
-  getAllProjects,
-  getAllTemplates,
-  getAllProjectStatuses,
-  getAllMembers,
-  getAllIssueLabels,
-  getAllProjectLabels,
-  getAllWorkflowStates,
-  type Initiative,
-  type Team,
-  type Project,
-  type Template,
-  type ProjectStatus,
-  type Member,
 } from '../../lib/linear-client.js';
+import type { AliasEntityType } from '../../lib/types.js';
 
 interface EditOptions {
   global?: boolean;

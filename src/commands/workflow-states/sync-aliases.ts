@@ -1,8 +1,9 @@
 import { Command } from 'commander';
+
+import { resolveAlias } from '../../lib/aliases.js';
+import { getConfig } from '../../lib/config.js';
 import { getAllWorkflowStates } from '../../lib/linear-client.js';
 import { syncAliasesCore, type SyncAliasesOptions } from '../../lib/sync-aliases.js';
-import { getConfig } from '../../lib/config.js';
-import { resolveAlias } from '../../lib/aliases.js';
 
 /**
  * Extended options for workflow-state sync (includes team filtering)

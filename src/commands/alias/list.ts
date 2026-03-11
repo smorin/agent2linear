@@ -1,17 +1,17 @@
 import {
+  getGlobalAliasesPath,
+  getProjectAliasesPath,
+  hasGlobalAliases,
+  hasProjectAliases,
   listAliases,
   normalizeEntityType,
   validateAllAliases,
-  hasGlobalAliases,
-  hasProjectAliases,
-  getGlobalAliasesPath,
-  getProjectAliasesPath,
 } from '../../lib/aliases.js';
 import { getApiKey } from '../../lib/config.js';
 import {
+  getProjectById,
   validateInitiativeExists,
   validateTeamExists,
-  getProjectById,
 } from '../../lib/linear-client.js';
 import type { AliasEntityType, ResolvedAliases } from '../../lib/types.js';
 

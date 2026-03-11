@@ -1,5 +1,5 @@
+import { getAllIssueLabels, getAllProjectLabels, getAllProjectStatuses,getAllWorkflowStates } from './linear-client.js';
 import type { Color } from './types.js';
-import { getAllIssueLabels, getAllProjectLabels, getAllWorkflowStates, getAllProjectStatuses } from './linear-client.js';
 
 /**
  * Curated Linear color palette

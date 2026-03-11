@@ -1,10 +1,11 @@
+import { Box, render, Text } from 'ink';
 import React, { useEffect, useState } from 'react';
-import { render, Box, Text } from 'ink';
-import { InitiativeList } from '../../ui/components/InitiativeList.js';
-import { getInitiativeById, getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
-import { showResolvedAlias, showEntityNotFound } from '../../lib/output.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getAllInitiatives, getInitiativeById, type Initiative } from '../../lib/linear-client.js';
+import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
+import { InitiativeList } from '../../ui/components/InitiativeList.js';
 
 interface ViewOptions {
   interactive?: boolean;

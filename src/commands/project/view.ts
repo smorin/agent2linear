@@ -1,7 +1,7 @@
-import { getFullProjectDetails } from '../../lib/linear-client.js';
-import { resolveProject } from '../../lib/project-resolver.js';
-import { showResolvedAlias, showEntityNotFound, formatContentPreview } from '../../lib/output.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getFullProjectDetails } from '../../lib/linear-client.js';
+import { formatContentPreview,showEntityNotFound, showResolvedAlias } from '../../lib/output.js';
+import { resolveProject } from '../../lib/project-resolver.js';
 
 export async function viewProject(nameOrId: string, options: { web?: boolean; autoAlias?: boolean; desc?: boolean; descLength?: string; descFull?: boolean; noDesc?: boolean } = {}) {
   // Use smart resolver to handle ID, alias, or name

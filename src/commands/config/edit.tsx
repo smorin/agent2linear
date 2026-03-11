@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
-import { render, Box, Text } from 'ink';
+import { Box, render, Text } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
+import React, { useState } from 'react';
+
 import {
   getConfig,
+  maskApiKey,
   setConfigValue,
   unsetConfigValue,
-  maskApiKey,
 } from '../../lib/config.js';
 import {
-  validateApiKey,
-  validateInitiativeExists,
-  validateTeamExists,
   getAllInitiatives,
   getAllTeams,
   getAllTemplates,
@@ -19,6 +17,9 @@ import {
   type Initiative,
   type Team,
   type Template,
+  validateApiKey,
+  validateInitiativeExists,
+  validateTeamExists,
 } from '../../lib/linear-client.js';
 import { getScopeInfo } from '../../lib/scope.js';
 

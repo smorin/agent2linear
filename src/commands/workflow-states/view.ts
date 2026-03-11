@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { getWorkflowStateById } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { formatColorPreview } from '../../lib/colors.js';
+import { getWorkflowStateById } from '../../lib/linear-client.js';
 
 export function viewWorkflowState(program: Command) {
   program

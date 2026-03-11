@@ -11,9 +11,9 @@
  * - Prewarm functions for common operations (create, update)
  */
 
-import { getEntityCache } from './entity-cache.js';
-import { Team, Initiative, Member, Template } from './linear-client.js';
 import { getConfig } from './config.js';
+import { getEntityCache } from './entity-cache.js';
+import { Initiative, Member, Team, Template } from './linear-client.js';
 
 /**
  * Batch fetch options

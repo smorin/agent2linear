@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { getColorUsage, findColorByHex, formatColorPreview } from '../../lib/colors.js';
+
+import { findColorByHex, formatColorPreview,getColorUsage } from '../../lib/colors.js';
 
 export function viewColor(program: Command) {
   program

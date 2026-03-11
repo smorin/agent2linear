@@ -1,9 +1,10 @@
 import { readFileSync } from 'fs';
-import { resolveProject } from '../../lib/project-resolver.js';
-import { updateProject } from '../../lib/linear-client.js';
-import { showEntityNotFound, showError, showSuccess } from '../../lib/output.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
+import { updateProject } from '../../lib/linear-client.js';
+import { showEntityNotFound, showError, showSuccess } from '../../lib/output.js';
+import { resolveProject } from '../../lib/project-resolver.js';
 
 interface UpdateOptions {
   status?: string;
@@ -38,6 +39,8 @@ interface UpdateOptions {
   removeDependsOn?: string;        // Remove depends-on relations
   removeBlocks?: string;           // Remove blocks relations
   removeDependency?: string[];     // Remove all dependencies with project
+  // Dry-run mode
+  dryRun?: boolean;
 }
 
 // validateDateFormat removed in M22 Phase 5 - replaced with parseDateForCommand()
@@ -351,6 +354,13 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
       updates.targetDateResolution = options.targetDateResolution;
       changes.push(`Target Date Resolution → ${options.targetDateResolution}`);
       console.log(`ℹ️  Updating resolution without changing date (resolution-only update)`);
+    }
+
+    // Dry-run mode: print payload and exit without updating
+    if (options.dryRun) {
+      console.error('\n[dry-run] Would update project with:');
+      console.log(JSON.stringify({ projectId, ...updates }, null, 2));
+      return;
     }
 
     // Update project

@@ -1,7 +1,8 @@
-import { normalizeEntityType, clearAliases } from '../../lib/aliases.js';
-import { getScopeInfo } from '../../lib/scope.js';
-import { showSuccess, showError, showInfo } from '../../lib/output.js';
 import * as readline from 'readline';
+
+import { clearAliases,normalizeEntityType } from '../../lib/aliases.js';
+import { showError, showInfo,showSuccess } from '../../lib/output.js';
+import { getScopeInfo } from '../../lib/scope.js';
 
 interface ClearAliasOptions {
   global?: boolean;

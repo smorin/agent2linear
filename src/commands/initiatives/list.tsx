@@ -1,10 +1,11 @@
+import { Box, render, Text } from 'ink';
 import React, { useEffect, useState } from 'react';
-import { render, Box, Text } from 'ink';
-import { InitiativeList } from '../../ui/components/InitiativeList.js';
-import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
-import { openInBrowser } from '../../lib/browser.js';
-import { formatListTSV, formatListJSON } from '../../lib/output.js';
+
 import { getAliasesForId } from '../../lib/aliases.js';
+import { openInBrowser } from '../../lib/browser.js';
+import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
+import { formatListJSON,formatListTSV } from '../../lib/output.js';
+import { InitiativeList } from '../../ui/components/InitiativeList.js';
 
 interface ListOptions {
   interactive?: boolean;

@@ -1,9 +1,10 @@
-import React from 'react';
 import { render } from 'ink';
+import React from 'react';
+
 import { addAlias, normalizeEntityType } from '../../lib/aliases.js';
-import { showSuccess, showError, showInfo } from '../../lib/output.js';
+import { getMemberByEmail, type Member,searchMembers } from '../../lib/linear-client.js';
+import { showError, showInfo,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
-import { getMemberByEmail, searchMembers, type Member } from '../../lib/linear-client.js';
 import { MemberSelector } from '../../ui/components/MemberSelector.js';
 
 interface AddAliasOptions {

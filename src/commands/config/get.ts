@@ -1,4 +1,4 @@
-import { getConfig, maskApiKey, type ConfigKey } from '../../lib/config.js';
+import { type ConfigKey,getConfig, maskApiKey } from '../../lib/config.js';
 
 export async function getConfigValue(key: ConfigKey) {
   try {

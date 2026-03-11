@@ -1,7 +1,8 @@
-import { removeMilestoneTemplate, getMilestoneTemplate } from '../../lib/milestone-templates.js';
-import { showSuccess, showError } from '../../lib/output.js';
-import { getScopeInfo } from '../../lib/scope.js';
 import readline from 'readline';
+
+import { getMilestoneTemplate,removeMilestoneTemplate } from '../../lib/milestone-templates.js';
+import { showError,showSuccess } from '../../lib/output.js';
+import { getScopeInfo } from '../../lib/scope.js';
 
 interface RemoveTemplateOptions {
   global?: boolean;

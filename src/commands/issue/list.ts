@@ -10,20 +10,49 @@
  */
 
 import type { Command } from 'commander';
-import { getAllIssues } from '../../lib/linear-client.js';
-import { showError, formatContentPreview } from '../../lib/output.js';
-import { getConfig } from '../../lib/config.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
-import { resolveProjectId } from '../../lib/project-resolver.js';
-import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
-import { getEntityCache } from '../../lib/entity-cache.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { getConfig } from '../../lib/config.js';
+import { getEntityCache } from '../../lib/entity-cache.js';
+import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
+import { getAllIssues } from '../../lib/linear-client.js';
+import { filterColumns,formatContentPreview, showError } from '../../lib/output.js';
+import { resolveProjectId } from '../../lib/project-resolver.js';
 import type { IssueListFilters, IssueListItem } from '../../lib/types.js';
+
+interface IssueListCommandOptions {
+  allAssignees?: boolean;
+  assignee?: string;
+  team?: string;
+  completed?: boolean;
+  canceled?: boolean;
+  allStates?: boolean;
+  archived?: boolean;
+  project?: string;
+  state?: string;
+  priority?: string;
+  label?: string | string[];
+  parent?: string;
+  rootOnly?: boolean;
+  cycle?: string;
+  search?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+  sort?: string;
+  order?: string;
+  limit?: string;
+  format?: string;
+  web?: boolean;
+  columns?: string;
+}
 
 // ========================================
 // HELPER: Build filters with smart defaults
 // ========================================
-async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
+async function buildDefaultFilters(options: IssueListCommandOptions): Promise<IssueListFilters> {
   const config = getConfig();
   const filters: IssueListFilters = {};
 
@@ -131,6 +160,20 @@ async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
     filters.search = options.search;
   }
 
+  // Date range filters
+  if (options.createdAfter) {
+    filters.createdAfter = options.createdAfter;
+  }
+  if (options.createdBefore) {
+    filters.createdBefore = options.createdBefore;
+  }
+  if (options.updatedAfter) {
+    filters.updatedAfter = options.updatedAfter;
+  }
+  if (options.updatedBefore) {
+    filters.updatedBefore = options.updatedBefore;
+  }
+
   // ========================================
   // PHASE 3: SORTING
   // ========================================
@@ -141,7 +184,7 @@ async function buildDefaultFilters(options: any): Promise<IssueListFilters> {
         `Invalid sort field: ${options.sort}. Valid options: ${validSortFields.join(', ')}`
       );
     }
-    filters.sortField = options.sort as any;
+    filters.sortField = options.sort as IssueListFilters['sortField'];
   } else {
     // Default sort: priority descending
     filters.sortField = 'priority';
@@ -260,7 +303,7 @@ function formatPriority(priority?: number): string {
 // ========================================
 // HELPER: Build Linear web URL with filters
 // ========================================
-async function buildLinearWebUrl(filters: IssueListFilters, options: any): Promise<string> {
+async function buildLinearWebUrl(filters: IssueListFilters, options: IssueListCommandOptions): Promise<string> {
   // For now, construct a basic URL to the team's active issues view
   // Linear's URL structure for filtered views is complex and not fully documented
   // We'll open to the team view which will show filtered results
@@ -337,6 +380,9 @@ async function listIssues(options: {
   desc?: boolean;
   descLength?: string;
   descFull?: boolean;
+
+  // Column selection
+  columns?: string;
 }): Promise<void> {
   try {
     // Build filters with smart defaults
@@ -380,9 +426,43 @@ async function listIssues(options: {
         }
       : undefined;
 
-    // Output based on format
+    // Column selection: flatten nested objects for filtering
     const format = options.format || 'table';
 
+    if (options.columns) {
+      const cols = options.columns.split(',').map(c => c.trim());
+      // Flatten issues for column filtering
+      const flattened = issues.map(issue => ({
+        identifier: issue.identifier,
+        title: issue.title,
+        state: issue.state?.name || '',
+        priority: issue.priority !== undefined ? formatPriority(issue.priority) : '',
+        assignee: issue.assignee?.name || '',
+        team: issue.team?.key || '',
+        url: issue.url,
+        description: issue.description || '',
+        id: issue.id,
+        estimate: issue.estimate,
+        dueDate: issue.dueDate || '',
+      }));
+      const filtered = filterColumns(flattened, cols);
+
+      if (format === 'json') {
+        console.log(JSON.stringify(filtered, null, 2));
+      } else {
+        // TSV/table with custom columns
+        console.log(cols.join('\t'));
+        for (const row of filtered) {
+          console.log(cols.map(c => String(row[c] ?? '')).join('\t'));
+        }
+        if (format === 'table') {
+          console.log(`\nTotal: ${issues.length} issue(s)`);
+        }
+      }
+      return;
+    }
+
+    // Output based on format
     switch (format) {
       case 'json':
         formatJsonOutput(issues);
@@ -440,6 +520,12 @@ export function registerIssueListCommand(program: Command): void {
     .option('--cycle <id|alias>', 'Filter by cycle')
     .option('--search <query>', 'Full-text search in issue title and description')
 
+    // Date range filters
+    .option('--created-after <date>', 'Filter issues created after date (YYYY-MM-DD)')
+    .option('--created-before <date>', 'Filter issues created before date (YYYY-MM-DD)')
+    .option('--updated-after <date>', 'Filter issues updated after date (YYYY-MM-DD)')
+    .option('--updated-before <date>', 'Filter issues updated before date (YYYY-MM-DD)')
+
     // Phase 3: Sorting
     .option('--sort <field>', 'Sort by field: priority, created, updated, due (default: priority)')
     .option('--order <direction>', 'Sort order: asc or desc (default: desc)')
@@ -455,6 +541,7 @@ export function registerIssueListCommand(program: Command): void {
     .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
     .option('--desc-full', 'Show full description column (no truncation)')
     .option('--no-desc', 'Hide description column')
+    .option('--columns <fields>', 'Comma-separated list of columns to display (e.g., "identifier,title,state")')
 
     .addHelpText('after', `
 Smart Defaults (applied automatically unless overridden):

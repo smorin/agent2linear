@@ -1119,6 +1119,20 @@ npx agent2linear --version
 npx a2l --version
 ```
 
+## Design Decisions
+
+### No Delete Commands
+
+Delete commands are **intentionally omitted** for data safety. This is a deliberate design choice — not a missing feature. Destructive operations like deleting projects or permanently removing issues should be done through the Linear web UI where you can visually confirm what you're deleting.
+
+For issues, you can use the trash/restore workflow:
+```bash
+agent2linear issue update ENG-123 --trash     # Move to trash (reversible)
+agent2linear issue update ENG-123 --untrash   # Restore from trash
+```
+
+Trashed issues can be recovered; deleted entities cannot.
+
 ## Project Status
 
 See [MILESTONES.md](./MILESTONES.md) for detailed project milestones and progress.

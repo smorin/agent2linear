@@ -7,6 +7,47 @@
  */
 
 /**
+ * No-color mode flag. When true, emojis are stripped from output messages.
+ */
+let noColor = false;
+
+/**
+ * Enable or disable no-color mode.
+ * When enabled, emoji prefixes are stripped from all show* output functions.
+ */
+export function setNoColor(enabled: boolean): void {
+  noColor = enabled;
+}
+
+/**
+ * Strip leading emoji from a message if no-color mode is active.
+ */
+function stripEmoji(message: string): string {
+  if (!noColor) return message;
+  // Strip common emoji prefixes used in output
+  // eslint-disable-next-line no-misleading-character-class
+  return message.replace(/^[📎🔍✅❌💡⚠️📋📄🔄]\s*/u, '').replace(/^ {3}[✓✗] /u, '   ');
+}
+
+/**
+ * Filter list items to only include specified columns
+ */
+export function filterColumns<T extends Record<string, unknown>>(
+  items: T[],
+  columns: string[]
+): Array<Record<string, unknown>> {
+  return items.map(item => {
+    const filtered: Record<string, unknown> = {};
+    for (const col of columns) {
+      if (col in item) {
+        filtered[col] = item[col];
+      }
+    }
+    return filtered;
+  });
+}
+
+/**
  * Capitalize the first letter of a string
  */
 function capitalize(str: string): string {
@@ -23,7 +64,7 @@ function capitalize(str: string): string {
  * // Output: 📎 Resolved alias "backend" to init_abc123
  */
 export function showResolvedAlias(alias: string, id: string): void {
-  console.log(`📎 Resolved alias "${alias}" to ${id}`);
+  console.log(stripEmoji(`📎 Resolved alias "${alias}" to ${id}`));
 }
 
 /**
@@ -36,7 +77,7 @@ export function showResolvedAlias(alias: string, id: string): void {
  * // Output: 🔍 Validating team ID: team_abc123...
  */
 export function showValidating(entityType: string, id: string): void {
-  console.log(`🔍 Validating ${entityType} ID: ${id}...`);
+  console.log(stripEmoji(`🔍 Validating ${entityType} ID: ${id}...`));
 }
 
 /**
@@ -70,7 +111,7 @@ export function showValidated(entityType: string, name: string): void {
  * //    ID: team_abc123
  */
 export function showSuccess(message: string, details?: Record<string, string>): void {
-  console.log(`\n✅ ${message}`);
+  console.log(stripEmoji(`\n✅ ${message}`));
   if (details) {
     for (const [key, value] of Object.entries(details)) {
       console.log(`   ${key}: ${value}`);
@@ -91,7 +132,7 @@ export function showSuccess(message: string, details?: Record<string, string>): 
  * //    Use "agent2linear teams list" to see available teams
  */
 export function showError(message: string, hint?: string): void {
-  console.error(`❌ ${message}`);
+  console.error(stripEmoji(`❌ ${message}`));
   if (hint) {
     console.error(`   ${hint}`);
   }
@@ -107,7 +148,7 @@ export function showError(message: string, hint?: string): void {
  * // 💡 Use "agent2linear config show" to view your configuration
  */
 export function showInfo(message: string): void {
-  console.log(`\n💡 ${message}\n`);
+  console.log(stripEmoji(`\n💡 ${message}\n`));
 }
 
 /**
@@ -119,7 +160,7 @@ export function showInfo(message: string): void {
  * // Output: ⚠️ This command is deprecated
  */
 export function showWarning(message: string): void {
-  console.log(`⚠️  ${message}`);
+  console.log(stripEmoji(`⚠️  ${message}`));
 }
 
 /**
@@ -141,7 +182,7 @@ export function showEntityDetails(
   entity: Record<string, unknown>,
   fields: string[]
 ): void {
-  console.log(`📋 ${type}: ${entity.name || entity.title || entity.id}`);
+  console.log(stripEmoji(`📋 ${type}: ${entity.name || entity.title || entity.id}`));
   for (const field of fields) {
     if (entity[field] !== undefined && entity[field] !== null) {
       const label = capitalize(field);

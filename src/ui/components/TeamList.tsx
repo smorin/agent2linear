@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import SelectInput from 'ink-select-input';
+import React, { useState } from 'react';
+
 import type { Team } from '../../lib/linear-client.js';
 
 interface TeamListProps {

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { getProjectLabelById, updateProjectLabel } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
+import { getProjectLabelById, updateProjectLabel } from '../../lib/linear-client.js';
 
 export function updateProjectLabelCommand(program: Command) {
   program

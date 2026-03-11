@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
 import SelectInput from 'ink-select-input';
+import TextInput from 'ink-text-input';
+import React, { useState } from 'react';
+
 import type { ProjectCreateInput } from '../../lib/linear-client.js';
 
 type Step = 'title' | 'description' | 'state' | 'complete';

@@ -1,8 +1,9 @@
 import { Command } from 'commander';
-import { extractIconsFromEntities } from '../../lib/icons.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
-import { validateTeamExists } from '../../lib/linear-client.js';
 import { getConfig } from '../../lib/config.js';
+import { extractIconsFromEntities } from '../../lib/icons.js';
+import { validateTeamExists } from '../../lib/linear-client.js';
 
 export function extractIcons(program: Command) {
   program

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { createIssueLabel } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
+import { createIssueLabel } from '../../lib/linear-client.js';
 
 export function createIssueLabelCommand(program: Command) {
   program

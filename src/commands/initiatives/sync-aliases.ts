@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+
 import { getAllInitiatives } from '../../lib/linear-client.js';
 import { syncAliasesCore, type SyncAliasesOptions } from '../../lib/sync-aliases.js';
 

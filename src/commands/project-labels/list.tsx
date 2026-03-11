@@ -1,8 +1,9 @@
-import React from 'react';
-import { render, Text, Box } from 'ink';
 import { Command } from 'commander';
-import { getAllProjectLabels } from '../../lib/linear-client.js';
+import { Box,render, Text } from 'ink';
+import React from 'react';
+
 import { formatColorPreview } from '../../lib/colors.js';
+import { getAllProjectLabels } from '../../lib/linear-client.js';
 
 interface ProjectLabelsListProps {
   colorFilter?: string;

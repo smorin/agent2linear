@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { getProjectLabelById } from '../../lib/linear-client.js';
+
 import { resolveAlias } from '../../lib/aliases.js';
 import { formatColorPreview } from '../../lib/colors.js';
+import { getProjectLabelById } from '../../lib/linear-client.js';
 
 export function viewProjectLabel(program: Command) {
   program

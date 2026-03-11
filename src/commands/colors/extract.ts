@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+
 import { extractColorsFromEntities, formatColorPreview } from '../../lib/colors.js';
 
 export function extractColors(program: Command) {

@@ -1,5 +1,5 @@
-import { getEntityCache } from '../../lib/entity-cache.js';
 import { getConfig } from '../../lib/config.js';
+import { getEntityCache } from '../../lib/entity-cache.js';
 
 /**
  * Display cache statistics

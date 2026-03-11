@@ -1,7 +1,7 @@
 import { createMilestoneTemplate, parseDateOffset } from '../../lib/milestone-templates.js';
-import { showSuccess, showError } from '../../lib/output.js';
+import { showError,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
-import type { MilestoneTemplate, MilestoneDefinition } from '../../lib/types.js';
+import type { MilestoneDefinition,MilestoneTemplate } from '../../lib/types.js';
 
 interface CreateTemplateOptions {
   global?: boolean;

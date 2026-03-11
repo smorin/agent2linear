@@ -1,4 +1,4 @@
-import { removeAlias, normalizeEntityType } from '../../lib/aliases.js';
+import { normalizeEntityType,removeAlias } from '../../lib/aliases.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
 interface RemoveAliasOptions {

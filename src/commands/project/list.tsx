@@ -1,17 +1,44 @@
-import React from 'react';
-import { render, Box, Text } from 'ink';
 import type { Command } from 'commander';
-import { getAllProjects } from '../../lib/linear-client.js';
-import { getEntityCache } from '../../lib/entity-cache.js';
-import { showError, formatContentPreview } from '../../lib/output.js';
-import { getConfig } from '../../lib/config.js';
+import { Box, render, Text } from 'ink';
+import React from 'react';
+
 import { resolveAlias } from '../../lib/aliases.js';
+import { getConfig } from '../../lib/config.js';
+import { getEntityCache } from '../../lib/entity-cache.js';
+import { getAllProjects } from '../../lib/linear-client.js';
+import { filterColumns,formatContentPreview, showError } from '../../lib/output.js';
 import type { ProjectListFilters, ProjectListItem } from '../../lib/types.js';
+
+interface ProjectListCommandOptions {
+  allLeads?: boolean;
+  lead?: string;
+  allTeams?: boolean;
+  team?: string;
+  allInitiatives?: boolean;
+  initiative?: string;
+  status?: string;
+  priority?: string;
+  member?: string;
+  label?: string;
+  startAfter?: string;
+  startBefore?: string;
+  targetAfter?: string;
+  targetBefore?: string;
+  search?: string;
+  limit?: string;
+  format?: string;
+  web?: boolean;
+  columns?: string;
+  hasDependencies?: boolean;
+  withoutDependencies?: boolean;
+  dependsOnOthers?: boolean;
+  blocksOthers?: boolean;
+}
 
 // ========================================
 // HELPER: Build filters from options with smart defaults
 // ========================================
-async function buildDefaultFilters(options: any): Promise<ProjectListFilters> {
+async function buildDefaultFilters(options: ProjectListCommandOptions): Promise<ProjectListFilters> {
   const config = getConfig();
   const filters: ProjectListFilters = {};
 
@@ -260,8 +287,8 @@ function ProjectList({ filters }: ProjectListProps): React.ReactElement {
         const projectList = await getAllProjects(filters);
         setProjects(projectList);
         setLoading(false);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       }
     }
@@ -362,6 +389,7 @@ export function listProjectsCommand(program: Command): void {
     .option('--desc-length <n>', 'Description preview length in characters')
     .option('--desc-full', 'Show full description column (no truncation)')
     .option('--no-desc', 'Hide description preview column')
+    .option('--columns <fields>', 'Comma-separated list of columns to display (e.g., "id,name,status")')
 
     .action(async (options) => {
       try {
@@ -410,6 +438,43 @@ export function listProjectsCommand(program: Command): void {
           hide: options.desc === false, // --no-desc sets this to false
         };
 
+        // Column selection mode
+        if (options.columns) {
+          let projects = await getAllProjects(filters);
+          projects = applyDependencyFilters(projects, {
+            hasDependencies: options.hasDependencies,
+            withoutDependencies: options.withoutDependencies,
+            dependsOnOthers: options.dependsOnOthers,
+            blocksOthers: options.blocksOthers,
+          });
+
+          const cols = options.columns.split(',').map((c: string) => c.trim());
+          const flattened = projects.map(p => ({
+            id: p.id,
+            name: p.name,
+            status: p.status?.name || p.state || '',
+            team: p.team?.name || '',
+            lead: p.lead?.name || '',
+            description: p.description || '',
+            priority: p.priority,
+            url: p.url || '',
+            dependsOnCount: p.dependsOnCount || 0,
+            blocksCount: p.blocksCount || 0,
+          }));
+          const filtered = filterColumns(flattened, cols);
+
+          if (options.format === 'json') {
+            console.log(JSON.stringify(filtered, null, 2));
+          } else {
+            console.log(cols.join('\t'));
+            for (const row of filtered) {
+              console.log(cols.map((c: string) => String(row[c] ?? '')).join('\t'));
+            }
+            console.log(`\nTotal: ${projects.length} project${projects.length !== 1 ? 's' : ''}`);
+          }
+          process.exit(0);
+        }
+
         // Non-interactive formats - handle synchronously before Ink
         if (options.format !== 'table' && !options.interactive) {
           let projects = await getAllProjects(filters);
@@ -453,8 +518,8 @@ export function listProjectsCommand(program: Command): void {
         // Interactive mode with Ink UI
         render(<ProjectList filters={filters} format={options.format} />);
 
-      } catch (error: any) {
-        showError(error.message);
+      } catch (error: unknown) {
+        showError(error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });

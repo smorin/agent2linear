@@ -1,25 +1,25 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+
 import { getConfig } from './config.js';
 import {
+  getAllInitiatives,
+  getAllIssueLabels,
+  getAllMembers,
+  getAllProjectLabels,
   getAllProjectStatuses,
   getAllTeams,
-  getAllInitiatives,
-  getAllMembers,
   getAllTemplates,
   getAllWorkflowStates,
-  getAllIssueLabels,
-  getAllProjectLabels,
-  type Team,
   type Initiative,
   type Member,
+  type Team,
   type Template
 } from './linear-client.js';
 import type {
-  WorkflowState,
   IssueLabel,
-  ProjectLabel
-} from './types.js';
+  ProjectLabel,
+  WorkflowState} from './types.js';
 
 const CACHE_DIR = '.agent2linear';
 const CACHE_FILE = join(CACHE_DIR, 'cache.json');
