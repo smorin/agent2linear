@@ -277,6 +277,18 @@ $ agent2linear issue list -I
 
 ---
 
+## [x] Milestone M27: XDG Base Directory Compliance (v0.25.0)
+**Goal**: Honor $XDG_CONFIG_HOME for config and store caches in a per-workspace $XDG_CACHE_HOME location, with walk-up project-config discovery.
+
+### Tests & Tasks
+- [x] [M27-T01] Pure xdg-paths.ts module (config/cache dirs, key, walk-up, legacy cleanup)
+- [x] [M27-T02] Migrate config.ts / aliases.ts / milestone-templates.ts to XDG
+- [x] [M27-T03] Caches → keyed $XDG_CACHE_HOME with legacy cleanup
+- [x] [M27-T04] Update user-facing path strings and docs
+- [x] [M27-TS01] vitest unit tests for xdg-paths + per-module XDG tests
+
+---
+
 ## [x] Milestone M15: Issue Commands - Core CRUD (v0.24.0)
 **Goal**: Implement comprehensive issue management with create, update, view, and list commands for Linear issues. This is a meta-milestone tracking the overall issue command implementation across multiple phased releases.
 

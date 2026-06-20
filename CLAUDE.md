@@ -185,7 +185,7 @@
   Aliases System
 
   Aliases allow using simple names instead of Linear IDs:
-  - Storage: ~/.config/agent2linear/aliases.json (global) or .agent2linear/aliases.json (project)
+  - Storage: $XDG_CONFIG_HOME/agent2linear/aliases.json (default: ~/.config/agent2linear/aliases.json) (global) or .agent2linear/aliases.json (project)
   - Supported entities: teams, initiatives, project-statuses, members, workflow-states, issue-labels, project-labels
   - Commands: alias add/list/remove/get/edit/sync
   - Usage: Aliases can be used anywhere an ID is expected
@@ -193,7 +193,7 @@
   Milestone Templates
 
   Reusable milestone templates for projects:
-  - Storage: ~/.config/agent2linear/milestone-templates.json (global) or .agent2linear/milestone-templates.json (project)
+  - Storage: $XDG_CONFIG_HOME/agent2linear/milestone-templates.json (default: ~/.config/agent2linear/milestone-templates.json) (global) or .agent2linear/milestone-templates.json (project)
   - Format: JSON with name, description, milestones array
   - Commands: milestone-templates create/list/view/edit/remove
   - Application: project add-milestones <project> --template <name>
@@ -201,9 +201,15 @@
   Configuration
 
   Persistent defaults for common values:
-  - Storage: ~/.config/agent2linear/config.json
+  - Storage: $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
   - Supported: defaultTeam, defaultInitiative, defaultMilestoneTemplate
   - Commands: config list/get/set/unset/edit
+
+  Storage Locations (XDG)
+
+  - Config (config.json, aliases.json, milestone-templates.json) honors $XDG_CONFIG_HOME/agent2linear/ (default: ~/.config/agent2linear/).
+  - Caches live at $XDG_CACHE_HOME/agent2linear/<workspace-key>/ (default: ~/.cache/agent2linear/<workspace-key>/), keyed per workspace.
+  - Project config is discovered by walking up from the current directory toward $HOME for the nearest .agent2linear/ directory.
 
   Common Commands
 
