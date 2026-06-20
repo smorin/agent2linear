@@ -67,7 +67,7 @@ Examples:
 Common options:
   --dry-run: Preview without creating
   --force:   Override existing aliases
-  --global:  Save to ~/.config/agent2linear/aliases.json (default)
+  --global:  Save to $XDG_CONFIG_HOME/agent2linear/aliases.json (default: ~/.config/agent2linear/aliases.json) (default scope)
   --project: Save to .agent2linear/aliases.json
 
 This is equivalent to running entity-specific sync-aliases commands:

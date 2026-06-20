@@ -23,8 +23,8 @@ Current respected settings:
 - \`projectCacheMinTTL\`: Cache time-to-live in minutes (default: 60, range: 1-1440)
 
 Configuration files:
-- Global:  ~/.config/agent2linear/config.json
-- Project: .agent2linear/config.json
+- Global:  $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
+- Project: .agent2linear/config.json (nearest, searching up from the current directory)
 - Priority: environment > project > global (for apiKey)
             project > global (for other settings)
 `)
