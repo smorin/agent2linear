@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { getConfig } from './config.js';
+import { getApiKey, getConfig } from './config.js';
 import {
   getAllInitiatives,
   getAllIssueLabels,
@@ -20,9 +20,24 @@ import type {
   IssueLabel,
   ProjectLabel,
   WorkflowState} from './types.js';
+import { cleanupLegacyProjectCaches, workspaceCacheDir } from './xdg-paths.js';
 
-const CACHE_DIR = '.agent2linear';
-const CACHE_FILE = join(CACHE_DIR, 'cache.json');
+const CACHE_FILENAME = 'cache.json';
+let legacyCleaned = false;
+
+function cacheDir(): string {
+  return workspaceCacheDir(getApiKey());
+}
+
+function cacheFile(): string {
+  return join(cacheDir(), CACHE_FILENAME);
+}
+
+function ensureLegacyCleaned(): void {
+  if (legacyCleaned) return;
+  legacyCleaned = true;
+  cleanupLegacyProjectCaches();
+}
 
 export interface ProjectStatusCacheEntry {
   id: string;
@@ -85,12 +100,13 @@ function getCacheTTL(): number {
  * Read cache from file
  */
 function readCache(): Cache {
+  ensureLegacyCleaned();
   try {
-    if (!existsSync(CACHE_FILE)) {
+    const file = cacheFile();
+    if (!existsSync(file)) {
       return {};
     }
-    const content = readFileSync(CACHE_FILE, 'utf-8');
-    return JSON.parse(content);
+    return JSON.parse(readFileSync(file, 'utf-8'));
   } catch {
     return {};
   }
@@ -100,11 +116,13 @@ function readCache(): Cache {
  * Write cache to file
  */
 function writeCache(cache: Cache): void {
+  ensureLegacyCleaned();
   try {
-    if (!existsSync(CACHE_DIR)) {
-      mkdirSync(CACHE_DIR, { recursive: true });
+    const dir = cacheDir();
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+    writeFileSync(cacheFile(), JSON.stringify(cache, null, 2), 'utf-8');
   } catch {
     // Ignore cache write errors
   }

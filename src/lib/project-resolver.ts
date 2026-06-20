@@ -1,13 +1,28 @@
-import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { resolveAlias } from './aliases.js';
-import { getConfig } from './config.js';
+import { getApiKey, getConfig } from './config.js';
 import type { ProjectResult } from './linear-client.js';
 import { findProjectByName, getProjectById } from './linear-client.js';
+import { cleanupLegacyProjectCaches, workspaceCacheDir } from './xdg-paths.js';
 
-const PROJECT_CACHE_DIR = '.agent2linear';
-const PROJECT_CACHE_FILE = join(PROJECT_CACHE_DIR, 'project-cache.json');
+const PROJECT_CACHE_FILENAME = 'project-cache.json';
+let legacyCleaned = false;
+
+function cacheDir(): string {
+  return workspaceCacheDir(getApiKey());
+}
+
+function cacheFile(): string {
+  return join(cacheDir(), PROJECT_CACHE_FILENAME);
+}
+
+function ensureLegacyCleaned(): void {
+  if (legacyCleaned) return;
+  legacyCleaned = true;
+  cleanupLegacyProjectCaches();
+}
 
 interface CacheEntry {
   projectId: string;
@@ -24,12 +39,13 @@ interface ProjectCache {
  * Read project cache from file
  */
 function readCache(): ProjectCache {
+  ensureLegacyCleaned();
   try {
-    if (!existsSync(PROJECT_CACHE_FILE)) {
+    const file = cacheFile();
+    if (!existsSync(file)) {
       return { byName: {}, byId: {} };
     }
-    const content = readFileSync(PROJECT_CACHE_FILE, 'utf-8');
-    return JSON.parse(content);
+    return JSON.parse(readFileSync(file, 'utf-8'));
   } catch {
     return { byName: {}, byId: {} };
   }
@@ -39,11 +55,13 @@ function readCache(): ProjectCache {
  * Write project cache to file
  */
 function writeCache(cache: ProjectCache): void {
+  ensureLegacyCleaned();
   try {
-    if (!existsSync(PROJECT_CACHE_DIR)) {
-      mkdirSync(PROJECT_CACHE_DIR, { recursive: true });
+    const dir = cacheDir();
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(PROJECT_CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+    writeFileSync(cacheFile(), JSON.stringify(cache, null, 2), 'utf-8');
   } catch {
     // Ignore cache write errors
   }
