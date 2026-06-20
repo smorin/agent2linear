@@ -122,7 +122,7 @@ function writeCache(cache: Cache): void {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(cacheFile(), JSON.stringify(cache, null, 2), 'utf-8');
+    writeFileSync(join(dir, CACHE_FILENAME), JSON.stringify(cache, null, 2), 'utf-8');
   } catch {
     // Ignore cache write errors
   }

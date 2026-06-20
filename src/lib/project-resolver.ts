@@ -61,7 +61,7 @@ function writeCache(cache: ProjectCache): void {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    writeFileSync(cacheFile(), JSON.stringify(cache, null, 2), 'utf-8');
+    writeFileSync(join(dir, PROJECT_CACHE_FILENAME), JSON.stringify(cache, null, 2), 'utf-8');
   } catch {
     // Ignore cache write errors
   }
