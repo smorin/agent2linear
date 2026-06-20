@@ -185,7 +185,7 @@
   Aliases System
 
   Aliases allow using simple names instead of Linear IDs:
-  - Storage: $XDG_CONFIG_HOME/agent2linear/aliases.json (default: ~/.config/agent2linear/aliases.json) (global) or .agent2linear/aliases.json (project)
+  - Storage: $XDG_CONFIG_HOME/agent2linear/aliases.json (global; default: ~/.config/agent2linear/aliases.json) or .agent2linear/aliases.json (project)
   - Supported entities: teams, initiatives, project-statuses, members, workflow-states, issue-labels, project-labels
   - Commands: alias add/list/remove/get/edit/sync
   - Usage: Aliases can be used anywhere an ID is expected
@@ -193,7 +193,7 @@
   Milestone Templates
 
   Reusable milestone templates for projects:
-  - Storage: $XDG_CONFIG_HOME/agent2linear/milestone-templates.json (default: ~/.config/agent2linear/milestone-templates.json) (global) or .agent2linear/milestone-templates.json (project)
+  - Storage: $XDG_CONFIG_HOME/agent2linear/milestone-templates.json (global; default: ~/.config/agent2linear/milestone-templates.json) or .agent2linear/milestone-templates.json (project)
   - Format: JSON with name, description, milestones array
   - Commands: milestone-templates create/list/view/edit/remove
   - Application: project add-milestones <project> --template <name>

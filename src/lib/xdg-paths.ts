@@ -10,7 +10,7 @@ const LEGACY_CACHE_FILES = ['cache.json', 'project-cache.json'] as const;
 /** Resolve an XDG base dir: use the env var only if set, non-empty, and absolute. */
 function resolveXdgBase(envVar: string, homeRelativeDefault: string): string {
   const value = process.env[envVar];
-  if (value && value.length > 0 && isAbsolute(value)) {
+  if (value && isAbsolute(value)) {
     return join(value, APP_DIR);
   }
   return join(homedir(), homeRelativeDefault, APP_DIR);
