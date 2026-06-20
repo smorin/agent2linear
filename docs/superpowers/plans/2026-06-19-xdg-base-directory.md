@@ -1225,21 +1225,21 @@ In `README.md` and `CLAUDE.md`, update every documented storage path to the XDG 
 Open `MILESTONES.md`, find the highest existing `M##`, and add the next number. Entry content:
 
 ```markdown
-## [x] M<next>: XDG Base Directory Compliance (v0.25.0)
+## [x] M27: XDG Base Directory Compliance (v0.27.0)
 **Goal**: Honor $XDG_CONFIG_HOME for config and store caches in a per-workspace $XDG_CACHE_HOME location, with walk-up project-config discovery.
 
 ### Tests & Tasks
-- [x] [M<next>-T01] Pure xdg-paths.ts module (config/cache dirs, key, walk-up, legacy cleanup)
-- [x] [M<next>-T02] Migrate config.ts / aliases.ts / milestone-templates.ts to XDG
-- [x] [M<next>-T03] Caches → keyed $XDG_CACHE_HOME with legacy cleanup
-- [x] [M<next>-T04] Update user-facing path strings and docs
-- [x] [M<next>-TS01] vitest unit tests for xdg-paths + per-module XDG tests
+- [x] [M27-T01] Pure xdg-paths.ts module (config/cache dirs, key, walk-up, legacy cleanup)
+- [x] [M27-T02] Migrate config.ts / aliases.ts / milestone-templates.ts to XDG
+- [x] [M27-T03] Caches → keyed $XDG_CACHE_HOME with legacy cleanup
+- [x] [M27-T04] Update user-facing path strings and docs
+- [x] [M27-TS01] vitest unit tests for xdg-paths + per-module XDG tests
 ```
 
 - [ ] **Step 3: Bump the version**
 
-In `package.json` line 3: `"version": "0.24.1"` → `"version": "0.25.0"`.
-In `src/cli.ts`, find the `.version('0.24.1')` (or equivalent version string) and change it to `0.25.0`. (Run `grep -n "0.24.1" src/cli.ts` to locate.)
+In `package.json` line 3: `"version": "0.24.1"` → `"version": "0.27.0"`.
+In `src/cli.ts`, find the `.version('0.24.1')` (or equivalent version string) and change it to `0.27.0`. (Run `grep -n "0.24.1" src/cli.ts` to locate.)
 
 - [ ] **Step 4: Full verification**
 
@@ -1258,7 +1258,7 @@ Expected: all succeed; vitest reports all suites passing.
 
 ```bash
 git add README.md CLAUDE.md MILESTONES.md package.json src/cli.ts
-git commit -m "docs: document XDG paths and bump to v0.25.0"
+git commit -m "docs: document XDG paths and bump to v0.27.0"
 ```
 
 ---
