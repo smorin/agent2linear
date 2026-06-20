@@ -20,6 +20,7 @@
 - **Legacy cleanup is narrow:** only ever delete files named exactly `cache.json` and `project-cache.json`; never touch `config.json`, `aliases.json`, or `milestone-templates.json`.
 - **Verification gates per task:** `npm test` (relevant tests), and at task end `npm run build`, `npm run typecheck`, `npm run lint` must pass.
 - **Reference spec:** `docs/superpowers/specs/2026-06-19-xdg-base-directory-design.md`.
+- **Performance / no memoization:** path resolution moves from import-time constants to call-time, so `getConfig()`/`getApiKey()` now perform a `statSync` walk up to `$HOME` per call (<10ms for a single CLI invocation — acceptable). Do **not** add a process-level memo of `findProjectConfigDir()` — it would break the `process.chdir`-based tests in this plan. If memoization ever becomes necessary, key it by `process.cwd()`.
 
 ---
 
@@ -891,18 +892,25 @@ import { workspaceCacheKey } from './xdg-paths.js';
 import { saveTeamsCache } from './status-cache.js';
 
 let tmp: string;
+const origCwd = process.cwd();
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'a2l-cache-'));
 });
 
 afterEach(() => {
+  process.chdir(origCwd);
   vi.unstubAllEnvs();
   rmSync(tmp, { recursive: true, force: true });
 });
 
 describe('status-cache.ts writes to the keyed XDG cache dir', () => {
   it('writes cache.json under $XDG_CACHE_HOME/agent2linear/<key>', () => {
+    // chdir into the temp dir BEFORE any cache call: saveTeamsCache triggers the
+    // one-time legacy cleanup, which walks from cwd up to $HOME deleting legacy
+    // cache files. Starting in tmp (outside $HOME) keeps the test hermetic and
+    // prevents it from deleting real cache files in the dev checkout.
+    process.chdir(tmp);
     vi.stubEnv('XDG_CACHE_HOME', tmp);
     vi.stubEnv('LINEAR_API_KEY', 'lin_api_testkey');
     saveTeamsCache([
@@ -1306,7 +1314,7 @@ git commit -m "test: add end-to-end XDG path smoke test"
 - §3 dependency direction (pure, apiKey as param) → Task 1 (`workspaceCacheDir(apiKey?)`) ✓
 - §4 cache key derivation + walk-up semantics → Task 1 ✓ (home-boundary-first loop)
 - §5 config resolution (read walk-up / write cwd-fallback; precedence) → Tasks 2-4 ✓
-- §6 user-level keyed cache → Task 5 ✓
+- §6 user-level keyed cache → Task 5 ✓ (`status-cache.ts` directly asserted; `project-resolver.ts` is migrated identically but relies on the shared `workspaceCacheDir` helper + typecheck — its `addToCache` is internal and needs the live API, so it has no direct unit assertion)
 - §7 legacy cleanup (E2) → Task 1 (`cleanupLegacyProjectCaches`) + Task 5 (hooked into both cache modules) ✓
 - §8 edge cases → covered by Task 1 unit tests (relative/empty/unset, default bucket, nested, home boundary, root) ✓
 - §9 files touched → Tasks 2-7 cover every listed file ✓
