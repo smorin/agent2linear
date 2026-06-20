@@ -574,10 +574,14 @@ afterEach(() => {
 describe('aliases.ts global path honors XDG', () => {
   it('writes global aliases under $XDG_CONFIG_HOME', async () => {
     vi.stubEnv('XDG_CONFIG_HOME', tmp);
+    const expected = join(tmp, 'agent2linear', 'aliases.json');
+    // Assert the resolved path BEFORE any write. At RED (pre-migration) this
+    // assertion fails and aborts the test before addAlias() could write to the
+    // user's real ~/.config/agent2linear/aliases.json (the unmigrated global path
+    // is an absolute module-level constant that env stubbing cannot redirect).
+    expect(getGlobalAliasesPath()).toBe(expected);
     const res = await addAlias('team', 'backend', 'team_123', 'global', { skipValidation: true });
     expect(res.success).toBe(true);
-    const expected = join(tmp, 'agent2linear', 'aliases.json');
-    expect(getGlobalAliasesPath()).toBe(expected);
     expect(existsSync(expected)).toBe(true);
   });
 });
@@ -738,14 +742,18 @@ afterEach(() => {
 describe('milestone-templates.ts global path honors XDG', () => {
   it('writes global templates under $XDG_CONFIG_HOME', () => {
     vi.stubEnv('XDG_CONFIG_HOME', tmp);
+    const expected = join(tmp, 'agent2linear', 'milestone-templates.json');
+    // Assert the resolved path BEFORE any write. At RED (pre-migration) this
+    // assertion fails and aborts the test before createMilestoneTemplate() could
+    // write to the user's real ~/.config/agent2linear/milestone-templates.json
+    // (the unmigrated global path is an absolute module-level constant).
+    expect(getGlobalTemplatesPath()).toBe(expected);
     const res = createMilestoneTemplate(
       'std',
       { name: 'std', milestones: [{ name: 'M1' }] },
       'global'
     );
     expect(res.success).toBe(true);
-    const expected = join(tmp, 'agent2linear', 'milestone-templates.json');
-    expect(getGlobalTemplatesPath()).toBe(expected);
     expect(existsSync(expected)).toBe(true);
   });
 });
