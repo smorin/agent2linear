@@ -214,8 +214,10 @@ agent2linear config edit
 ```
 
 **Configuration files:**
-- Global: `~/.config/agent2linear/config.json`
+- Global: `$XDG_CONFIG_HOME/agent2linear/config.json` (default: `~/.config/agent2linear/config.json`)
 - Project: `.agent2linear/config.json`
+
+Project configuration is discovered by walking up from the current directory toward `$HOME` for the nearest `.agent2linear/` directory. Caches are stored separately under `$XDG_CACHE_HOME/agent2linear/<workspace-key>/` (default: `~/.cache/agent2linear/<workspace-key>/`), keyed per workspace so they never mix between accounts.
 
 **See also:** Run `agent2linear config --help` for all configuration options.
 
@@ -668,7 +670,7 @@ agent2linear milestone-templates create team-workflow \
 **Manual Template File Creation:**
 
 Templates are stored at:
-- **Global**: `~/.config/agent2linear/milestone-templates.json` - Available across all projects
+- **Global**: `$XDG_CONFIG_HOME/agent2linear/milestone-templates.json` (default: `~/.config/agent2linear/milestone-templates.json`) - Available across all projects
 - **Project**: `.agent2linear/milestone-templates.json` - Project-specific templates
 
 **Example Template File:**
@@ -791,10 +793,10 @@ agent2linear teams select --id frontend
 
 ### Storage Locations
 
-- **Global aliases**: `~/.config/agent2linear/aliases.json` - Available across all projects
+- **Global aliases**: `$XDG_CONFIG_HOME/agent2linear/aliases.json` (default: `~/.config/agent2linear/aliases.json`) - Available across all projects
 - **Project aliases**: `.agent2linear/aliases.json` - Project-specific, can be version controlled
 
-Project aliases take precedence over global aliases, allowing you to override global settings per-project.
+Project aliases take precedence over global aliases, allowing you to override global settings per-project. The project `.agent2linear/` directory is discovered by walking up from the current directory toward `$HOME`.
 
 ### Alias Scope
 

@@ -14,6 +14,26 @@ interface SetConfigOptions {
   project?: boolean;
 }
 
+// Human-readable label per config key for success messages. Typed as a full
+// Record so adding a new ConfigKey forces adding its label (compile-time guard).
+const KEY_LABELS: Record<ConfigKey, string> = {
+  apiKey: 'API Key',
+  defaultInitiative: 'Default Initiative',
+  defaultTeam: 'Default Team',
+  defaultProject: 'Default Project',
+  defaultIssueTemplate: 'Default Issue Template',
+  defaultProjectTemplate: 'Default Project Template',
+  defaultMilestoneTemplate: 'Default Milestone Template',
+  projectCacheMinTTL: 'Project Cache Min TTL',
+  defaultAutoAssignLead: 'Default Auto-Assign Lead',
+  entityCacheMinTTL: 'Entity Cache Min TTL',
+  enableEntityCache: 'Enable Entity Cache',
+  enablePersistentCache: 'Enable Persistent Cache',
+  enableSessionCache: 'Enable Session Cache',
+  enableBatchFetching: 'Enable Batch Fetching',
+  prewarmCacheOnCreate: 'Prewarm Cache On Create',
+};
+
 export async function setConfig(key: string, value: string, options: SetConfigOptions) {
   // Validate key
   if (!isValidConfigKey(key)) {
@@ -111,20 +131,7 @@ export async function setConfig(key: string, value: string, options: SetConfigOp
     setConfigValue(key as ConfigKey, value, scope);
 
     // Success message
-    const keyLabel =
-      key === 'apiKey'
-        ? 'API Key'
-        : key === 'defaultInitiative'
-          ? 'Default Initiative'
-          : key === 'defaultTeam'
-            ? 'Default Team'
-            : key === 'defaultProject'
-              ? 'Default Project'
-              : key === 'defaultIssueTemplate'
-                ? 'Default Issue Template'
-                : key === 'defaultProjectTemplate'
-                  ? 'Default Project Template'
-                  : 'Default Milestone Template';
+    const keyLabel = KEY_LABELS[key as ConfigKey];
 
     showSuccess(`${keyLabel} saved to ${scopeLabel} config`);
 
