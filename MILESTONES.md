@@ -277,7 +277,7 @@ $ agent2linear issue list -I
 
 ---
 
-## [x] Milestone M27: XDG Base Directory Compliance (v0.25.0)
+## [x] Milestone M27: XDG Base Directory Compliance (v0.27.0)
 **Goal**: Honor $XDG_CONFIG_HOME for config and store caches in a per-workspace $XDG_CACHE_HOME location, with walk-up project-config discovery.
 
 ### Tests & Tasks

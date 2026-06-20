@@ -29,7 +29,7 @@ const cli = new Command();
 cli
   .name('agent2linear')
   .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
-  .version('0.25.0')
+  .version('0.27.0')
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
   .option('--no-color', 'Disable emojis and colored output')
