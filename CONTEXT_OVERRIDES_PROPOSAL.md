@@ -226,7 +226,7 @@ or absent `when` (the top-level config) always matches — it is the catch-all.
 | `repo` | normalized `owner/name` of the origin remote | glob (`acme/web`, `acme/*`) |
 | `owner` | normalized owner/group path | glob (`acme`, `acme/platform`) |
 | `host` | normalized host | glob (`github.com`, `*.gitlab.com`) |
-| `path` | cwd (see §5.3) | gitignore-style glob |
+| `path` | the cwd as a **repo-root-relative** path (or the absolute cwd for `~/`/`/` patterns) — see §5.3 | root-anchored glob (gitignore tokens) |
 | `branch` | current branch | glob (`release/*`) |
 
 Identity matchers (`repo`/`owner`/`host`) are meaningful only when the repo has a
