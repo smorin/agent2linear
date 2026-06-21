@@ -36,7 +36,7 @@ remote-URL matching by normalizing identity to `host/owner/name`.
    - 5.3 [Path Anchoring](#53-path-anchoring)
    - 5.4 [Repo Identity Normalization](#54-repo-identity-normalization)
    - 5.5 [Resolution Algorithm](#55-resolution-algorithm)
-   - 5.6 [Specificity & Tie-Breaking](#56-specificity--tie-breaking)
+   - 5.6 [Precedence & Tie-Breaking](#56-precedence--tie-breaking)
 6. [Worked Examples](#6-worked-examples)
 7. [CLI & UX](#7-cli--ux)
 8. [Technical Implementation](#8-technical-implementation)
@@ -54,7 +54,7 @@ remote-URL matching by normalizing identity to `host/owner/name`.
 | U1 | **Monorepo routing** | In one repo, `cli/**` → team `cli-team`, `apps/web/**` → `web-team`, everything else → repo-wide `platform`. |
 | U2 | **Field inheritance** | A path rule overrides only `defaultTeam`; `defaultInitiative` still falls back to the repo-wide value. |
 | U3 | **Org-wide default (machine)** | Every repo under owner `acme` defaults to team `acme-eng`, set once globally — no per-repo edits, works for future repos. |
-| U4 | **Repo + subpath** | "In `acme/web`, under `apps/mobile/**`, default to `mobile`." Identity + path combined. |
+| U4 | **Repo + subpath** | "In `acme/web`, under `apps/mobile/**`, default to `mobile`." Combine a subpath rule with the repo's own config (or an identity matcher globally). |
 | U5 | **Branch-scoped** | On `release/*` branches, default initiative `hardening`. |
 | U6 | **Generic alias remap** | A generic alias `default` resolves to different team IDs in different subtrees. |
 | U7 | **Disk-location fallback** | Anything under `~/scratch/**` (no/irrelevant remote) → personal team. |
@@ -157,6 +157,8 @@ portably.
       "defaultTeam": "acme-eng"
     },
     {
+      // compound matcher = logical AND; precedence is governed by §5.6 (in global
+      // config this loses to acme/web's own repo config — see §6).
       "when": { "repo": "acme/web", "path": "apps/mobile/**" },
       "defaultTeam": "mobile"
     },
@@ -283,9 +285,12 @@ host. v1 consults **`origin` only** (forks: add an explicit `repo` rule).
        {when:{}, ...repoCfg top-level fields},         // repo catch-all
        ...repoCfg.overrides ]                          // repo overrides   (CONCATENATE)
 4. Keep rules whose `when` matches the context (AND across criteria).
-5. For EACH overridable field independently:
-     value = field from the highest-specificity matching rule that sets it (§5.6).
-     (the `aliases` block merges per entity type, then per alias key; most-specific wins.)
+5. For EACH overridable field independently, pick the value from the WINNING matching
+     rule that sets it, where "winning" is decided by, in order (§5.6):
+       (a) SCOPE  — repo-local beats global;
+       (b) SPECIFICITY within the scope;
+       (c) declaration order — later wins.
+     (the `aliases` block merges per entity type, then per alias key, by the same order.)
 6. apiKey resolves as today (env > repo > global); never from overrides.
 7. Explicit CLI flags override the resolved value.
 ```
@@ -293,23 +298,35 @@ host. v1 consults **`origin` only** (forks: add an explicit `repo` rule).
 Field-level merge (U2): a rule setting only `defaultTeam` leaves `defaultInitiative` to
 be resolved from less-specific rules.
 
-### 5.6 Specificity & Tie-Breaking
+### 5.6 Precedence & Tie-Breaking
 
-Each matching rule gets a specificity score; per field, the highest score wins. Ranking
-(most → least specific):
+Per field, the winning rule is chosen by this **lexicographic sort** (the first key
+decides; later keys only break ties):
 
-1. **Exact `repo`** (no wildcard) — strongest identity.
-2. **`repo` glob / `owner` / `host`** identity.
-3. **`path`** — finer = longer literal prefix, then fewer wildcard segments; absolute
-   and relative paths compared by matched-prefix length.
-4. **`branch`** presence.
-5. The **catch-all** (empty `when`) is lowest.
+1. **Scope (primary): repo-local beats global.** A rule in the repo's
+   `.agent2linear/config.json` always wins over any rule in the global config —
+   *regardless of specificity*. This matches Git/ESLint/Prettier/EditorConfig (locality
+   dominates), and it protects committed, shared repo config from being silently
+   overridden by a personal global file. Guidance: use **global** config for coarse,
+   cross-repo fallbacks (mostly identity); use **repo** config for authoritative,
+   fine-grained routing.
+2. **Specificity (within a scope)**, most → least specific:
+   1. **Exact `repo`** (no wildcard) — strongest identity.
+   2. **`repo` glob / `owner` / `host`** identity.
+   3. **`path`** — finer = **more leading literal (non-wildcard) path segments**, then
+      fewer wildcard segments. Specificity is counted in **path segments, never raw
+      string length**; relative and absolute `path`s are scored the same way (by segment
+      count), so an absolute pattern is not "more specific" merely for being a longer
+      string.
+   4. **`branch`** presence.
+   5. The **catch-all** (empty `when`) is lowest.
+   A compound `when` sums its criteria, so *within a scope* `repo` + `path` outranks
+   `owner` alone, which outranks a bare `path`.
+3. **Declaration order:** later-declared wins within the same scope and specificity.
 
-A compound `when` sums its criteria, so `repo` + `path` outranks `owner` alone, which
-outranks a bare `path`. Deterministic tie-breakers, in order: **repo-local layer beats
-global layer** → **later declaration wins** within a layer. Because resolution is
-score-based, reordering rules cannot change behavior except on exact ties (unlike
-CODEOWNERS' order-sensitive last-match).
+Because the winner is score-based (file order matters only as the final tie-break),
+reordering rules within a scope cannot change behavior except on exact ties — unlike
+CODEOWNERS' order-sensitive last-match.
 
 ---
 
@@ -336,21 +353,36 @@ CODEOWNERS' order-sensitive last-match).
 - From `packages/foo/`: both team and initiative come from the foo rule.
 - From repo root: catch-all `platform` / `q3-roadmap`.
 
-**Machine-wide identity (U3, U4, U7)** — global `~/.config/agent2linear/config.json`:
+**Machine-wide identity (U3, U7)** — global `~/.config/agent2linear/config.json` holds
+*coarse, cross-repo* fallbacks:
 
 ```jsonc
 {
   "overrides": [
-    { "when": { "owner": "acme" },                       "defaultTeam": "acme-eng" },
-    { "when": { "repo": "acme/web", "path": "apps/mobile/**" }, "defaultTeam": "mobile" },
-    { "when": { "path": "~/scratch/**" },                "defaultTeam": "personal" }
+    { "when": { "owner": "acme" },        "defaultTeam": "acme-eng" },
+    { "when": { "path": "~/scratch/**" }, "defaultTeam": "personal" }
   ]
 }
 ```
 
-Inside any `acme/*` checkout (any disk path, any machine) you get `acme-eng`; inside
-`acme/web` under `apps/mobile/` you get the more-specific `mobile`; under `~/scratch`
-you get `personal`. Global and repo overrides both apply (concatenated).
+**Repo + subpath (U4)** — fine-grained routing belongs in the repo's own
+`acme/web/.agent2linear/config.json`, where it is committed, shared, and — per §5.6 —
+authoritative over the global fallback:
+
+```jsonc
+{
+  "defaultTeam": "web-platform",
+  "overrides": [
+    { "when": { "path": "apps/mobile/**" }, "defaultTeam": "mobile" }
+  ]
+}
+```
+
+In any `acme/*` checkout with **no** repo config you get `acme-eng` (global fallback). In
+`acme/web` you get the repo's `web-platform` — which beats the global `owner: acme` rule
+because **repo scope wins** (§5.6) — and under `apps/mobile/` the more-specific repo rule
+gives `mobile`. Under `~/scratch` you get `personal`. Global and repo overrides are both
+considered (concatenated), then sorted per §5.6.
 
 ---
 
