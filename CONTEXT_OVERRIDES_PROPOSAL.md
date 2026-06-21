@@ -163,7 +163,7 @@ portably.
     {
       "when": { "path": "cli/**" },
       "defaultTeam": "cli-team",
-      "aliases": { "default": "cli-team" }      // per-rule alias override
+      "aliases": { "teams": { "default": "team_cli123" } }  // per-rule alias override (namespaced by entity type; value is a Linear ID)
     },
     {
       "when": { "branch": "release/*" },
@@ -177,8 +177,12 @@ portably.
 }
 ```
 
-- A rule's value fields are **the same overridable keys as top-level config** (team,
-  initiative, project, templates, autoAssignLead) **plus an `aliases` map**.
+- A rule's value fields are **the same overridable keys that `config.json` supports
+  today** (team, initiative, project, templates, autoAssignLead) **plus an `aliases`
+  block**. Aliases are *not* a top-level `config.json` field today (they live in
+  `aliases.json`); inside a rule they are **namespaced by entity type**, matching that
+  store's shape — `{ teams: { <alias>: <linearId> }, initiatives: { … }, … }` — where each
+  value is a Linear ID (`alias → ID`), exactly as `resolveAlias(entityType, …)` expects.
 - **`apiKey` is NOT overridable** in a rule (security; no use case).
 - `overrides` is optional and additive. Absent ⇒ behavior identical to today.
 
@@ -197,7 +201,11 @@ export type OverridableConfig = Pick<Config,
   | 'defaultTeam' | 'defaultInitiative' | 'defaultProject'
   | 'defaultIssueTemplate' | 'defaultProjectTemplate' | 'defaultMilestoneTemplate'
   | 'defaultAutoAssignLead'
-> & { aliases?: Record<string, string> };
+> & {
+  // `Aliases` is the existing namespaced map ({ teams, initiatives, ... }),
+  // each entity type holding an `AliasMap` of `alias -> Linear ID`.
+  aliases?: Partial<Aliases>;
+};
 
 export interface ConfigOverride extends OverridableConfig {
   when: WhenClause;
@@ -277,7 +285,7 @@ host. v1 consults **`origin` only** (forks: add an explicit `repo` rule).
 4. Keep rules whose `when` matches the context (AND across criteria).
 5. For EACH overridable field independently:
      value = field from the highest-specificity matching rule that sets it (§5.6).
-     (aliases map merges key-by-key, most-specific key wins.)
+     (the `aliases` block merges per entity type, then per alias key; most-specific wins.)
 6. apiKey resolves as today (env > repo > global); never from overrides.
 7. Explicit CLI flags override the resolved value.
 ```
@@ -315,7 +323,7 @@ CODEOWNERS' order-sensitive last-match).
   "defaultInitiative": "q3-roadmap",
   "overrides": [
     { "when": { "path": "cli/**" },      "defaultTeam": "cli-team",
-                                          "aliases": { "default": "cli-team" } },
+                                          "aliases": { "teams": { "default": "team_cli123" } } },
     { "when": { "path": "apps/web/**" }, "defaultTeam": "web-team" },
     { "when": { "path": "packages/foo/**" }, "defaultTeam": "foo-team",
                                               "defaultInitiative": "foo-initiative" }
@@ -410,7 +418,8 @@ configs that don't use overrides pay nothing.
 - Overrides **never** touch `apiKey` or which workspace is contacted — only *defaults*.
 - A repo-local `config.json` is **committed and therefore trusted**; it can already set
   `defaultTeam` today, so per-path defaults are not a new trust boundary. The new wrinkle
-  is `aliases` overrides remapping a generic alias to an arbitrary ID — still resolved
+  is an `aliases` override remapping a generic team alias (e.g. `teams.default`) to an
+  arbitrary ID — still resolved
   against *your* workspace via *your* key, and still just a default you can override with
   a flag. Acceptable; called out so it's a conscious decision.
 - `config explain` makes any surprising routing visible, mitigating "silently sent to the
