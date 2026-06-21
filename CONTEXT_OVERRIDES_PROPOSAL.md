@@ -13,8 +13,10 @@ way to vary defaults *by where you are* or *by which repo you're in*.
 **Proposal:** Add an `overrides` array to `config.json` (at both global and repo scope).
 Each override is a `{ "when": { … }, …config }` rule: when the current **context**
 (filesystem location, repo identity, branch) matches the `when` clause, that rule's
-config values apply. Resolution is **field-level, most-specific-wins**, and overrides
-from the global and repo layers are **concatenated**. The design follows the conventions
+config values apply. Resolution is **field-level**, with **repo scope beating global
+scope** and most-specific-wins **within a scope**; overrides from the global and repo
+layers are **concatenated** and then sorted by precedence (§5.6). The design follows the
+conventions
 proven by ESLint/Prettier (`overrides[]`) and Git's conditional includes
 (`gitdir` / `hasconfig:remote.*.url` / `onbranch`), while improving on Git's
 remote-URL matching by normalizing identity to `host/owner/name`.
@@ -88,7 +90,7 @@ There is **no** mechanism to vary any of these by directory, repo, or branch.
 | **ESLint / Prettier** | `overrides: [{ files:[glob], …settings }]`, later entry wins, merged | The **`overrides[]` name and shape** (array of conditional config blocks). |
 | **CODEOWNERS** | path glob → team; gitignore-style globs | Domain fit (path → team); gitignore glob syntax. |
 | **.gitignore** | `*`, `**`, leading `/` anchor, trailing `/`, `!` negation | **Glob semantics** for `path`. |
-| **EditorConfig** | cascading glob sections, nearer wins, properties merge | Field-level merge + most-specific-wins. |
+| **EditorConfig** | cascading glob sections, nearer wins, properties merge | Field-level (per-property) merge; closer/locality wins. |
 | **Git `includeIf`** | `gitdir:` (path), `hasconfig:remote.*.url:` (identity), `onbranch:` (branch) | The **matcher families**; `**`/trailing-`/` conventions; the identity-vs-location lesson. |
 | **CI configs** (Actions `if:`, GitLab `rules:`) | conditional `when` clauses | The **`when` keyword** for the matcher block. |
 
