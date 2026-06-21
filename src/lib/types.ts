@@ -23,6 +23,39 @@ export interface ConfigLocation {
   path?: string;
 }
 
+/**
+ * Secrets registry entry: a named workspace holding/pointing at one Linear key.
+ * Lives only in the secrets registry (workspaces.json / workspaces.local.json),
+ * never in committable config.
+ */
+export interface Workspace {
+  apiKey: string;
+}
+
+/**
+ * How the active workspace was selected / how its key was sourced.
+ * (Phase 4 adds 'env-file'; Phases 2/3 add 'env', 'project', 'auto-detect', 'default'.)
+ */
+export type WorkspaceSource =
+  | 'flag'
+  | 'env'
+  | 'env-file'
+  | 'project'
+  | 'auto-detect'
+  | 'default'
+  | 'legacy';
+
+/**
+ * The resolved active workspace: which key is active, how the workspace was
+ * selected, and the named workspace/profile (when applicable).
+ */
+export interface WorkspaceResolution {
+  key: string;
+  name?: string;
+  source: WorkspaceSource;
+  profile?: string;
+}
+
 export interface ResolvedConfig extends Config {
   locations: {
     apiKey: ConfigLocation;

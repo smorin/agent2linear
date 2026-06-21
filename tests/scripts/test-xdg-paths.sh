@@ -115,6 +115,38 @@ echo "$GET_OUTPUT" | grep -q "999" \
   && echo "PASS: nested 'config get' walked up and read project value (999)" \
   || fail "nested 'config get' did not read project value; got: $GET_OUTPUT"
 
+# --- Step 5: workspace registry + offline resolution (multi-workspace P1) -
+# Register a project-scoped workspace by piping the key via stdin (--api-key -),
+# then confirm:
+#   a) the gitignored secrets file is written under .agent2linear/
+#   b) a .gitignore entry is added for the secrets file
+#   c) `workspace current --workspace <name>` reports the right name + source:flag
+# All offline — no LINEAR_API_KEY, no network.
+WS_PROJ="$ROOT/wsproj"
+mkdir -p "$WS_PROJ"
+
+(
+  cd "$WS_PROJ"
+  echo "lin_api_acmekey" | run_cli workspace add acme --api-key - --project >/dev/null 2>&1
+) || fail "'workspace add' (project, stdin key) exited non-zero"
+
+WS_SECRETS_FILE="$WS_PROJ/.agent2linear/workspaces.local.json"
+test -f "$WS_SECRETS_FILE" \
+  && echo "PASS: project workspace secrets written ($WS_SECRETS_FILE)" \
+  || fail "project workspace secrets not written to $WS_SECRETS_FILE"
+
+WS_GITIGNORE="$WS_PROJ/.agent2linear/.gitignore"
+test -f "$WS_GITIGNORE" && grep -q "workspaces.local.json" "$WS_GITIGNORE" \
+  && echo "PASS: .gitignore refreshed for project secrets file" \
+  || fail "secrets file not added to .gitignore ($WS_GITIGNORE)"
+
+# Resolve the active workspace offline; must report name acme + source flag.
+WS_CURRENT="$(cd "$WS_PROJ" && run_cli --workspace acme workspace current 2>&1)"
+echo "$WS_CURRENT" | grep -q "acme" \
+  && echo "$WS_CURRENT" | grep -qi "source:.*flag" \
+  && echo "PASS: 'workspace current --workspace acme' reports acme + source flag (offline)" \
+  || fail "'workspace current' did not report acme/source flag; got: $WS_CURRENT"
+
 # --- Hermeticity assertion: real ~/.config was never touched -------------
 # HOME is overridden to temp, so the user's real config dir cannot have been
 # created or modified by this run. (Informational: the trap removes $ROOT.)

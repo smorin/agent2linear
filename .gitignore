@@ -34,3 +34,6 @@ coverage/
 
 # Generated cleanup scripts
 cleanup-*.sh
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/

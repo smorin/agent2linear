@@ -21,8 +21,11 @@ import { registerTeamsCommands } from './commands/teams/register.js';
 import { registerTemplatesCommands } from './commands/templates/register.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { registerWorkflowStatesCommands } from './commands/workflow-states/register.js';
+import { registerWorkspaceCommands } from './commands/workspace/register.js';
+import { setInvocationContext } from './lib/invocation-context.js';
 import { setLogLevel } from './lib/logger.js';
 import { setNoColor } from './lib/output.js';
+import { readStdinKey } from './lib/workspace-resolver.js';
 
 const cli = new Command();
 
@@ -33,11 +36,21 @@ cli
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
   .option('--no-color', 'Disable emojis and colored output')
-  .hook('preAction', (thisCommand) => {
+  .option('--workspace <name>', 'Select workspace/profile for this invocation')
+  .option('--api-key <key>', 'Use this Linear API key (use "-" to read from stdin)')
+  .hook('preAction', async (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.quiet) setLogLevel('quiet');
     if (opts.verbose) setLogLevel('verbose');
     if (opts.color === false) setNoColor(true);
+
+    // Resolve `--api-key -` from stdin eagerly so the resolver only ever sees a
+    // literal string and getApiKey() can stay synchronous.
+    let apiKey: string | undefined = opts.apiKey;
+    if (apiKey === '-') {
+      apiKey = await readStdinKey();
+    }
+    setInvocationContext({ workspace: opts.workspace, apiKey });
   })
   .action(() => {
     cli.help();
@@ -61,6 +74,7 @@ registerColorsCommands(cli);
 registerCacheCommands(cli);
 registerIssueCommands(cli);
 registerCyclesCommands(cli);
+registerWorkspaceCommands(cli);
 
 // Stub command groups (future releases)
 const issues = cli

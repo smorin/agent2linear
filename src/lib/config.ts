@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
 import type { Config, ResolvedConfig } from './types.js';
+import { resolveActiveWorkspace, resolveWorkspaceKey } from './workspace-resolver.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -210,11 +211,16 @@ export function getConfig(): ResolvedConfig {
 }
 
 /**
- * Get API key from config or environment
+ * Get API key from the resolved active workspace.
+ *
+ * Routes through the workspace resolver chokepoint so multi-workspace selection
+ * (--workspace / --api-key, secrets registry) funnels through one place. With no
+ * workspaces/profiles configured and no explicit selection, this returns exactly
+ * today's value (env LINEAR_API_KEY, else config-file apiKey) — byte-identical.
  */
 export function getApiKey(): string | undefined {
-  const config = getConfig();
-  return config.apiKey;
+  const { key } = resolveWorkspaceKey(resolveActiveWorkspace().name);
+  return key || undefined;
 }
 
 /**
