@@ -103,12 +103,14 @@ There is **no** mechanism to vary any of these by directory, repo, or branch.
 - `onbranch:` — matches the **current branch** name (same glob rules).
 
 **Where we deliberately deviate:** Git auto-prepends `**/` to unanchored `gitdir`
-patterns, which is surprising. We instead use **gitignore anchoring** (familiar from
-`.gitignore`/CODEOWNERS): a leading `/` anchors to the repo root, otherwise the pattern
-matches at any depth — but see §5.3, anchoring is driven by whether the rule is
-repo-anchored. We also **improve on `hasconfig:remote.*.url`**: Git matches the raw URL
-string, so SSH and HTTPS forms need two patterns; we normalize to `host/owner/name`, so
-one `owner: acme` rule covers both.
+patterns (so `foo/bar` matches at any depth), which is surprising. We borrow gitignore's
+*wildcard tokens* (`*`, `**`, trailing `/`, `!`) but **not** its match-at-any-depth
+default: a relative `path` is matched against the repo-root-relative path and is therefore
+**anchored at the repo root** (use `**` explicitly for any-depth) — closer to CODEOWNERS'
+leading-slash patterns or ESLint `files` globs. Absolute patterns (`~/…`, `/…`) are disk
+matches (see §5.3). We also **improve on `hasconfig:remote.*.url`**: Git matches the raw
+URL string, so SSH and HTTPS forms need two patterns; we normalize to `host/owner/name`,
+so one `owner: acme` rule covers both.
 
 Sources: [git-config docs](https://git-scm.com/docs/git-config) ·
 [onbranch commit 07b2c0e](https://github.com/git/git/commit/07b2c0eacac91c8db1a371667ed621cff443cf0d) ·
@@ -236,8 +238,12 @@ Because the repo root is resolved at runtime, a **relative `path` works identica
 global and repo-local files**. Combined with an identity matcher (U4), the rule becomes
 *portable* — identity makes it follow the repo, the relative path refines within it.
 
-Glob conventions (gitignore-style): `*` (one segment), `**` (multiple segments),
-trailing `/` ≡ `/**`, leading `/` anchors to the repo root, `!` negation. We do **not**
+Glob conventions: we use gitignore's wildcard *tokens* — `*` (one path segment), `**`
+(zero or more segments), trailing `/` ≡ `/**`, `!` (negation) — but a **relative** pattern
+is **anchored at the repo root** (matched against `relative(repoRoot, cwd)`), so `cli/**`
+means "under `<repoRoot>/cli`," **not** "any `cli/` at any depth." Use a leading `**/`
+explicitly for any-depth matching (e.g. `**/cli/**`). A leading `~/` or `/` switches the
+pattern to an **absolute disk match** (per the first bullet above). We do **not**
 auto-prepend `**/` (Git's surprising behavior).
 
 ### 5.4 Repo Identity Normalization
