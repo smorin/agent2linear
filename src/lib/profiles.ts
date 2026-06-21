@@ -18,6 +18,7 @@ import {
   readProjectConfig,
   writeConfigForScope,
 } from './config.js';
+import { parseRemoteOwner, readGitOriginUrl } from './git-remote.js';
 import type { Scope } from './scope.js';
 import type { Config, Profile } from './types.js';
 
@@ -67,6 +68,53 @@ export function saveProfile(scope: Scope, name: string, profile: Profile): void 
   const config = readConfigForScope(scope);
   config.profiles = { ...(config.profiles ?? {}), [name]: profile };
   writeConfigForScope(scope, config);
+}
+
+/**
+ * Auto-detect the active profile from the repo's `origin` remote owner (Phase 3).
+ *
+ * Returns `{ name, exclude }` for the matched profile, or null when nothing
+ * matches. A **negative match wins** (R9a): if the owner matches an excluded
+ * profile (`linear: false` on the profile or its `match`), that exclusion is
+ * returned even if another profile positively matches the same owner.
+ *
+ * Short-circuits to null (without invoking the git provider) when no profile has
+ * `match.gitRemoteOwner` rules — so the simple/no-detection case never spawns git.
+ * `remoteUrlProvider` is injectable so tests never shell out.
+ */
+export function detectProfile(
+  profiles: Record<string, Profile>,
+  remoteUrlProvider: (startDir?: string) => string | null = readGitOriginUrl
+): { name: string; exclude: boolean } | null {
+  const matchable = Object.entries(profiles).filter(
+    ([, p]) => p.match?.gitRemoteOwner && p.match.gitRemoteOwner.length > 0
+  );
+  if (matchable.length === 0) {
+    return null;
+  }
+
+  const parsed = parseRemoteOwner(remoteUrlProvider());
+  if (!parsed) {
+    return null;
+  }
+  const owner = parsed.owner.toLowerCase();
+
+  let positive: string | null = null;
+  for (const [name, profile] of matchable) {
+    const owners = (profile.match?.gitRemoteOwner ?? []).map((o) => o.toLowerCase());
+    if (!owners.includes(owner)) {
+      continue;
+    }
+    const excluded = profile.linear === false || profile.match?.linear === false;
+    if (excluded) {
+      return { name, exclude: true }; // negative match wins immediately
+    }
+    if (positive === null) {
+      positive = name;
+    }
+  }
+
+  return positive ? { name: positive, exclude: false } : null;
 }
 
 /**

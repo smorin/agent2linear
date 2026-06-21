@@ -24,8 +24,8 @@
 
 import { readGlobalConfig, readProjectConfig } from './config.js';
 import { getInvocationContext } from './invocation-context.js';
-import { loadProfiles } from './profiles.js';
-import type { WorkspaceResolution, WorkspaceSource } from './types.js';
+import { detectProfile, loadProfiles } from './profiles.js';
+import type { Profile, WorkspaceResolution, WorkspaceSource } from './types.js';
 import { loadWorkspaces } from './workspaces.js';
 
 /**
@@ -50,27 +50,54 @@ function legacyKey(): { key: string; source: WorkspaceSource } | null {
 }
 
 /**
- * The per-invocation selection, decided once by walking the R8 precedence chain
- * (without sourcing a key). Both `resolveActiveProfile()` and
- * `resolveActiveWorkspace()` build on this.
+ * The per-invocation decision, computed once by walking the R8 precedence chain
+ * AND applying the Phase-3 gate (exclusion + no-match policy) — without sourcing a
+ * key. Both `resolveActiveProfile()` and `resolveActiveWorkspace()` build on this.
  *
- * - `apikey`: bare `--api-key` (ad-hoc workspace, no profile scope).
- * - `named`: a workspace/profile name chosen by flag/env/project/default, with
- *   the selection source and (when it names a profile) the profile name.
+ * - `apikey`: bare `--api-key` (ad-hoc workspace, forces through everything).
+ * - `named`: a workspace/profile chosen by flag/env/project/auto-detect/default.
+ * - `denied`: resolution REFUSED (exclusion, or the no-match gate).
  * - `legacy`: nothing selected — fall back to the legacy single key.
  */
-type Selection =
+type Decision =
   | { kind: 'apikey'; apiKey: string }
   | { kind: 'named'; name: string; source: WorkspaceSource; profile?: string }
+  | { kind: 'denied'; reason: string; hint: string }
   | { kind: 'legacy' };
 
-function resolveSelection(): Selection {
+const FORCE_HINT = 'Pass --workspace <name> or --api-key to override.';
+
+function isProfileName(profiles: Record<string, Profile>, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(profiles, name);
+}
+
+/**
+ * Build a `named` decision for a config/env/default selection, denying first if
+ * the named profile is excluded (`linear: false`). Explicit `--workspace` does
+ * NOT go through here — it forces through exclusion.
+ */
+function namedOrExcluded(
+  name: string,
+  source: WorkspaceSource,
+  profiles: Record<string, Profile>
+): Decision {
+  const profile = profiles[name];
+  if (profile && profile.linear === false) {
+    return {
+      kind: 'denied',
+      reason: `Profile '${name}' is excluded from Linear (linear: false).`,
+      hint: FORCE_HINT,
+    };
+  }
+  return { kind: 'named', name, source, profile: isProfileName(profiles, name) ? name : undefined };
+}
+
+function resolveDecision(): Decision {
   const ctx = getInvocationContext();
   const profiles = loadProfiles();
-  const isProfile = (n: string): boolean =>
-    Object.prototype.hasOwnProperty.call(profiles, n);
 
-  // 1. Explicit per-invocation selection (highest precedence).
+  // 1. Explicit per-invocation selection (highest precedence; forces through
+  //    exclusion AND the no-match gate).
   if (ctx.apiKey !== undefined && ctx.workspace === undefined) {
     return { kind: 'apikey', apiKey: ctx.apiKey };
   }
@@ -79,54 +106,73 @@ function resolveSelection(): Selection {
       kind: 'named',
       name: ctx.workspace,
       source: 'flag',
-      profile: isProfile(ctx.workspace) ? ctx.workspace : undefined,
+      profile: isProfileName(profiles, ctx.workspace) ? ctx.workspace : undefined,
+    };
+  }
+
+  // Repo-level exclusion: `.agent2linear/config.json` `linear: false`.
+  const project = readProjectConfig();
+  if (project.linear === false) {
+    return {
+      kind: 'denied',
+      reason: 'This repository is excluded from Linear (linear: false).',
+      hint: FORCE_HINT,
     };
   }
 
   // 2. AGENT2LINEAR_WORKSPACE env declarator.
   const envWs = process.env.AGENT2LINEAR_WORKSPACE;
   if (envWs) {
-    return {
-      kind: 'named',
-      name: envWs,
-      source: 'env',
-      profile: isProfile(envWs) ? envWs : undefined,
-    };
+    return namedOrExcluded(envWs, 'env', profiles);
   }
 
   // 3. Project config `profile` / `workspace` (nearest .agent2linear/config.json).
-  const project = readProjectConfig();
   if (project.profile) {
-    return {
-      kind: 'named',
-      name: project.profile,
-      source: 'project',
-      profile: isProfile(project.profile) ? project.profile : undefined,
-    };
+    return namedOrExcluded(project.profile, 'project', profiles);
   }
   if (project.workspace) {
+    return namedOrExcluded(project.workspace, 'project', profiles);
+  }
+
+  // 4. Profile auto-detection via git-remote owner (negative match wins).
+  const detected = detectProfile(profiles);
+  if (detected) {
+    if (detected.exclude) {
+      return {
+        kind: 'denied',
+        reason: `The detected profile '${detected.name}' is excluded from Linear.`,
+        hint: FORCE_HINT,
+      };
+    }
+    return { kind: 'named', name: detected.name, source: 'auto-detect', profile: detected.name };
+  }
+
+  // 5. No-match gate (R9b): nothing matched and nothing explicit.
+  const policy = readGlobalConfig().noMatchPolicy ?? 'deny';
+  const profileCount = Object.keys(profiles).length;
+  if (policy === 'match-only') {
     return {
-      kind: 'named',
-      name: project.workspace,
-      source: 'project',
-      profile: isProfile(project.workspace) ? project.workspace : undefined,
+      kind: 'denied',
+      reason: 'No workspace resolved for this repository (noMatchPolicy: match-only).',
+      hint: 'Pass --workspace <name>, set a repo profile/workspace, or add a match rule.',
+    };
+  }
+  if (policy === 'deny' && profileCount >= 2) {
+    return {
+      kind: 'denied',
+      reason: 'No workspace resolved for this repository and multiple profiles exist.',
+      hint: 'Pass --workspace <name>, set a repo profile/workspace, or add a match rule.',
     };
   }
 
-  // 4. [Phase 3 gap] profile auto-detection via git-remote owner.
-
-  // 5. Global defaultProfile.
+  // 6. Global defaultProfile (reached under `default`, or `deny` with <2 profiles —
+  //    the simple/single-workspace case, which never denies).
   const defaultProfile = readGlobalConfig().defaultProfile;
   if (defaultProfile) {
-    return {
-      kind: 'named',
-      name: defaultProfile,
-      source: 'default',
-      profile: isProfile(defaultProfile) ? defaultProfile : undefined,
-    };
+    return namedOrExcluded(defaultProfile, 'default', profiles);
   }
 
-  // 6. Legacy single key.
+  // 7. Legacy single key.
   return { kind: 'legacy' };
 }
 
@@ -143,33 +189,37 @@ function workspaceNameFor(name: string): string {
 }
 
 /**
- * Resolve the active PROFILE name only (no key sourcing). Used by getConfig() for
- * its merge. Returns undefined for the ad-hoc, bare-workspace, and legacy paths.
+ * Resolve the active PROFILE name only (no key sourcing, never denies). Used by
+ * getConfig() for its merge — a denied/legacy/ad-hoc decision contributes no
+ * profile scope, so getConfig() still returns a working config in a denied repo.
  *
- * MUST NOT call getConfig() (would recurse) — resolveSelection() reads raw config.
+ * MUST NOT call getConfig() (would recurse) — resolveDecision() reads raw config.
  */
 export function resolveActiveProfile(): string | undefined {
-  const selection = resolveSelection();
-  return selection.kind === 'named' ? selection.profile : undefined;
+  const decision = resolveDecision();
+  return decision.kind === 'named' ? decision.profile : undefined;
 }
 
 /**
- * Resolve the active workspace selection (which workspace + how it was chosen +
- * the sourced key). The `source` describes how the workspace was SELECTED; the
- * key itself is sourced via `resolveWorkspaceKey()`.
+ * Resolve the active workspace: which workspace + how it was selected + the
+ * sourced key, OR a `denied` resolution when the gate refused to pick one.
  */
 export function resolveActiveWorkspace(): WorkspaceResolution {
-  const selection = resolveSelection();
+  const decision = resolveDecision();
 
-  // Bare `--api-key` with no `--workspace` = ad-hoc workspace (no profile scope).
-  if (selection.kind === 'apikey') {
-    return { key: selection.apiKey, source: 'flag' };
+  if (decision.kind === 'denied') {
+    return { key: '', source: 'legacy', denied: { reason: decision.reason, hint: decision.hint } };
   }
 
-  if (selection.kind === 'named') {
-    const wsName = workspaceNameFor(selection.name);
+  // Bare `--api-key` with no `--workspace` = ad-hoc workspace (no profile scope).
+  if (decision.kind === 'apikey') {
+    return { key: decision.apiKey, source: 'flag' };
+  }
+
+  if (decision.kind === 'named') {
+    const wsName = workspaceNameFor(decision.name);
     const { key } = resolveWorkspaceKey(wsName);
-    return { key, name: wsName, source: selection.source, profile: selection.profile };
+    return { key, name: wsName, source: decision.source, profile: decision.profile };
   }
 
   // Legacy single-key passthrough — byte-identical to today's getApiKey().

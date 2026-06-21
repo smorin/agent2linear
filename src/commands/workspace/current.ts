@@ -14,6 +14,23 @@ interface CurrentWorkspaceOptions {
 export function currentWorkspaceCommand(options: CurrentWorkspaceOptions = {}) {
   try {
     const resolution = resolveActiveWorkspace();
+
+    // Phase 3: resolution refused to pick a workspace (exclusion / no-match gate).
+    if (resolution.denied) {
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            { denied: true, reason: resolution.denied.reason, hint: resolution.denied.hint },
+            null,
+            2
+          )
+        );
+      } else {
+        showError(resolution.denied.reason, resolution.denied.hint);
+      }
+      process.exit(1);
+    }
+
     const hasKey = resolution.key !== '';
 
     if (options.json) {

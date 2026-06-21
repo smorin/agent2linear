@@ -195,6 +195,95 @@ describe('resolveActiveProfile - selection precedence (R8, Phase 2)', () => {
   });
 });
 
+describe('resolveActiveWorkspace - no-match gate + exclusion (R9, Phase 3)', () => {
+  // All cases use profiles WITHOUT match rules, so detectProfile short-circuits
+  // and never shells out to git — the gate is exercised hermetically.
+
+  it('deny (default) with >=2 profiles and nothing matched -> denied', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      profiles: { acme: { workspace: 'acme' }, beta: { workspace: 'beta' } },
+    });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeDefined();
+    expect(res.key).toBe('');
+    // getConfig() must still work in a denied repo: no profile scope.
+    expect(resolveActiveProfile()).toBeUndefined();
+  });
+
+  it('deny with a single profile does NOT deny (uses defaultProfile)', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'acme' } },
+    });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.name).toBe('acme');
+    expect(res.source).toBe('default');
+  });
+
+  it('default policy falls back to defaultProfile even with >=2 profiles', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'default',
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'acme' }, beta: { workspace: 'beta' } },
+    });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.profile).toBe('acme');
+    expect(res.source).toBe('default');
+  });
+
+  it('match-only denies even with a single profile + defaultProfile', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'match-only',
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'acme' } },
+    });
+    expect(resolveActiveWorkspace().denied).toBeDefined();
+  });
+
+  it('repo linear:false denies', () => {
+    writeProjectConfigJson(workdir, { linear: false });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeDefined();
+    expect(res.denied?.reason).toMatch(/excluded/i);
+  });
+
+  it('an excluded profile selected via project config denies', () => {
+    writeGlobalConfigJson(xdgConfig, { profiles: { acme: { workspace: 'acme', linear: false } } });
+    writeProjectConfigJson(workdir, { profile: 'acme' });
+    expect(resolveActiveWorkspace().denied).toBeDefined();
+  });
+
+  it('explicit --workspace forces through an excluded profile', () => {
+    writeGlobalConfigJson(xdgConfig, { profiles: { acme: { workspace: 'acme', linear: false } } });
+    writeProjectConfigJson(workdir, { profile: 'acme' });
+    setInvocationContext({ workspace: 'acme' });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.source).toBe('flag');
+    expect(res.profile).toBe('acme');
+  });
+
+  it('explicit --workspace forces through the no-match gate (deny, >=2 profiles)', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      profiles: { acme: { workspace: 'acme' }, beta: { workspace: 'beta' } },
+    });
+    setInvocationContext({ workspace: 'acme' });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.source).toBe('flag');
+  });
+
+  it('legacy single-key path never denies (zero profiles)', () => {
+    vi.stubEnv('LINEAR_API_KEY', 'lin_api_envkey');
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.key).toBe('lin_api_envkey');
+    expect(res.source).toBe('env');
+  });
+});
+
 /** Helper: write a global config.json apiKey under a stubbed XDG config dir. */
 function saveGlobalApiKey(xdgDir: string, apiKey: string): void {
   const dir = join(xdgDir, 'agent2linear');

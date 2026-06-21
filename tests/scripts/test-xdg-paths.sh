@@ -168,6 +168,55 @@ echo "$PROF_GET" | grep -q "team_offline" \
   && echo "PASS: 'config get defaultTeam' resolved from profile (source: profile, offline)" \
   || fail "'config get defaultTeam' did not resolve from profile; got: $PROF_GET"
 
+# --- Step 7: git-remote auto-detection + no-match deny (multi-workspace P3) -
+# Add a match rule to the acme profile and a second profile so >=2 exist, then:
+#   a) a repo whose origin owner matches auto-resolves (source: auto-detect)
+#   b) an unrelated repo under the default deny policy REFUSES (non-zero exit)
+# Uses real `git init` + `git remote add origin`; still offline (no Linear calls).
+if command -v git >/dev/null 2>&1; then
+  run_cli profile match add acme --git-remote-owner acme-co --global >/dev/null 2>&1 \
+    || fail "'profile match add' exited non-zero"
+  run_cli profile add beta --workspace beta --global >/dev/null 2>&1 \
+    || fail "'profile add beta' exited non-zero"
+
+  # (a) matched repo -> auto-detect
+  GITREPO_MATCH="$ROOT/gitrepo-acme"
+  mkdir -p "$GITREPO_MATCH"
+  ( cd "$GITREPO_MATCH" && git init -q && git remote add origin git@github.com:acme-co/widgets.git )
+  MATCH_OUT="$(cd "$GITREPO_MATCH" && run_cli workspace current 2>&1)"
+  echo "$MATCH_OUT" | grep -q "acme" \
+    && echo "$MATCH_OUT" | grep -qi "auto-detect" \
+    && echo "PASS: matching origin owner auto-resolves (source: auto-detect)" \
+    || fail "auto-detect did not resolve acme; got: $MATCH_OUT"
+
+  # (b) unmatched repo under deny -> refuse with non-zero exit
+  GITREPO_NOMATCH="$ROOT/gitrepo-other"
+  mkdir -p "$GITREPO_NOMATCH"
+  ( cd "$GITREPO_NOMATCH" && git init -q && git remote add origin git@github.com:unrelated-org/repo.git )
+  if NOMATCH_OUT="$(cd "$GITREPO_NOMATCH" && run_cli workspace current 2>&1)"; then
+    NOMATCH_EXIT=0
+  else
+    NOMATCH_EXIT=$?
+  fi
+  { [ "$NOMATCH_EXIT" -ne 0 ] && echo "$NOMATCH_OUT" | grep -qi "no workspace resolved"; } \
+    && echo "PASS: unmatched repo under deny refuses with non-zero exit" \
+    || fail "unmatched deny did not refuse (exit=$NOMATCH_EXIT); got: $NOMATCH_OUT"
+else
+  echo "SKIP: git not available — skipping auto-detection step"
+fi
+
+# --- Step 8: regression — `profile add --workspace` persists the pointer ---
+# The program-level --workspace global SHADOWS the subcommand option, so the
+# profile's workspace pointer is sourced from the invocation context. This guards
+# against the pointer being silently dropped (which left auto-detected profiles
+# with no key to source). Runs the real binary, so it exercises the actual
+# Commander parsing where the original bug lived.
+run_cli profile add regress --workspace regress-ws-123 --global >/dev/null 2>&1 \
+  || fail "'profile add --workspace' exited non-zero"
+grep -q 'regress-ws-123' "$XDG_CONFIG_FILE" \
+  && echo "PASS: 'profile add --workspace' persisted the workspace pointer (regression)" \
+  || fail "profile add dropped the --workspace pointer; not found in $XDG_CONFIG_FILE"
+
 # --- Hermeticity assertion: real ~/.config was never touched -------------
 # HOME is overridden to temp, so the user's real config dir cannot have been
 # created or modified by this run. (Informational: the trap removes $ROOT.)

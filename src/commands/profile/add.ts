@@ -1,10 +1,10 @@
+import { getInvocationContext } from '../../lib/invocation-context.js';
 import { showError, showSuccess } from '../../lib/output.js';
 import { loadProfiles, saveProfile } from '../../lib/profiles.js';
 import { getScopeInfo } from '../../lib/scope.js';
 import type { Profile } from '../../lib/types.js';
 
 interface AddProfileOptions {
-  workspace?: string;
   defaultTeam?: string;
   defaultInitiative?: string;
   global?: boolean;
@@ -18,6 +18,10 @@ interface AddProfileOptions {
  * that consumes them — `profile add` never contacts Linear, so it stays safe for
  * scripting and offline tests. A profile points at a workspace by NAME (the key
  * lives in the secrets registry), keeping config commit-safe.
+ *
+ * The target workspace comes from the PROGRAM-LEVEL `--workspace` global (which
+ * shadows any same-named subcommand option), read via the invocation context —
+ * mirroring how `workspace add` reads the global `--api-key`.
  */
 export function addProfileCommand(name: string, options: AddProfileOptions = {}): void {
   try {
@@ -31,9 +35,10 @@ export function addProfileCommand(name: string, options: AddProfileOptions = {})
     }
 
     const { scope, label: scopeLabel } = getScopeInfo(options);
+    const workspace = getInvocationContext().workspace;
 
     const profile: Profile = {};
-    if (options.workspace) profile.workspace = options.workspace;
+    if (workspace) profile.workspace = workspace;
     if (options.defaultTeam) profile.defaultTeam = options.defaultTeam;
     if (options.defaultInitiative) profile.defaultInitiative = options.defaultInitiative;
 

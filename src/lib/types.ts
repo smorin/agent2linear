@@ -87,6 +87,13 @@ export interface WorkspaceResolution {
   name?: string;
   source: WorkspaceSource;
   profile?: string;
+  /**
+   * Set when resolution REFUSED to pick a workspace (Phase 3): repo/profile
+   * exclusion, or the no-match gate under `noMatchPolicy`. When present, callers
+   * must not act — `getApiKey()` throws and `workspace current` exits non-zero.
+   * `key` is `''` and `source` is unused in this case.
+   */
+  denied?: { reason: string; hint: string };
 }
 
 export interface ResolvedConfig extends Config {
@@ -107,6 +114,7 @@ export interface ResolvedConfig extends Config {
     enableBatchFetching: ConfigLocation;
     prewarmCacheOnCreate: ConfigLocation;
     defaultProfile: ConfigLocation;
+    noMatchPolicy: ConfigLocation;
   };
 }
 

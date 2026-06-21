@@ -126,11 +126,19 @@ export function getConfig(): ResolvedConfig {
     enableBatchFetching: { type: 'none' },
     prewarmCacheOnCreate: { type: 'none' },
     defaultProfile: { type: 'none' },
+    noMatchPolicy: { type: 'none' },
   };
 
   // Default Profile location (global-only setting)
   if (globalConfig.defaultProfile) {
     locations.defaultProfile = { type: 'global', path: globalConfigFile() };
+  }
+
+  // No-Match Policy location
+  if (projectConfig.noMatchPolicy) {
+    locations.noMatchPolicy = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.noMatchPolicy) {
+    locations.noMatchPolicy = { type: 'global', path: globalConfigFile() };
   }
 
   // API Key location (env has highest priority for security)
@@ -280,7 +288,12 @@ export function getConfig(): ResolvedConfig {
  * today's value (env LINEAR_API_KEY, else config-file apiKey) — byte-identical.
  */
 export function getApiKey(): string | undefined {
-  const { key } = resolveWorkspaceKey(resolveActiveWorkspace().name);
+  const resolution = resolveActiveWorkspace();
+  // Refuse to guess: the no-match gate / exclusion (Phase 3) denied resolution.
+  if (resolution.denied) {
+    throw new Error(`${resolution.denied.reason} ${resolution.denied.hint}`);
+  }
+  const { key } = resolveWorkspaceKey(resolution.name);
   return key || undefined;
 }
 
@@ -356,7 +369,8 @@ const VALID_CONFIG_KEYS = [
   'enableSessionCache',
   'enableBatchFetching',
   'prewarmCacheOnCreate',
-  'defaultProfile' // M28: persisted default profile
+  'defaultProfile', // M28: persisted default profile
+  'noMatchPolicy' // M28: no-match behavior (deny|default|match-only)
 ] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 
@@ -408,6 +422,11 @@ export function setConfigValue(
     } else {
       throw new Error(`${key} must be true or false`);
     }
+  } else if (key === 'noMatchPolicy') {
+    if (value !== 'deny' && value !== 'default' && value !== 'match-only') {
+      throw new Error('noMatchPolicy must be one of: deny, default, match-only');
+    }
+    existingConfig[key] = value;
   } else {
     existingConfig[key] = value;
   }

@@ -57,7 +57,7 @@ Examples:
     .command('get')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy'])
     )
     .description('Get a single configuration value')
     .addHelpText('after', `
@@ -76,7 +76,7 @@ Examples:
     .command('set')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy'])
     )
     .addArgument(new Argument('<value>', 'Configuration value'))
     .description('Set a configuration value')
@@ -99,7 +99,7 @@ Examples:
     .command('unset')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy'])
     )
     .description('Remove a configuration value')
     .option('-g, --global', 'Remove from global config (default)')
