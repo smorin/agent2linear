@@ -269,7 +269,10 @@ Resolve the `origin` remote URL and normalize across forms:
 Rules: strip a trailing `.git`; accept `scheme://`, `user@host:path`, and `ssh://…`
 forms; the **last** path segment is `name`, the rest is `owner` (supports nested GitLab
 groups). `repo` matches `owner/name`; `owner` matches the owner path; `host` matches the
-host. v1 consults **`origin` only** (forks: add an explicit `repo` rule).
+host. Note that `repo` is the **full `<owner>/<name>`** and may therefore contain **more
+than two segments** for nested groups (e.g. `acme/platform/web`) — match those with a glob
+such as `acme/**` or `acme/platform/*` as needed. v1 consults **`origin` only** (forks:
+add an explicit `repo` rule).
 
 ### 5.5 Resolution Algorithm
 
