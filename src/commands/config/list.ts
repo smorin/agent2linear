@@ -12,9 +12,26 @@ import {
   validateTeamExists,
 } from '../../lib/linear-client.js';
 import { getMilestoneTemplate } from '../../lib/milestone-templates.js';
+import type { ConfigLocation } from '../../lib/types.js';
+import { resolveActiveProfile } from '../../lib/workspace-resolver.js';
+
+/** Human-readable source label for a resolved config value (incl. profile name). */
+function sourceLabelFor(source: ConfigLocation, profileName: string | undefined): string {
+  switch (source.type) {
+    case 'env':
+      return 'environment variable';
+    case 'project':
+      return 'project config';
+    case 'profile':
+      return profileName ? `profile '${profileName}'` : 'profile';
+    default:
+      return 'global config';
+  }
+}
 
 export async function listConfig() {
   const config = getConfig();
+  const activeProfile = resolveActiveProfile();
 
   console.log('\n📋 Linear Create Configuration\n');
 
@@ -32,12 +49,7 @@ export async function listConfig() {
   console.log('API Key:');
   if (config.apiKey) {
     const source = config.locations.apiKey;
-    const sourceLabel =
-      source.type === 'env'
-        ? 'environment variable'
-        : source.type === 'project'
-          ? 'project config'
-          : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
     console.log(`  ${maskApiKey(config.apiKey)} (from ${sourceLabel})`);
   } else {
     console.log('  Not configured');
@@ -49,7 +61,7 @@ export async function listConfig() {
   console.log('Default Initiative:');
   if (config.defaultInitiative) {
     const source = config.locations.defaultInitiative;
-    const sourceLabel = source.type === 'project' ? 'project config' : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
 
     // Fetch initiative name with validation
     let displayValue = config.defaultInitiative;
@@ -81,7 +93,7 @@ export async function listConfig() {
   console.log('Default Team:');
   if (config.defaultTeam) {
     const source = config.locations.defaultTeam;
-    const sourceLabel = source.type === 'project' ? 'project config' : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
 
     // Fetch team name with validation
     let displayValue = config.defaultTeam;
@@ -112,7 +124,7 @@ export async function listConfig() {
   console.log('Default Issue Template:');
   if (config.defaultIssueTemplate) {
     const source = config.locations.defaultIssueTemplate;
-    const sourceLabel = source.type === 'project' ? 'project config' : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
 
     // Fetch template name with validation
     let displayValue = config.defaultIssueTemplate;
@@ -144,7 +156,7 @@ export async function listConfig() {
   console.log('Default Project Template:');
   if (config.defaultProjectTemplate) {
     const source = config.locations.defaultProjectTemplate;
-    const sourceLabel = source.type === 'project' ? 'project config' : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
 
     // Fetch template name with validation
     let displayValue = config.defaultProjectTemplate;
@@ -176,7 +188,7 @@ export async function listConfig() {
   console.log('Default Milestone Template:');
   if (config.defaultMilestoneTemplate) {
     const source = config.locations.defaultMilestoneTemplate;
-    const sourceLabel = source.type === 'project' ? 'project config' : 'global config';
+    const sourceLabel = sourceLabelFor(source, activeProfile);
 
     // Fetch milestone template with validation
     let displayValue = config.defaultMilestoneTemplate;

@@ -1,8 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
-import type { Config, ResolvedConfig } from './types.js';
-import { resolveActiveWorkspace, resolveWorkspaceKey } from './workspace-resolver.js';
+import { getProfileScope } from './profiles.js';
+import type { Scope } from './scope.js';
+import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
+import {
+  resolveActiveProfile,
+  resolveActiveWorkspace,
+  resolveWorkspaceKey,
+} from './workspace-resolver.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -54,13 +60,48 @@ function writeConfigFile(path: string, config: Partial<Config>): void {
 }
 
 /**
- * Get configuration with priority: project > global > env
+ * Read the RAW global config.json (no merge, no profile scope, no env).
+ *
+ * Exposed for the workspace resolver and profile store, which must read config
+ * WITHOUT calling getConfig() — getConfig() now depends on the resolved profile,
+ * so any getConfig() call from the resolution path would recurse infinitely.
+ */
+export function readGlobalConfig(): Partial<Config> {
+  return readConfigFile(globalConfigFile());
+}
+
+/** Read the RAW nearest project config.json (walk-up discovery; {} if none). */
+export function readProjectConfig(): Partial<Config> {
+  const f = projectConfigReadFile();
+  return f ? readConfigFile(f) : {};
+}
+
+/** Read the RAW config.json for a scope's write target (read-modify-write helper). */
+export function readConfigForScope(scope: Scope): Partial<Config> {
+  const file = scope === 'global' ? globalConfigFile() : projectConfigWriteFile();
+  return readConfigFile(file);
+}
+
+/** Write the RAW config.json for a scope's write target. */
+export function writeConfigForScope(scope: Scope, config: Partial<Config>): void {
+  const file = scope === 'global' ? globalConfigFile() : projectConfigWriteFile();
+  writeConfigFile(file, config);
+}
+
+/**
+ * Get configuration with priority: project > profile > global > env
  */
 export function getConfig(): ResolvedConfig {
   const envConfig: Partial<Config> = {};
   const globalConfig = readConfigFile(globalConfigFile());
   const projectReadFile = projectConfigReadFile();
   const projectConfig = projectReadFile ? readConfigFile(projectReadFile) : {};
+
+  // Profile scope: the active profile's recognized Config defaults, slotted into
+  // the merge between global and project. `getProfileScope(undefined)` returns {}
+  // so the no-profile path stays byte-identical to {...global, ...project}.
+  // `resolveActiveProfile()` reads raw config only — it must never call getConfig().
+  const profileScope = getProfileScope(resolveActiveProfile());
 
   // Read from environment
   if (process.env.LINEAR_API_KEY) {
@@ -84,7 +125,13 @@ export function getConfig(): ResolvedConfig {
     enableSessionCache: { type: 'none' },
     enableBatchFetching: { type: 'none' },
     prewarmCacheOnCreate: { type: 'none' },
+    defaultProfile: { type: 'none' },
   };
+
+  // Default Profile location (global-only setting)
+  if (globalConfig.defaultProfile) {
+    locations.defaultProfile = { type: 'global', path: globalConfigFile() };
+  }
 
   // API Key location (env has highest priority for security)
   if (envConfig.apiKey) {
@@ -193,9 +240,23 @@ export function getConfig(): ResolvedConfig {
     locations.prewarmCacheOnCreate = { type: 'global', path: globalConfigFile() };
   }
 
-  // Merge configs with priority: project > global for most settings, but env > all for API key
+  // Profile-source labeling: a key supplied by the profile scope (and NOT
+  // overridden by the project) is labeled `profile`. Precedence is
+  // project > profile > global, so this overrides a `global` label set above but
+  // never a `project` one.
+  for (const key of Object.keys(profileScope)) {
+    if (key in projectConfig) {
+      continue;
+    }
+    if (key in locations) {
+      (locations as Record<string, ConfigLocation>)[key] = { type: 'profile' };
+    }
+  }
+
+  // Merge configs with priority: project > profile > global, but env > all for API key
   const merged = {
     ...globalConfig,
+    ...profileScope,
     ...projectConfig,
   };
 
@@ -294,7 +355,8 @@ const VALID_CONFIG_KEYS = [
   'enablePersistentCache',
   'enableSessionCache',
   'enableBatchFetching',
-  'prewarmCacheOnCreate'
+  'prewarmCacheOnCreate',
+  'defaultProfile' // M28: persisted default profile
 ] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 

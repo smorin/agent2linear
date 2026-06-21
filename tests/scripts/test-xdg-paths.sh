@@ -46,6 +46,8 @@ export HOME="$ROOT/home"
 mkdir -p "$HOME"
 export XDG_CONFIG_HOME="$ROOT/xdgcfg"
 export XDG_CACHE_HOME="$ROOT/xdgcache"
+# Neutralize the env declarator so an ambient value can't change selection.
+unset AGENT2LINEAR_WORKSPACE 2>/dev/null || true
 
 # Convenience runner for the built CLI.
 run_cli() {
@@ -146,6 +148,25 @@ echo "$WS_CURRENT" | grep -q "acme" \
   && echo "$WS_CURRENT" | grep -qi "source:.*flag" \
   && echo "PASS: 'workspace current --workspace acme' reports acme + source flag (offline)" \
   || fail "'workspace current' did not report acme/source flag; got: $WS_CURRENT"
+
+# --- Step 6: profile-as-scope defaults resolution (multi-workspace P2) ----
+# Define a global profile carrying a defaultTeam, mark it the defaultProfile,
+# then confirm `config get defaultTeam` from an unrelated repo resolves the
+# value from the profile scope and reports `source: profile`. All offline —
+# `profile add` and `config set defaultProfile` make no Linear API calls, and
+# `config get` reads without contacting Linear.
+run_cli profile add acme --workspace acme --default-team team_offline --global >/dev/null 2>&1 \
+  || fail "'profile add' (global) exited non-zero"
+run_cli config set defaultProfile acme --global >/dev/null 2>&1 \
+  || fail "'config set defaultProfile' exited non-zero"
+
+PROF_REPO="$ROOT/profrepo"
+mkdir -p "$PROF_REPO"
+PROF_GET="$(cd "$PROF_REPO" && run_cli config get defaultTeam 2>&1)"
+echo "$PROF_GET" | grep -q "team_offline" \
+  && echo "$PROF_GET" | grep -qi "profile" \
+  && echo "PASS: 'config get defaultTeam' resolved from profile (source: profile, offline)" \
+  || fail "'config get defaultTeam' did not resolve from profile; got: $PROF_GET"
 
 # --- Hermeticity assertion: real ~/.config was never touched -------------
 # HOME is overridden to temp, so the user's real config dir cannot have been

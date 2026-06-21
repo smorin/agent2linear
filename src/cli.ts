@@ -13,6 +13,7 @@ import { registerIssueCommands } from './commands/issue/register.js';
 import { registerIssueLabelsCommands } from './commands/issue-labels/register.js';
 import { registerMembersCommands } from './commands/members/register.js';
 import { registerMilestoneTemplatesCommands } from './commands/milestone-templates/register.js';
+import { registerProfileCommands } from './commands/profile/register.js';
 import { registerProjectCommands } from './commands/project/register.js';
 import { registerProjectLabelsCommands } from './commands/project-labels/register.js';
 import { registerProjectStatusCommands } from './commands/project-status/register.js';
@@ -75,6 +76,7 @@ registerCacheCommands(cli);
 registerIssueCommands(cli);
 registerCyclesCommands(cli);
 registerWorkspaceCommands(cli);
+registerProfileCommands(cli);
 
 // Stub command groups (future releases)
 const issues = cli

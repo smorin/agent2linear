@@ -32,6 +32,7 @@ const KEY_LABELS: Record<ConfigKey, string> = {
   enableSessionCache: 'Enable Session Cache',
   enableBatchFetching: 'Enable Batch Fetching',
   prewarmCacheOnCreate: 'Prewarm Cache On Create',
+  defaultProfile: 'Default Profile',
 };
 
 export async function setConfig(key: string, value: string, options: SetConfigOptions) {

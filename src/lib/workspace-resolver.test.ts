@@ -4,7 +4,11 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setInvocationContext } from './invocation-context.js';
-import { resolveActiveWorkspace, resolveWorkspaceKey } from './workspace-resolver.js';
+import {
+  resolveActiveProfile,
+  resolveActiveWorkspace,
+  resolveWorkspaceKey,
+} from './workspace-resolver.js';
 import { saveWorkspace } from './workspaces.js';
 
 let xdgConfig: string;
@@ -20,6 +24,8 @@ beforeEach(() => {
   // Control the legacy key explicitly so an ambient shell value can't flip the
   // legacy<->env branch.
   vi.stubEnv('LINEAR_API_KEY', '');
+  // Neutralize the env declarator so an ambient value can't change selection.
+  vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
   process.chdir(workdir);
   setInvocationContext({});
 });
@@ -125,9 +131,87 @@ describe('resolveWorkspaceKey - ordered key-source precedence (cli -> secrets ->
   });
 });
 
+describe('resolveActiveProfile - selection precedence (R8, Phase 2)', () => {
+  it('explicit --workspace beats AGENT2LINEAR_WORKSPACE and defaultProfile', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'personal',
+      profiles: { acme: { workspace: 'acme' }, personal: { workspace: 'personal' } },
+    });
+    vi.stubEnv('AGENT2LINEAR_WORKSPACE', 'acme');
+    setInvocationContext({ workspace: 'personal' });
+
+    expect(resolveActiveProfile()).toBe('personal');
+    expect(resolveActiveWorkspace().source).toBe('flag');
+  });
+
+  it('AGENT2LINEAR_WORKSPACE beats defaultProfile', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'personal',
+      profiles: { acme: { workspace: 'acme' }, personal: { workspace: 'personal' } },
+    });
+    vi.stubEnv('AGENT2LINEAR_WORKSPACE', 'acme');
+
+    expect(resolveActiveProfile()).toBe('acme');
+    expect(resolveActiveWorkspace().source).toBe('env');
+  });
+
+  it('project-config profile beats defaultProfile', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'personal',
+      profiles: { acme: { workspace: 'acme' }, personal: { workspace: 'personal' } },
+    });
+    writeProjectConfigJson(workdir, { profile: 'acme' });
+
+    expect(resolveActiveProfile()).toBe('acme');
+    expect(resolveActiveWorkspace().source).toBe('project');
+  });
+
+  it('falls back to defaultProfile when nothing else selects', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'acme' } },
+    });
+
+    expect(resolveActiveProfile()).toBe('acme');
+    expect(resolveActiveWorkspace().source).toBe('default');
+  });
+
+  it('returns undefined (no profile) for the legacy path', () => {
+    expect(resolveActiveProfile()).toBeUndefined();
+  });
+
+  it('sources the key from the profile-pointed workspace in the secrets registry', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'acme-ws' } },
+    });
+    saveWorkspace('global', 'acme-ws', { apiKey: 'lin_api_acme_ws' });
+
+    const res = resolveActiveWorkspace();
+    expect(res.profile).toBe('acme');
+    expect(res.name).toBe('acme-ws');
+    expect(res.key).toBe('lin_api_acme_ws');
+    expect(res.source).toBe('default');
+  });
+});
+
 /** Helper: write a global config.json apiKey under a stubbed XDG config dir. */
 function saveGlobalApiKey(xdgDir: string, apiKey: string): void {
   const dir = join(xdgDir, 'agent2linear');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'config.json'), JSON.stringify({ apiKey }), 'utf-8');
+}
+
+/** Helper: write a full global config.json under a stubbed XDG config dir. */
+function writeGlobalConfigJson(xdgDir: string, config: Record<string, unknown>): void {
+  const dir = join(xdgDir, 'agent2linear');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'config.json'), JSON.stringify(config), 'utf-8');
+}
+
+/** Helper: write a project config.json under <cwd>/.agent2linear. */
+function writeProjectConfigJson(cwd: string, config: Record<string, unknown>): void {
+  const dir = join(cwd, '.agent2linear');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'config.json'), JSON.stringify(config), 'utf-8');
 }

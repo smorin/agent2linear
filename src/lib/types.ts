@@ -16,11 +16,44 @@ export interface Config {
   enableSessionCache?: boolean; // Enable/disable in-memory cache (default: true)
   enableBatchFetching?: boolean; // Enable/disable batch API calls (default: true)
   prewarmCacheOnCreate?: boolean; // Auto-prewarm cache on project create (default: true)
+
+  // Multi-workspace configuration (M28)
+  profile?: string; // Repo-level selector: use this profile for this repository
+  workspace?: string; // Repo-level selector: use this workspace for this repository
+  linear?: boolean; // Repo-level opt-out: false = this repo is off-limits (Phase 3)
+  defaultProfile?: string; // Global default profile when nothing else resolves
+  profiles?: Record<string, Profile>; // Named profiles (settings + detection rules)
+  noMatchPolicy?: 'deny' | 'default' | 'match-only'; // No-match behavior (Phase 3)
 }
 
 export interface ConfigLocation {
-  type: 'global' | 'project' | 'env' | 'none';
+  type: 'global' | 'project' | 'env' | 'profile' | 'none';
   path?: string;
+}
+
+/**
+ * A profile's git-remote detection rule (Phase 3). A profile auto-resolves for a
+ * repo whose `origin` owner is listed in `gitRemoteOwner`. `linear: false` marks
+ * the matched org off-limits.
+ */
+export interface MatchRule {
+  gitRemoteOwner?: string[];
+  linear?: boolean;
+}
+
+/**
+ * A named profile: a bundle of config defaults (any recognized Config key, R10) +
+ * a pointer to a workspace + detection/exclusion + non-secret key-source refs.
+ * Profiles live in committable config (config.json), never holding a raw key.
+ *
+ * Inherits `workspace`/`linear` (and the default* keys) from Partial<Config>;
+ * adds `match`/`apiKeyEnv`/`envFile`. The non-config meta keys
+ * (workspace/match/linear/apiKeyEnv/envFile) are stripped by getProfileScope().
+ */
+export interface Profile extends Partial<Config> {
+  match?: MatchRule; // git-remote detection (Phase 3)
+  apiKeyEnv?: string; // override the default env-var name (Phase 4)
+  envFile?: string; // per-profile dotenv path (Phase 4)
 }
 
 /**
@@ -73,6 +106,7 @@ export interface ResolvedConfig extends Config {
     enableSessionCache: ConfigLocation;
     enableBatchFetching: ConfigLocation;
     prewarmCacheOnCreate: ConfigLocation;
+    defaultProfile: ConfigLocation;
   };
 }
 

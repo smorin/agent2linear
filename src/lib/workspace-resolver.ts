@@ -1,71 +1,178 @@
 /**
  * The workspace resolution chokepoint.
  *
- * `resolveActiveWorkspace()` walks the (Phase-1 subset of the) precedence chain to
- * decide WHICH workspace is active and HOW it was selected. `resolveWorkspaceKey()`
- * then sources the chosen workspace's key through an ordered list of source-resolvers
- * (cli -> [Phase 4 gaps] -> secrets file -> legacy), first non-null wins.
+ * `resolveActiveWorkspace()` walks the precedence chain (R8) to decide WHICH
+ * workspace is active and HOW it was selected. `resolveActiveProfile()` returns
+ * just the active PROFILE name and is what `getConfig()` uses for its merge.
+ * `resolveWorkspaceKey()` sources the chosen workspace's key through an ordered
+ * list of source-resolvers (cli -> [Phase 4 gaps] -> secrets file -> legacy).
  *
- * Phase 1 fills R7 steps 1 (cli), 4 (secrets file), and 5 (legacy plain
- * `LINEAR_API_KEY` / config `apiKey`). Steps 2 (named env var) and 3 (per-profile
- * env-file) are left as explicit gaps for Phase 4 to INSERT between cli and secrets.
+ * RECURSION SAFETY: nothing here may call `getConfig()`. `getConfig()` now calls
+ * `resolveActiveProfile()` for its merge, so any getConfig() call from the
+ * resolution path would recurse infinitely. We read RAW config files via
+ * `readGlobalConfig()` / `readProjectConfig()` instead.
+ *
+ * Phase 1 filled R7 key-source steps 1 (cli), 4 (secrets file), 5 (legacy).
+ * Phase 2 adds the SELECTION precedence: flag -> AGENT2LINEAR_WORKSPACE env ->
+ * project config profile/workspace -> [auto-detect: Phase 3] -> global
+ * defaultProfile -> legacy. Steps 2/3 of the key-source order are Phase 4 gaps.
  *
  * INVARIANT (R4): with zero workspaces/profiles configured and no explicit
  * selection, this returns exactly today's value — env `LINEAR_API_KEY` (source
- * 'env') or the config-file `apiKey` (source 'legacy') — and reads no new files.
- *
- * Note: this module must NOT call `getApiKey()` (config.ts) — that would recurse,
- * since `getApiKey()` routes through here. It reads `getConfig().apiKey` and the
- * environment directly instead.
+ * 'env') or the config-file `apiKey` (source 'legacy') — and selects no profile.
  */
 
-import { getConfig } from './config.js';
+import { readGlobalConfig, readProjectConfig } from './config.js';
 import { getInvocationContext } from './invocation-context.js';
+import { loadProfiles } from './profiles.js';
 import type { WorkspaceResolution, WorkspaceSource } from './types.js';
 import { loadWorkspaces } from './workspaces.js';
 
 /**
- * The legacy single-key value: env `LINEAR_API_KEY` (highest), else config-file
- * `apiKey`. Mirrors today's `getApiKey()` resolution exactly. The `source`
- * distinguishes an env-sourced key ('env') from a config-file key ('legacy').
+ * The legacy single-key value: env `LINEAR_API_KEY` (highest), else project-file
+ * `apiKey`, else global-file `apiKey`. Mirrors today's apiKey precedence
+ * (env > project > global) WITHOUT calling getConfig() (would recurse).
  */
 function legacyKey(): { key: string; source: WorkspaceSource } | null {
   const envKey = process.env.LINEAR_API_KEY;
   if (envKey) {
     return { key: envKey, source: 'env' };
   }
-  const configKey = getConfig().apiKey;
-  if (configKey) {
-    return { key: configKey, source: 'legacy' };
+  const projectKey = readProjectConfig().apiKey;
+  if (projectKey) {
+    return { key: projectKey, source: 'legacy' };
+  }
+  const globalKey = readGlobalConfig().apiKey;
+  if (globalKey) {
+    return { key: globalKey, source: 'legacy' };
   }
   return null;
 }
 
 /**
- * Resolve the active workspace selection (which workspace + how it was chosen).
+ * The per-invocation selection, decided once by walking the R8 precedence chain
+ * (without sourcing a key). Both `resolveActiveProfile()` and
+ * `resolveActiveWorkspace()` build on this.
  *
- * Phase 1 precedence:
- *   1. explicit `--api-key` (ad-hoc workspace, no profile)  -> source 'flag'
- *   1. explicit `--workspace <name>` (named workspace)       -> source 'flag'
- *   ... [Phase 2/3 insert env declarator / project config / auto-detect / default]
- *   6. legacy single key (env or config apiKey)              -> source 'env' | 'legacy'
+ * - `apikey`: bare `--api-key` (ad-hoc workspace, no profile scope).
+ * - `named`: a workspace/profile name chosen by flag/env/project/default, with
+ *   the selection source and (when it names a profile) the profile name.
+ * - `legacy`: nothing selected — fall back to the legacy single key.
  */
-export function resolveActiveWorkspace(): WorkspaceResolution {
+type Selection =
+  | { kind: 'apikey'; apiKey: string }
+  | { kind: 'named'; name: string; source: WorkspaceSource; profile?: string }
+  | { kind: 'legacy' };
+
+function resolveSelection(): Selection {
   const ctx = getInvocationContext();
+  const profiles = loadProfiles();
+  const isProfile = (n: string): boolean =>
+    Object.prototype.hasOwnProperty.call(profiles, n);
 
   // 1. Explicit per-invocation selection (highest precedence).
-  // Bare `--api-key` with no `--workspace` = ad-hoc workspace (no profile scope).
   if (ctx.apiKey !== undefined && ctx.workspace === undefined) {
-    return { key: ctx.apiKey, source: 'flag' };
+    return { kind: 'apikey', apiKey: ctx.apiKey };
   }
   if (ctx.workspace !== undefined) {
-    // The selection source is always 'flag' because the workspace was chosen
-    // explicitly. `resolveWorkspaceKey` describes where the KEY came from.
-    const { key } = resolveWorkspaceKey(ctx.workspace);
-    return { key, name: ctx.workspace, source: 'flag' };
+    return {
+      kind: 'named',
+      name: ctx.workspace,
+      source: 'flag',
+      profile: isProfile(ctx.workspace) ? ctx.workspace : undefined,
+    };
   }
 
-  // 6. Legacy single-key passthrough — byte-identical to today's getApiKey().
+  // 2. AGENT2LINEAR_WORKSPACE env declarator.
+  const envWs = process.env.AGENT2LINEAR_WORKSPACE;
+  if (envWs) {
+    return {
+      kind: 'named',
+      name: envWs,
+      source: 'env',
+      profile: isProfile(envWs) ? envWs : undefined,
+    };
+  }
+
+  // 3. Project config `profile` / `workspace` (nearest .agent2linear/config.json).
+  const project = readProjectConfig();
+  if (project.profile) {
+    return {
+      kind: 'named',
+      name: project.profile,
+      source: 'project',
+      profile: isProfile(project.profile) ? project.profile : undefined,
+    };
+  }
+  if (project.workspace) {
+    return {
+      kind: 'named',
+      name: project.workspace,
+      source: 'project',
+      profile: isProfile(project.workspace) ? project.workspace : undefined,
+    };
+  }
+
+  // 4. [Phase 3 gap] profile auto-detection via git-remote owner.
+
+  // 5. Global defaultProfile.
+  const defaultProfile = readGlobalConfig().defaultProfile;
+  if (defaultProfile) {
+    return {
+      kind: 'named',
+      name: defaultProfile,
+      source: 'default',
+      profile: isProfile(defaultProfile) ? defaultProfile : undefined,
+    };
+  }
+
+  // 6. Legacy single key.
+  return { kind: 'legacy' };
+}
+
+/**
+ * Map a selected name to the workspace name whose key should be sourced. A
+ * profile points at a workspace by name; a bare workspace name maps to itself.
+ */
+function workspaceNameFor(name: string): string {
+  const profile = loadProfiles()[name];
+  if (profile && profile.workspace) {
+    return profile.workspace;
+  }
+  return name;
+}
+
+/**
+ * Resolve the active PROFILE name only (no key sourcing). Used by getConfig() for
+ * its merge. Returns undefined for the ad-hoc, bare-workspace, and legacy paths.
+ *
+ * MUST NOT call getConfig() (would recurse) — resolveSelection() reads raw config.
+ */
+export function resolveActiveProfile(): string | undefined {
+  const selection = resolveSelection();
+  return selection.kind === 'named' ? selection.profile : undefined;
+}
+
+/**
+ * Resolve the active workspace selection (which workspace + how it was chosen +
+ * the sourced key). The `source` describes how the workspace was SELECTED; the
+ * key itself is sourced via `resolveWorkspaceKey()`.
+ */
+export function resolveActiveWorkspace(): WorkspaceResolution {
+  const selection = resolveSelection();
+
+  // Bare `--api-key` with no `--workspace` = ad-hoc workspace (no profile scope).
+  if (selection.kind === 'apikey') {
+    return { key: selection.apiKey, source: 'flag' };
+  }
+
+  if (selection.kind === 'named') {
+    const wsName = workspaceNameFor(selection.name);
+    const { key } = resolveWorkspaceKey(wsName);
+    return { key, name: wsName, source: selection.source, profile: selection.profile };
+  }
+
+  // Legacy single-key passthrough — byte-identical to today's getApiKey().
   const legacy = legacyKey();
   if (legacy) {
     return { key: legacy.key, source: legacy.source };
@@ -102,7 +209,7 @@ const KEY_SOURCE_RESOLVERS: KeySourceResolver[] = [
     if (!name) return null;
     const ws = loadWorkspaces()[name];
     if (ws && ws.apiKey) {
-      // No dedicated 'secrets' source member exists in P1; reuse 'flag' since a
+      // No dedicated 'secrets' source member exists yet; reuse 'flag' since a
       // secrets-file key is only reached via an explicit --workspace selection.
       return { key: ws.apiKey, source: 'flag' };
     }
