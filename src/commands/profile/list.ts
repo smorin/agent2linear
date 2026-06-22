@@ -1,5 +1,5 @@
 import { getGlobalConfigPath, getProjectConfigPath } from '../../lib/config.js';
-import { formatListJSON } from '../../lib/output.js';
+import { formatListJSON, formatListTSV } from '../../lib/output.js';
 import { loadProfiles } from '../../lib/profiles.js';
 
 interface ListProfileOptions {
@@ -31,13 +31,23 @@ export function listProfileCommand(options: ListProfileOptions = {}): void {
     }
 
     if (options.format === 'tsv') {
-      console.log('name\tworkspace\tdefaultTeam\tdefaultInitiative\texcluded');
-      for (const name of names) {
-        const p = profiles[name];
-        console.log(
-          `${name}\t${p.workspace ?? ''}\t${p.defaultTeam ?? ''}\t${p.defaultInitiative ?? ''}\t${p.linear === false ? 'yes' : ''}`
-        );
-      }
+      // Headerless, tab/newline-escaped output via the shared helper — matches the
+      // --format tsv path of every other list command (teams/initiatives/etc.).
+      console.log(
+        formatListTSV(
+          names.map((name) => {
+            const p = profiles[name];
+            return {
+              name,
+              workspace: p.workspace ?? '',
+              defaultTeam: p.defaultTeam ?? '',
+              defaultInitiative: p.defaultInitiative ?? '',
+              excluded: p.linear === false ? 'yes' : '',
+            };
+          }),
+          ['name', 'workspace', 'defaultTeam', 'defaultInitiative', 'excluded']
+        )
+      );
       return;
     }
 
