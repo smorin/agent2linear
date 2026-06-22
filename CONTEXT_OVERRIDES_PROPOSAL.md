@@ -35,6 +35,8 @@ remote-URL matching by normalizing identity to `host/owner/name`.
 5. [Proposed Design](#5-proposed-design)
    - 5.1 [Schema](#51-schema)
    - 5.2 [Matchers (`when`)](#52-matchers-when)
+     - 5.2.1 [Grammar reference](#521-grammar-reference)
+     - 5.2.2 [Worked examples](#522-worked-examples)
    - 5.3 [Path Anchoring](#53-path-anchoring)
    - 5.4 [Repo Identity Normalization](#54-repo-identity-normalization)
    - 5.5 [Resolution Algorithm](#55-resolution-algorithm)
@@ -278,6 +280,74 @@ resolves; they're allowed in repo-local files but redundant there (already repo-
 
 "Upstream" is just the remote literally **named** `upstream` (read from git config); we do
 **not** call the GitHub API to discover a fork's parent (stays offline/portable).
+
+#### 5.2.1 Grammar reference
+
+A `when` value is a **node**. Evaluation is JSON-Schema-style: a node matches iff **every
+key present at that node** matches (AND); composite keys contribute their own boolean result.
+
+```ebnf
+when     = node ;
+node     = "{" { criterion | composite } "}" ;   (* all entries AND together *)
+
+criterion = "repo"   ":" glob              (* identity, read via `remote` (default origin) *)
+          | "owner"  ":" glob              (* identity *)
+          | "host"   ":" glob              (* identity *)
+          | "path"   ":" glob              (* repo-anchored, or ~//abs disk — §5.3 *)
+          | "branch" ":" glob
+          | "remote" ":" ( name | name[] | "*" ) ;  (* selects remote(s) for identity above *)
+
+composite = "allOf" ":" node[]             (* AND of children;  [] ⇒ true  *)
+          | "anyOf" ":" node[]             (* OR  of children;  [] ⇒ false *)
+          | "not"   ":" node ;             (* negation *)
+```
+
+Evaluation, precisely:
+
+```
+match(node) =
+      AND over each criterion c present:  matchCriterion(c, ctx)
+  AND (node.allOf ? every child matches            : true)
+  AND (node.anyOf ? at least one child matches      : true)
+  AND (node.not   ? !match(node.not)                : true)
+```
+
+Identity criteria in a node are tested against the remote(s) named by that node's `remote`
+(default `origin`), OR'd if a list/`"*"`; `path`/`branch` ignore `remote`. Specificity of a
+match (for §5.6 tie-breaking) comes from the leaf criteria that actually caused it — for
+`anyOf`, the single most-specific matching branch.
+
+#### 5.2.2 Worked examples
+
+```jsonc
+// 1. Base OR upstream (the fork case). Equivalent shorthand shown second.
+{ "when": { "anyOf": [ { "owner": "acme" },
+                       { "remote": "upstream", "owner": "acme" } ] },
+  "defaultTeam": "acme-eng" }
+{ "when": { "remote": ["origin", "upstream"], "owner": "acme" },   // same meaning
+  "defaultTeam": "acme-eng" }
+
+// 2. allOf — release branches of acme repos on GitHub get the hardening initiative.
+//    (Top-level keys already AND, so allOf is only needed to AND *composites*; here it
+//    reads clearly and groups the three identity/branch conditions.)
+{ "when": { "allOf": [ { "host": "github.com" },
+                       { "owner": "acme" },
+                       { "branch": "release/*" } ] },
+  "defaultInitiative": "hardening" }
+
+// 3. not — everything under apps/** EXCEPT the sandbox app routes to the apps team.
+{ "when": { "allOf": [ { "path": "apps/**" },
+                       { "not": { "path": "apps/sandbox/**" } } ] },
+  "defaultTeam": "apps" }
+
+// 4. Mixed leaf + composite (all AND): owner acme AND (mobile path OR release branch).
+{ "when": { "owner": "acme",
+            "anyOf": [ { "path": "apps/mobile/**" }, { "branch": "release/*" } ] },
+  "defaultTeam": "mobile" }
+
+// 5. remote-only predicate — "this checkout is a fork" (has an `upstream` remote).
+{ "when": { "remote": "upstream" }, "defaultInitiative": "fork-contributions" }
+```
 
 ### 5.3 Path Anchoring
 
