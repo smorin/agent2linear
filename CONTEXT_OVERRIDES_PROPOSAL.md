@@ -62,6 +62,7 @@ remote-URL matching by normalizing identity to `host/owner/name`.
 | U6 | **Generic alias remap** | A generic alias `default` resolves to different team IDs in different subtrees. |
 | U7 | **Disk-location fallback** | Anything under `~/scratch/**` (no/irrelevant remote) → personal team. |
 | U8 | **Agent targets another directory** | An agent runs the CLI from its own workspace (or `/`) but means a *different* target dir; it must resolve (or query) defaults for that target, not the process cwd. |
+| U9 | **Fork: base OR upstream** | In a fork (`origin = myuser/web`, `upstream = acme/web`), an `acme` identity rule should fire because the **upstream** matches even though `origin` doesn't. |
 
 ---
 
@@ -157,7 +158,13 @@ portably.
 
   "overrides": [
     {
-      "when": { "owner": "acme" },
+      // Identity reads `origin` by default; match base OR upstream explicitly via anyOf.
+      "when": {
+        "anyOf": [
+          { "owner": "acme" },                        // origin's owner is acme, OR
+          { "remote": "upstream", "owner": "acme" }   // the upstream (parent) is acme
+        ]
+      },
       "defaultTeam": "acme-eng"
     },
     {
@@ -195,13 +202,27 @@ portably.
 TypeScript (in `src/lib/types.ts`):
 
 ```ts
-export interface WhenClause {
+// A `when` node. Leaf criteria present at a node are AND'd together; `anyOf`/`allOf`/`not`
+// add JSON-Schema-style boolean composition and may nest. ALL keys present at a node are
+// AND'd (so leaf criteria AND the composite results), e.g. `{ owner, anyOf:[…] }` means
+// `owner AND (… OR …)`.
+export interface WhenLeaf {
   repo?: string;    // "owner/name" glob, e.g. "acme/web", "acme/*"
   owner?: string;   // owner/group path glob, e.g. "acme"
   host?: string;    // host glob, e.g. "github.com"
-  path?: string;    // gitignore-style glob (relative = repo-anchored; ~//abs = disk)
+  path?: string;    // root-anchored path glob (relative = repo-anchored; ~//abs = disk)
   branch?: string;  // branch glob, e.g. "release/*"
+  // Which remote(s) the identity criteria (repo/owner/host) in THIS node read.
+  // string | string[] | "*"(any remote). Omitted ⇒ "origin". Alone (no identity
+  // criterion) ⇒ matches if a remote of that name exists (e.g. { remote: "upstream" }).
+  remote?: string | string[];
 }
+export interface WhenComposite {
+  allOf?: WhenClause[]; // AND of children   (allOf: [] ⇒ true, vacuous)
+  anyOf?: WhenClause[]; // OR of children    (anyOf: [] ⇒ false)
+  not?: WhenClause;     // negation
+}
+export type WhenClause = WhenLeaf & WhenComposite;
 
 export type OverridableConfig = Pick<Config,
   | 'defaultTeam' | 'defaultInitiative' | 'defaultProject'
@@ -222,20 +243,41 @@ export interface ConfigOverride extends OverridableConfig {
 
 ### 5.2 Matchers (`when`)
 
-A rule **matches** only if **every** present criterion matches (logical AND). An empty
-or absent `when` (the top-level config) always matches — it is the catch-all.
+A `when` node is evaluated with **JSON-Schema-style** semantics: every key present at a
+node must hold (logical AND). Leaf **criteria** below are AND'd with each other and with
+the results of any composite keys. An empty or absent `when` (the top-level config) always
+matches — it is the catch-all.
+
+**Leaf criteria:**
 
 | Key | Matches against | Pattern |
 |-----|-----------------|---------|
-| `repo` | normalized `owner/name` of the origin remote | glob (`acme/web`, `acme/*`) |
+| `repo` | normalized `owner/name` of the selected remote(s) | glob (`acme/web`, `acme/*`) |
 | `owner` | normalized owner/group path | glob (`acme`, `acme/platform`) |
 | `host` | normalized host | glob (`github.com`, `*.gitlab.com`) |
-| `path` | the cwd as a **repo-root-relative** path (or the absolute cwd for `~/`/`/` patterns) — see §5.3 | root-anchored glob (gitignore tokens) |
+| `path` | the context dir as a **repo-root-relative** path (or the absolute context dir for `~/`/`/` patterns) — see §5.3 | root-anchored glob (gitignore tokens) |
 | `branch` | current branch | glob (`release/*`) |
+| `remote` | the remote(s) the identity criteria in this node read; `string \| string[] \| "*"` | name / list / any |
 
-Identity matchers (`repo`/`owner`/`host`) are meaningful only when the repo has a
-resolvable remote; they simply don't match otherwise. They are allowed in repo-local
-files but are redundant there (the file is already repo-scoped).
+**Boolean composites** (each is a child `when`, may nest):
+
+| Key | Meaning |
+|-----|---------|
+| `allOf: [...]` | AND of children (`[]` ⇒ true) |
+| `anyOf: [...]` | OR of children (`[]` ⇒ false) — this is how you express "base OR upstream" |
+| `not: {...}` | negation |
+
+**The `remote` qualifier.** Identity criteria (`repo`/`owner`/`host`) are evaluated against
+the remote(s) named by `remote` in the *same* node; omitted ⇒ **`origin`** (explicit and
+predictable — we do not implicitly fold in other remotes). `remote: ["origin","upstream"]`
+ORs the identity check across those remotes; `remote: "*"` checks any remote (git's
+`remote.*.url` model). `remote` **alone** (no identity criterion) matches if a remote of
+that name exists — e.g. `{ "remote": "upstream" }` means "this is a fork with an upstream."
+`path`/`branch` ignore `remote`. Identity criteria only match when the selected remote
+resolves; they're allowed in repo-local files but redundant there (already repo-scoped).
+
+"Upstream" is just the remote literally **named** `upstream` (read from git config); we do
+**not** call the GitHub API to discover a fork's parent (stays offline/portable).
 
 ### 5.3 Path Anchoring
 
@@ -275,15 +317,20 @@ forms; the **last** path segment is `name`, the rest is `owner` (supports nested
 groups). `repo` matches `owner/name`; `owner` matches the owner path; `host` matches the
 host. Note that `repo` is the **full `<owner>/<name>`** and may therefore contain **more
 than two segments** for nested groups (e.g. `acme/platform/web`) — match those with a glob
-such as `acme/**` or `acme/platform/*` as needed. v1 consults **`origin` only** (forks:
-add an explicit `repo` rule).
+such as `acme/**` or `acme/platform/*` as needed.
+
+We resolve **every** remote into a `name → {host, owner, name}` map. Identity criteria
+read **`origin` by default**; use the `remote` qualifier (§5.2) to read `upstream`, a
+named remote, a list, or `"*"` (any). This makes the **fork** case first-class — match
+"base OR upstream" with an `anyOf`, no `repo`-rule workaround needed.
 
 ### 5.5 Resolution Algorithm
 
 ```
 1. Build runtime context (lazily; only if any override has when-criteria),
      rooted at the resolution-context dir (§5.7), NOT necessarily process.cwd():
-     contextDir, repoRoot, identity {host, owner, name}, branch.
+     contextDir, repoRoot, branch, and remotes = { <name> -> {host, owner, name} }
+     for every git remote (origin, upstream, ...).
 2. Gather layers:
      globalCfg  = read ~/.config/.../config.json
      repoCfg    = read nearest .agent2linear/config.json (or {})
@@ -292,7 +339,8 @@ add an explicit `repo` rule).
        ...globalCfg.overrides,                         // global overrides
        {when:{}, ...repoCfg top-level fields},         // repo catch-all
        ...repoCfg.overrides ]                          // repo overrides   (CONCATENATE)
-4. Keep rules whose `when` matches the context (AND across criteria).
+4. Keep rules whose `when` tree matches (leaf criteria AND'd; `anyOf`/`allOf`/`not`
+     and the `remote` qualifier per §5.2).
 5. For EACH overridable field independently, pick the value from the WINNING matching
      rule that sets it, where "winning" is decided by, in order (§5.6):
        (a) SCOPE  — repo-local beats global;
@@ -329,8 +377,18 @@ decides; later keys only break ties):
    4. **`branch`** presence.
    5. The **catch-all** (empty `when`) is lowest.
    A compound `when` sums its criteria, so *within a scope* `repo` + `path` outranks
-   `owner` alone, which outranks a bare `path`.
+   `owner` alone, which outranks a bare `path`. Sub-tie-break for identity: a match via
+   **`origin` outranks a match via a non-origin remote** (your fork's own identity beats
+   the parent's).
 3. **Declaration order:** later-declared wins within the same scope and specificity.
+
+**Scoring composite `when` trees.** Specificity is computed from the **set of leaf
+criteria that actually caused the match**: an `allOf` (and plain AND'd leaves) sums all its
+matched leaves; an `anyOf` contributes its **single most-specific matching branch**; `not`
+contributes only a small presence weight (never negative). So the `anyOf` "base OR
+upstream" example scores like a single `owner` identity match — exactly as if you'd written
+the matching branch directly. (Exact weights are an implementation detail; the tiers above
+are the contract.)
 
 Because the winner is score-based (file order matters only as the final tie-break),
 reordering rules within a scope cannot change behavior except on exact ties — unlike
@@ -463,11 +521,13 @@ $ a2l config explain ~/work/acme/web/apps/mobile/feature   # positional = --cwd
 context:
   contextDir  ~/work/acme/web/apps/mobile/feature
   repoRoot    ~/work/acme/web
-  identity    github.com  acme/web
+  remotes     origin   → github.com  myuser/web
+              upstream → github.com  acme/web
   branch      feature/login
 resolved:
   defaultTeam        mobile        ← repo override   when{path:apps/mobile/**}
   defaultInitiative  q3-roadmap    ← repo catch-all
+  (acme-eng rule matched via upstream; lost to repo scope, per §5.6)
 ```
 
 ---
@@ -476,11 +536,11 @@ resolved:
 
 | Area | Change |
 |------|--------|
-| `src/lib/types.ts` | Add `WhenClause`, `OverridableConfig`, `ConfigOverride`; add `overrides?` to `Config`. |
+| `src/lib/types.ts` | Add `WhenLeaf`, `WhenComposite`, `WhenClause` (recursive), `OverridableConfig`, `ConfigOverride`; add `overrides?` to `Config`. |
 | `src/cli.ts` | Add a global `-C, --cwd <dir>` option; in the existing `preAction` hook, resolve the context dir (flag → `AGENT2LINEAR_CWD` env → `process.cwd()`), realpath + existence-check it, and stash it for downstream resolution. Apply git-style `-C` semantics (also the base for relative path args). |
-| `src/lib/git-context.ts` *(new)* | Given a **context dir** (not hard-wired to `process.cwd()`), resolve `repoRoot`, `origin` URL → `{host, owner, name}` (normalize SSH/HTTPS/ssh://, strip `.git`, nested groups), current branch. Pure, lazily invoked, cached per context dir. |
+| `src/lib/git-context.ts` *(new)* | Given a **context dir** (not hard-wired to `process.cwd()`), resolve `repoRoot`, current branch, and **all** remotes into `{ <name> -> {host, owner, name} }` (normalize SSH/HTTPS/ssh://, strip `.git`, nested groups). Pure, lazily invoked, cached per context dir. |
 | `src/lib/glob-match.ts` *(new)* | gitignore-style matcher (`*`/`**`/trailing-`/`/leading-`/`/`!`), plus identity/branch glob match. Reuse a vetted lib (e.g. `picomatch`/`minimatch`) rather than hand-roll. |
-| `src/lib/overrides.ts` *(new)* | `resolveOverrides(context, layers)` → per-field winner + provenance; specificity scoring (§5.6). |
+| `src/lib/overrides.ts` *(new)* | `resolveOverrides(context, layers)` → per-field winner + provenance. Evaluate the recursive `when` tree (leaf AND + `anyOf`/`allOf`/`not`, `remote` qualifier resolved against the remotes map); specificity scoring incl. composites (§5.6). |
 | `src/lib/config.ts` | `getConfig(contextDir?)` takes an optional context dir (default `process.cwd()`) and threads it into `findProjectConfigDir(contextDir)` (which **already accepts a `startDir`** — `xdg-paths.ts:55`) and the override resolver. After building `merged`, apply override resolution per field; populate `locations[...] = { type: 'override', … }`; **concatenate** global+repo `overrides` instead of letting the repo array replace the global one. Keep `apiKey` path untouched. |
 | `src/commands/config/explain.ts` *(new)* | Implements `config explain [dir]` with `--cwd`/`--json`. |
 | `src/commands/config/get.ts` | Add `--cwd <dir>` and override-resolve the requested key for that context dir. |
@@ -497,7 +557,9 @@ configs that don't use overrides pay nothing.
 | Case | Behavior |
 |------|----------|
 | Not in a Git repo / no remote | Identity matchers don't match. Relative `path` rules anchor to the discovered `.agent2linear/` dir if present, else are skipped. Absolute `path` and catch-all still apply. |
-| Multiple remotes | v1 uses `origin`. Forks: add an explicit `repo` rule (documented). |
+| Multiple remotes / forks | All remotes resolved. Identity reads `origin` by default; use the `remote` qualifier (`upstream`, a name, a list, or `"*"`) and `anyOf` for "base OR upstream". `origin` match outranks non-origin on ties (§5.6). |
+| `remote` names a remote that doesn't exist | That node's identity criteria don't match (and a bare `{ remote: "x" }` is false); other rules/branches unaffected. |
+| Empty `anyOf: []` / `allOf: []` | `anyOf: []` ⇒ false (matches nothing); `allOf: []` ⇒ true (vacuous). Warn on a likely-mistaken empty `anyOf`. |
 | Detached HEAD / no branch | `branch` matchers don't match; everything else unaffected. |
 | Git worktrees | Branch and root resolved via Git; works normally. |
 | Invalid glob / unknown `when` key | Warn (stderr) and skip that rule; never crash resolution. |
@@ -537,12 +599,14 @@ configs that don't use overrides pay nothing.
 ## 12. Open Questions / Future Work
 
 - **Structured authoring** (`config override add/list/remove`) vs. hand-editing JSON.
-- **`onbranch`-style extras**: `host` is included; do we want `remote` (match a specific
-  named remote) or multi-remote matching beyond `origin`?
-- **Negation / exclusion** at the rule level (gitignore `!` covers path negation; do we
-  want `when.not`?).
+- **GitHub-aware upstream discovery** — v1 treats "upstream" as the remote literally named
+  `upstream`; optionally resolve a fork's true parent via the GitHub API (would require
+  network and auth — deliberately out of scope for the offline core).
 - **`extends`/includes** if `overrides` arrays grow large enough to warrant splitting out
   of `config.json` (the routes.json option we deferred).
+
+(Resolved in this revision: `remote` qualifier + multi-remote matching, and boolean
+composition `anyOf`/`allOf`/`not` — see §5.2.)
 - **Batch targeting** — resolving defaults for *many* directories in one call (beyond
   `config explain --json` per dir) if agents need to map a whole tree at once.
 - **`getConfig()` is currently cwd-implicit at call sites** — threading an explicit
