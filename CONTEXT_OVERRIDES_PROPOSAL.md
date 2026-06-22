@@ -39,6 +39,7 @@ remote-URL matching by normalizing identity to `host/owner/name`.
    - 5.4 [Repo Identity Normalization](#54-repo-identity-normalization)
    - 5.5 [Resolution Algorithm](#55-resolution-algorithm)
    - 5.6 [Precedence & Tie-Breaking](#56-precedence--tie-breaking)
+   - 5.7 [Resolution Context & Targeting](#57-resolution-context--targeting)
 6. [Worked Examples](#6-worked-examples)
 7. [CLI & UX](#7-cli--ux)
 8. [Technical Implementation](#8-technical-implementation)
@@ -60,6 +61,7 @@ remote-URL matching by normalizing identity to `host/owner/name`.
 | U5 | **Branch-scoped** | On `release/*` branches, default initiative `hardening`. |
 | U6 | **Generic alias remap** | A generic alias `default` resolves to different team IDs in different subtrees. |
 | U7 | **Disk-location fallback** | Anything under `~/scratch/**` (no/irrelevant remote) → personal team. |
+| U8 | **Agent targets another directory** | An agent runs the CLI from its own workspace (or `/`) but means a *different* target dir; it must resolve (or query) defaults for that target, not the process cwd. |
 
 ---
 
@@ -279,8 +281,9 @@ add an explicit `repo` rule).
 ### 5.5 Resolution Algorithm
 
 ```
-1. Build runtime context (lazily; only if any override has when-criteria):
-     cwd, repoRoot, identity {host, owner, name}, branch.
+1. Build runtime context (lazily; only if any override has when-criteria),
+     rooted at the resolution-context dir (§5.7), NOT necessarily process.cwd():
+     contextDir, repoRoot, identity {host, owner, name}, branch.
 2. Gather layers:
      globalCfg  = read ~/.config/.../config.json
      repoCfg    = read nearest .agent2linear/config.json (or {})
@@ -332,6 +335,51 @@ decides; later keys only break ties):
 Because the winner is score-based (file order matters only as the final tie-break),
 reordering rules within a scope cannot change behavior except on exact ties — unlike
 CODEOWNERS' order-sensitive last-match.
+
+### 5.7 Resolution Context & Targeting
+
+Everything above resolves against a **resolution-context directory** — the answer to
+"where am I?" for repo-local config discovery, `path` matching, and identity/`branch`
+detection. By default that is `process.cwd()`, but because this tool is built for agents
+and automation, the CLI must run from one directory while **targeting another**.
+
+**The lever — a global `-C, --cwd <dir>` flag** (git-style, like `git -C`): the process
+behaves as if it had been launched in `<dir>`. It is resolved once (in the program's
+`preAction` hook) and governs **everything** downstream — config discovery, override
+matching, *and* relative path arguments (e.g. `--content-file ./spec.md` resolves under
+`<dir>`). One unified notion of "current directory"; agents that need a different dir for
+file args use absolute file paths.
+
+**Source precedence** for the context dir:
+
+1. `-C, --cwd <dir>` flag (highest)
+2. `AGENT2LINEAR_CWD` environment variable (for wrapping/automation)
+3. `process.cwd()` (default)
+
+The dir is **canonicalized (realpath)** before any matching (so symlinks resolve
+consistently). It must exist when a command will act on it (otherwise: hard error); in
+pure **query** mode a missing/repo-less dir simply yields "no matching context" rather
+than an error.
+
+**Two modes, one lever:**
+
+- **Execute** — any command honors `-C`/`--cwd`:
+  ```
+  a2l -C ~/work/acme/web/apps/mobile issue create --title "Bug"
+  # resolves defaults as if run from apps/mobile (→ defaultTeam: mobile), then creates.
+  ```
+- **Query** (no side effects) — reuse the same lever on the read commands:
+  ```
+  a2l config explain ~/work/acme/web/apps/mobile        # positional sugar for --cwd
+  a2l config explain --cwd <dir> --json                 # machine-readable, for agents
+  a2l config get defaultTeam --cwd <dir>                # single override-resolved field
+  ```
+
+**Overrides are always *defaults*, regardless of how the context dir is chosen.** Whether
+the context is `process.cwd()`, `-C`, or `AGENT2LINEAR_CWD`, the resolved values only seed
+defaults; explicit CLI flags/args always win (§5.5 step 7). So "pwd *is* the target" and
+"`-C` points at the target" behave identically — both merely supply defaults — which
+directly answers the "is that for defaults?" question for the cwd case.
 
 ---
 
@@ -399,20 +447,26 @@ considered (concatenated), then sorted per §5.6.
 - **Provenance:** extend `ResolvedConfig.locations[field]` with a new source type
   `{ type: 'override', scope, ruleIndex, when }` so existing `config list` output shows
   *which rule* supplied each value.
-- **New `config explain` (a.k.a. `config which`):** for the current context, print each
+- **Targeting (§5.7):** a **global `-C, --cwd <dir>`** flag (with `AGENT2LINEAR_CWD` env
+  fallback) sets the resolution-context dir for *any* command, git-style. This is the lever
+  that serves both execute and query modes.
+- **New `config explain` (a.k.a. `config which`):** for the context dir, print each
   resolved field, its value, and the winning rule — the answer to "why did it pick team
-  X here?" Include resolved context (cwd, repoRoot, identity, branch) and the ordered
-  list of matching rules with scores. This is the key debuggability feature.
+  X here?" Include resolved context (contextDir, repoRoot, identity, branch) and the
+  ordered list of matching rules with scores. Accepts an optional **positional `[dir]`**
+  (sugar for `--cwd`) and **`--json`** for agents. This is the key debuggability feature.
+- **`config get <key> --cwd <dir>`:** returns a single **override-resolved** field for the
+  target dir — the lightweight scripting path for agents that just need one value.
 
 ```
-$ a2l config explain
+$ a2l config explain ~/work/acme/web/apps/mobile/feature   # positional = --cwd
 context:
-  cwd        /home/me/acme/web/apps/mobile/feature
-  repoRoot   /home/me/acme/web
-  identity   github.com  acme/web
-  branch     feature/login
+  contextDir  ~/work/acme/web/apps/mobile/feature
+  repoRoot    ~/work/acme/web
+  identity    github.com  acme/web
+  branch      feature/login
 resolved:
-  defaultTeam        mobile        ← global override #2  when{repo:acme/web, path:apps/mobile/**}
+  defaultTeam        mobile        ← repo override   when{path:apps/mobile/**}
   defaultInitiative  q3-roadmap    ← repo catch-all
 ```
 
@@ -423,11 +477,13 @@ resolved:
 | Area | Change |
 |------|--------|
 | `src/lib/types.ts` | Add `WhenClause`, `OverridableConfig`, `ConfigOverride`; add `overrides?` to `Config`. |
-| `src/lib/git-context.ts` *(new)* | Resolve `repoRoot`, `origin` URL → `{host, owner, name}` (normalize SSH/HTTPS/ssh://, strip `.git`, nested groups), current branch. Pure, lazily invoked, process-cached. |
+| `src/cli.ts` | Add a global `-C, --cwd <dir>` option; in the existing `preAction` hook, resolve the context dir (flag → `AGENT2LINEAR_CWD` env → `process.cwd()`), realpath + existence-check it, and stash it for downstream resolution. Apply git-style `-C` semantics (also the base for relative path args). |
+| `src/lib/git-context.ts` *(new)* | Given a **context dir** (not hard-wired to `process.cwd()`), resolve `repoRoot`, `origin` URL → `{host, owner, name}` (normalize SSH/HTTPS/ssh://, strip `.git`, nested groups), current branch. Pure, lazily invoked, cached per context dir. |
 | `src/lib/glob-match.ts` *(new)* | gitignore-style matcher (`*`/`**`/trailing-`/`/leading-`/`/`!`), plus identity/branch glob match. Reuse a vetted lib (e.g. `picomatch`/`minimatch`) rather than hand-roll. |
 | `src/lib/overrides.ts` *(new)* | `resolveOverrides(context, layers)` → per-field winner + provenance; specificity scoring (§5.6). |
-| `src/lib/config.ts` | In `getConfig()`: after building `merged`, apply override resolution per field; populate `locations[...] = { type: 'override', … }`; **concatenate** global+repo `overrides` instead of letting the repo array replace the global one. Keep `apiKey` path untouched. |
-| `src/commands/config/explain.ts` *(new)* | Implements `config explain`. |
+| `src/lib/config.ts` | `getConfig(contextDir?)` takes an optional context dir (default `process.cwd()`) and threads it into `findProjectConfigDir(contextDir)` (which **already accepts a `startDir`** — `xdg-paths.ts:55`) and the override resolver. After building `merged`, apply override resolution per field; populate `locations[...] = { type: 'override', … }`; **concatenate** global+repo `overrides` instead of letting the repo array replace the global one. Keep `apiKey` path untouched. |
+| `src/commands/config/explain.ts` *(new)* | Implements `config explain [dir]` with `--cwd`/`--json`. |
+| `src/commands/config/get.ts` | Add `--cwd <dir>` and override-resolve the requested key for that context dir. |
 | Tests | `tests/scripts/test-config-overrides.sh` (integration) + unit tests for glob-match, git-context normalization, and specificity ordering (Vitest, matching existing `*.test.ts`). |
 
 **Performance:** the Git context is resolved lazily and only when at least one override
@@ -446,7 +502,11 @@ configs that don't use overrides pay nothing.
 | Git worktrees | Branch and root resolved via Git; works normally. |
 | Invalid glob / unknown `when` key | Warn (stderr) and skip that rule; never crash resolution. |
 | `path` escapes repo root (`../`) | Treated as a disk path comparison; documented as discouraged. |
-| Conflicting equal-specificity rules | Tie-break: repo layer > global layer > later declaration (§5.6). |
+| Conflicting rules | Resolved by §5.6 precedence: scope (repo > global) first, then specificity, then later declaration. |
+| `-C`/`--cwd` dir does not exist or is unreadable | **Execute:** hard error. **Query** (`config explain`/`get`): report "no matching context" (catch-all/global only), not a crash. |
+| `-C`/`--cwd` dir is outside any repo | Honored as the context dir; identity/`branch` matchers don't match; relative `path` anchors to its discovered `.agent2linear/` if any; absolute `path` + catch-all still apply. |
+| Symlinked context dir | Canonicalized (realpath) before matching, so rules match the real location consistently. |
+| Both `--cwd` flag and `AGENT2LINEAR_CWD` set | Flag wins (precedence in §5.7). |
 
 ---
 
@@ -483,3 +543,8 @@ configs that don't use overrides pay nothing.
   want `when.not`?).
 - **`extends`/includes** if `overrides` arrays grow large enough to warrant splitting out
   of `config.json` (the routes.json option we deferred).
+- **Batch targeting** — resolving defaults for *many* directories in one call (beyond
+  `config explain --json` per dir) if agents need to map a whole tree at once.
+- **`getConfig()` is currently cwd-implicit at call sites** — threading an explicit
+  context dir (§5.7) through all command handlers is the bulk of the wiring; a
+  request-scoped context object could carry it instead of an extra parameter everywhere.
