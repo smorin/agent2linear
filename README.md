@@ -221,6 +221,92 @@ Project configuration is discovered by walking up from the current directory tow
 
 **See also:** Run `agent2linear config --help` for all configuration options.
 
+## Multi-Workspace & Profiles
+
+If you work across **multiple Linear workspaces** (e.g. personal + several companies), agent2linear can hold several keys at once and automatically target the right workspace per repository — without naming the workspace in every command.
+
+> **The simple case is unchanged.** If you use a single key (`LINEAR_API_KEY` env var or `apiKey` in config), everything works exactly as before. Profiles and workspaces are strictly opt-in.
+
+### Concepts: `global < profile < repo`
+
+- A **workspace** is a Linear workspace, addressed by one `lin_api_…` key. Keys live in a **secrets registry** that is never committed.
+- A **profile** is a named bundle of *settings* — which workspace to use, optional defaults (`defaultTeam`, `defaultInitiative`, …), and **detection rules**. Profiles live in committable config and **never contain a raw key**.
+- Resolved configuration merges **`global < profile < repo`**, so a repo override beats a profile default beats a global default.
+
+### Register workspaces and profiles
+
+```bash
+# 1. Register a workspace's key in the secrets registry (piped, never in shell history)
+echo "$ACME_KEY" | a2l workspace add acme --api-key -
+a2l workspace list                    # names + masked keys
+a2l workspace current                 # the resolved active workspace + source (offline)
+
+# 2. Define a profile that points at it, with optional defaults
+a2l profile add acme --workspace acme --default-team backend --default-initiative q3
+a2l config set defaultProfile acme    # persisted fallback default
+
+# 3. Auto-detect: route any repo under a GitHub org to this profile
+a2l profile match add acme --git-remote-owner acme-co --git-remote-owner acme-labs
+#   (accepts a bare owner OR a full repo URL — the owner is extracted)
+```
+
+Now, inside any repo whose `origin` owner is `acme-co`/`acme-labs`, commands automatically use the `acme` workspace and its defaults.
+
+### Selection precedence (which workspace?)
+
+Highest to lowest:
+
+| # | Source | Example |
+|---|---|---|
+| 1 | `--workspace <name>` / `--api-key <key>` (per-invocation) | `a2l --workspace acme issue create …` |
+| 2 | `AGENT2LINEAR_WORKSPACE` env declarator | `AGENT2LINEAR_WORKSPACE=acme a2l …` |
+| 3 | Repo config `profile`/`workspace` in `.agent2linear/config.json` | `{ "profile": "acme" }` |
+| 4 | Git-remote auto-detect (`origin` owner → `profile.match.gitRemoteOwner`) | (automatic) |
+| 5 | Global `defaultProfile` | `a2l config set defaultProfile acme` |
+| 6 | Legacy single key (`LINEAR_API_KEY` / config `apiKey`) | (the simple case) |
+
+### Key-source precedence (commit-safe — where does the key come from?)
+
+Committable config **never** holds a raw key. For the resolved workspace `<NAME>`, the key is sourced (highest → lowest):
+
+1. `--api-key <key>` / `--api-key -` (stdin)
+2. **Named env var** — `apiKeyEnv` override, else the default `LINEAR_API_KEY_<NAME>` (e.g. `acme` → `LINEAR_API_KEY_ACME`, `acme-co` → `LINEAR_API_KEY_ACME_CO`)
+3. **Per-profile env-file** — `profiles.<name>.envFile` (dotenv; `~` and `$VAR` expanded; never mutates `process.env`)
+4. **Secrets registry** — `workspaces.json` (global, mode `0600`) or `.agent2linear/workspaces.local.json` (project, auto-gitignored)
+5. Legacy plain `LINEAR_API_KEY` — used only when unambiguous
+
+If a non-explicitly-selected workspace would fall back to the bare `LINEAR_API_KEY` while ≥2 workspaces are configured, the tool **refuses** (ambiguous) and tells you to set `LINEAR_API_KEY_<NAME>` or pass `--workspace`.
+
+### Refuse to guess: `noMatchPolicy` and exclusion
+
+When ≥2 profiles exist and nothing matches a repo:
+
+- **`deny`** (default) — refuse, with guidance. The simple single-key case never denies.
+- **`default`** — fall back to `defaultProfile`.
+- **`match-only`** — operate only in recognized repos; refuse everywhere else.
+
+```bash
+a2l config set noMatchPolicy deny
+a2l profile exclude acme               # mark a profile/org off-limits (linear: false)
+# repo opt-out: .agent2linear/config.json -> { "linear": false }
+```
+
+An explicit `--workspace`/`--api-key` always forces through exclusion **and** no-match.
+
+### Safety on writes (R11)
+
+Mutating commands (`issue create`, `issue update`, `project create`) print a workspace/source banner and never let you write to the wrong place by accident:
+
+```bash
+a2l issue create --title "Fix bug"                     # → banner shows the active workspace + source
+a2l issue create --title "Fix bug" --json              # { "ok": true, "workspace": { "name": "acme", "source": "auto-detect" }, "issue": { … } }
+a2l issue create --title "Fix bug" -y                  # skip the auto-detected-workspace confirmation
+```
+
+- In an **auto-detected, multi-workspace** repo, a mutating command **confirms** on an interactive terminal and **fail-safe errors** (never hangs) when run non-interactively without `--workspace`/`-y`/`confirmAutoDetectedWrites=false`.
+- `--json` emits `workspace.source` so an agent can verify *which* workspace it wrote to.
+- `a2l whoami` and `a2l doctor` show the active workspace + source; `doctor` also warns if a secrets file is tracked by git or a raw `apiKey` sits in a project `config.json`.
+
 ## Usage
 
 The CLI provides two command names that work identically:
