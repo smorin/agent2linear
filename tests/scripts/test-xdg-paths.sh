@@ -217,6 +217,31 @@ grep -q 'regress-ws-123' "$XDG_CONFIG_FILE" \
   && echo "PASS: 'profile add --workspace' persisted the workspace pointer (regression)" \
   || fail "profile add dropped the --workspace pointer; not found in $XDG_CONFIG_FILE"
 
+# --- Step 9: named env var + per-profile env-file key sourcing (P4) -------
+# A selected workspace sources its key from LINEAR_API_KEY_<NAME> (named env var),
+# else the profile's envFile. Verified offline via the masked key value
+# (mask = first4 + *** + last3). Uses a fresh XDG dir + empty cwd so earlier
+# profiles / any project config don't interfere.
+P4XDG="$ROOT/p4xdg"
+P4CWD="$ROOT/p4cwd"
+mkdir -p "$P4XDG/agent2linear" "$P4CWD"
+
+# (a) named env var supplies the key for a bare --workspace selection
+A_OUT="$(cd "$P4CWD" && LINEAR_API_KEY_ENVWS='lin_api_namedenv_eee' XDG_CONFIG_HOME="$P4XDG" \
+  run_cli --workspace envws workspace current 2>&1)"
+echo "$A_OUT" | grep -q 'eee' \
+  && echo "PASS: key sourced from LINEAR_API_KEY_<NAME> (named env var)" \
+  || fail "named env var not used; got: $A_OUT"
+
+# (b) per-profile envFile supplies the key when the env var is unset
+printf 'LINEAR_API_KEY_EFWS=lin_api_fromfile_fff\n' > "$P4XDG/efws.env"
+printf '{ "profiles": { "penv": { "workspace": "efws", "envFile": "%s" } } }\n' \
+  "$P4XDG/efws.env" > "$P4XDG/agent2linear/config.json"
+B_OUT="$(cd "$P4CWD" && XDG_CONFIG_HOME="$P4XDG" run_cli --workspace penv workspace current 2>&1)"
+echo "$B_OUT" | grep -q 'fff' \
+  && echo "PASS: key sourced from the profile envFile (source: env-file)" \
+  || fail "envFile not used; got: $B_OUT"
+
 # --- Hermeticity assertion: real ~/.config was never touched -------------
 # HOME is overridden to temp, so the user's real config dir cannot have been
 # created or modified by this run. (Informational: the trap removes $ROOT.)

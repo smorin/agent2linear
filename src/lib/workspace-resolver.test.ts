@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setInvocationContext } from './invocation-context.js';
 import {
+  normalizeEnvVarName,
   resolveActiveProfile,
   resolveActiveWorkspace,
   resolveWorkspaceKey,
@@ -281,6 +282,115 @@ describe('resolveActiveWorkspace - no-match gate + exclusion (R9, Phase 3)', () 
     expect(res.denied).toBeUndefined();
     expect(res.key).toBe('lin_api_envkey');
     expect(res.source).toBe('env');
+  });
+});
+
+describe('normalizeEnvVarName', () => {
+  it('maps a name to LINEAR_API_KEY_<NORMALIZED>', () => {
+    expect(normalizeEnvVarName('acme')).toBe('LINEAR_API_KEY_ACME');
+    expect(normalizeEnvVarName('acme-co')).toBe('LINEAR_API_KEY_ACME_CO');
+    expect(normalizeEnvVarName('Foo.Bar 1')).toBe('LINEAR_API_KEY_FOO_BAR_1');
+  });
+});
+
+describe('resolveWorkspaceKey - full R7 key-source precedence (Phase 4)', () => {
+  it('cli --api-key wins over everything', () => {
+    vi.stubEnv('LINEAR_API_KEY_ACME', 'env');
+    saveWorkspace('global', 'acme', { apiKey: 'secret' });
+    setInvocationContext({ apiKey: 'cli', workspace: 'acme' });
+    expect(resolveWorkspaceKey('acme').key).toBe('cli');
+  });
+
+  it('named env var (default LINEAR_API_KEY_<NAME>) beats env-file/secrets/legacy', () => {
+    vi.stubEnv('LINEAR_API_KEY_ACME', 'envkey');
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    saveWorkspace('global', 'acme', { apiKey: 'secret' });
+    const res = resolveWorkspaceKey('acme');
+    expect(res.key).toBe('envkey');
+    expect(res.source).toBe('env');
+  });
+
+  it('honors the apiKeyEnv override instead of the default var name', () => {
+    vi.stubEnv('MY_KEY', 'overridden');
+    vi.stubEnv('LINEAR_API_KEY_ACME', 'default-var');
+    const res = resolveWorkspaceKey('acme', { apiKeyEnv: 'MY_KEY' });
+    expect(res.key).toBe('overridden');
+    expect(res.source).toBe('env');
+  });
+
+  it('falls to the env-file when the named env var is unset', () => {
+    const envFile = join(workdir, 'acme.env');
+    writeFileSync(envFile, 'LINEAR_API_KEY_ACME=fromfile\n', 'utf-8');
+    saveWorkspace('global', 'acme', { apiKey: 'secret' });
+    const res = resolveWorkspaceKey('acme', { envFile });
+    expect(res.key).toBe('fromfile');
+    expect(res.source).toBe('env-file');
+  });
+
+  it('falls to the secrets registry when no env var / env-file provides the key', () => {
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    saveWorkspace('global', 'acme', { apiKey: 'secret' });
+    const res = resolveWorkspaceKey('acme');
+    expect(res.key).toBe('secret');
+    expect(res.viaLegacy).toBeFalsy();
+  });
+
+  it('falls to the legacy plain key last, tagged viaLegacy', () => {
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    const res = resolveWorkspaceKey('acme');
+    expect(res.key).toBe('plain');
+    expect(res.source).toBe('env');
+    expect(res.viaLegacy).toBe(true);
+  });
+});
+
+describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () => {
+  it('FIRES: non-explicit named workspace falls back to plain key with >=2 workspaces', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
+    });
+    // AGENT2LINEAR_WORKSPACE names the workspace (so it bypasses the no-match gate)
+    // but is NOT the explicit --flag, so the ambiguity guard still applies.
+    vi.stubEnv('AGENT2LINEAR_WORKSPACE', 'acme');
+    vi.stubEnv('LINEAR_API_KEY', 'plain'); // no LINEAR_API_KEY_WSACME, no secrets
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeDefined();
+    expect(res.denied?.reason).toMatch(/ambiguous/i);
+  });
+
+  it('SILENT when the workspace was chosen explicitly (--workspace forces through)', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
+    });
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    setInvocationContext({ workspace: 'acme' });
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.key).toBe('plain');
+  });
+
+  it('SILENT for the "plain = default" single-workspace setup', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      defaultProfile: 'acme',
+      profiles: { acme: { workspace: 'wsAcme' } },
+    });
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.key).toBe('plain');
+  });
+
+  it('SILENT when the named env var supplies the key (not a legacy fallback)', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
+    });
+    vi.stubEnv('AGENT2LINEAR_WORKSPACE', 'acme');
+    vi.stubEnv('LINEAR_API_KEY', 'plain');
+    vi.stubEnv('LINEAR_API_KEY_WSACME', 'named');
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.key).toBe('named');
   });
 });
 

@@ -23,6 +23,7 @@
  */
 
 import { readGlobalConfig, readProjectConfig } from './config.js';
+import { loadEnvFile } from './env-file.js';
 import { getInvocationContext } from './invocation-context.js';
 import { detectProfile, loadProfiles } from './profiles.js';
 import type { Profile, WorkspaceResolution, WorkspaceSource } from './types.js';
@@ -218,8 +219,26 @@ export function resolveActiveWorkspace(): WorkspaceResolution {
 
   if (decision.kind === 'named') {
     const wsName = workspaceNameFor(decision.name);
-    const { key } = resolveWorkspaceKey(wsName);
-    return { key, name: wsName, source: decision.source, profile: decision.profile };
+    const profile = decision.profile ? loadProfiles()[decision.profile] : undefined;
+    const result = resolveWorkspaceKey(wsName, profile);
+
+    // Ambiguity guard (R7 Scheme-D Option 2): a non-explicitly-selected workspace
+    // would fall back to the bare LINEAR_API_KEY while ≥2 workspaces exist — its
+    // ownership is ambiguous, so refuse rather than use the wrong key.
+    const explicit = decision.source === 'flag';
+    if (result.viaLegacy && result.key !== '' && !explicit && configuredWorkspaceCount() >= 2) {
+      const expected = profile?.apiKeyEnv ?? normalizeEnvVarName(wsName);
+      return {
+        key: '',
+        source: decision.source,
+        denied: {
+          reason: `Ambiguous key for workspace '${wsName}': falling back to the plain LINEAR_API_KEY, but multiple workspaces are configured.`,
+          hint: `Set ${expected} (or a profile envFile / a "workspace add" secrets entry), or pass --workspace explicitly.`,
+        },
+      };
+    }
+
+    return { key: result.key, name: wsName, source: decision.source, profile: decision.profile };
   }
 
   // Legacy single-key passthrough — byte-identical to today's getApiKey().
@@ -234,58 +253,87 @@ export function resolveActiveWorkspace(): WorkspaceResolution {
 }
 
 /**
- * A single key source-resolver: given the chosen workspace name and the invocation
- * context, return its key + key-source, or null to fall through to the next source.
+ * The default per-workspace env-var name: `LINEAR_API_KEY_<NORMALIZED-NAME>`,
+ * upper-cased with any char outside [A-Z0-9_] replaced by `_`
+ * (e.g. `acme` -> LINEAR_API_KEY_ACME, `acme-co` -> LINEAR_API_KEY_ACME_CO).
  */
-type KeySourceResolver = (
-  name: string | undefined,
-  ctx: ReturnType<typeof getInvocationContext>
-) => { key: string; source: WorkspaceSource } | null;
+export function normalizeEnvVarName(name: string): string {
+  return `LINEAR_API_KEY_${name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}`;
+}
 
-/**
- * Ordered key-source resolvers (R7). First non-null wins. Phase 4 inserts the
- * named-env-var (step 2) and per-profile env-file (step 3) resolvers between
- * `cli` and `secretsFile` without rewriting the others.
- */
-const KEY_SOURCE_RESOLVERS: KeySourceResolver[] = [
-  // 1. cli: explicit `--api-key` (literal, or stdin already resolved in preAction)
-  (_name, ctx) => (ctx.apiKey !== undefined ? { key: ctx.apiKey, source: 'flag' } : null),
-
-  // 2. [Phase 4 gap] named env var: `apiKeyEnv` or default LINEAR_API_KEY_<NAME>
-  // 3. [Phase 4 gap] per-profile env-file (dotenv)
-
-  // 4. secrets file: literal apiKey in workspaces.json / workspaces.local.json
-  (name) => {
-    if (!name) return null;
-    const ws = loadWorkspaces()[name];
-    if (ws && ws.apiKey) {
-      // No dedicated 'secrets' source member exists yet; reuse 'flag' since a
-      // secrets-file key is only reached via an explicit --workspace selection.
-      return { key: ws.apiKey, source: 'flag' };
-    }
-    return null;
-  },
-
-  // 5. legacy plain LINEAR_API_KEY / config apiKey
-  () => legacyKey(),
-];
-
-/**
- * Source the chosen workspace's key through the ordered resolver list.
- *
- * @param name - resolved workspace/profile name, or undefined for the legacy path.
- */
-export function resolveWorkspaceKey(
-  name: string | undefined
-): { key: string; source: WorkspaceSource } {
-  const ctx = getInvocationContext();
-  for (const resolver of KEY_SOURCE_RESOLVERS) {
-    const result = resolver(name, ctx);
-    if (result) {
-      return result;
+/** Number of distinct configured workspaces (registry entries ∪ profile pointers). */
+function configuredWorkspaceCount(): number {
+  const names = new Set<string>(Object.keys(loadWorkspaces()));
+  for (const profile of Object.values(loadProfiles())) {
+    if (profile.workspace) {
+      names.add(profile.workspace);
     }
   }
-  return { key: '', source: 'legacy' };
+  return names.size;
+}
+
+/**
+ * The result of sourcing a workspace's key. `viaLegacy` marks that the key (if
+ * any) came from the legacy plain `LINEAR_API_KEY` / config `apiKey` fallback —
+ * used by the ambiguity guard, which must distinguish that from a named env var.
+ */
+interface KeySourceResult {
+  key: string;
+  source: WorkspaceSource;
+  viaLegacy?: boolean;
+}
+
+/**
+ * Source the chosen workspace's key through the ordered R7 chain (first hit wins):
+ *   1. cli `--api-key`
+ *   2. named env var (`apiKeyEnv` override, else default LINEAR_API_KEY_<NAME>)
+ *   3. per-profile env-file (dotenv; same var name; no process.env mutation)
+ *   4. secrets registry (workspaces.json / .local.json)
+ *   5. legacy plain LINEAR_API_KEY / config apiKey
+ *
+ * @param name - resolved workspace name, or undefined for the legacy path.
+ * @param profile - the active profile (carries `apiKeyEnv` / `envFile`), if any.
+ */
+export function resolveWorkspaceKey(name: string | undefined, profile?: Profile): KeySourceResult {
+  const ctx = getInvocationContext();
+
+  // 1. cli: explicit `--api-key` (literal, or stdin already resolved in preAction).
+  if (ctx.apiKey !== undefined) {
+    return { key: ctx.apiKey, source: 'flag' };
+  }
+
+  const envVarName = profile?.apiKeyEnv ?? (name ? normalizeEnvVarName(name) : undefined);
+
+  // 2. named env var in the process environment.
+  if (envVarName) {
+    const fromEnv = process.env[envVarName];
+    if (fromEnv) {
+      return { key: fromEnv, source: 'env' };
+    }
+  }
+
+  // 3. the same var name inside the profile's env-file.
+  if (envVarName && profile?.envFile) {
+    const fromFile = loadEnvFile(profile.envFile)[envVarName];
+    if (fromFile) {
+      return { key: fromFile, source: 'env-file' };
+    }
+  }
+
+  // 4. secrets registry. (No dedicated 'secrets' source member; reuse 'flag'.)
+  if (name) {
+    const ws = loadWorkspaces()[name];
+    if (ws && ws.apiKey) {
+      return { key: ws.apiKey, source: 'flag' };
+    }
+  }
+
+  // 5. legacy plain LINEAR_API_KEY / config apiKey.
+  const legacy = legacyKey();
+  if (legacy) {
+    return { ...legacy, viaLegacy: true };
+  }
+  return { key: '', source: 'legacy', viaLegacy: true };
 }
 
 /**

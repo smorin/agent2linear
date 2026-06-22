@@ -4,11 +4,7 @@ import { dirname, join } from 'path';
 import { getProfileScope } from './profiles.js';
 import type { Scope } from './scope.js';
 import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
-import {
-  resolveActiveProfile,
-  resolveActiveWorkspace,
-  resolveWorkspaceKey,
-} from './workspace-resolver.js';
+import { resolveActiveProfile, resolveActiveWorkspace } from './workspace-resolver.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -289,12 +285,15 @@ export function getConfig(): ResolvedConfig {
  */
 export function getApiKey(): string | undefined {
   const resolution = resolveActiveWorkspace();
-  // Refuse to guess: the no-match gate / exclusion (Phase 3) denied resolution.
+  // Refuse to guess: the no-match gate / exclusion (Phase 3) or the ambiguity
+  // guard (Phase 4) denied resolution.
   if (resolution.denied) {
     throw new Error(`${resolution.denied.reason} ${resolution.denied.hint}`);
   }
-  const { key } = resolveWorkspaceKey(resolution.name);
-  return key || undefined;
+  // resolveActiveWorkspace() already sourced the key WITH full profile context
+  // (named env var / env-file / secrets). Reuse it — re-sourcing here would drop
+  // the profile and miss apiKeyEnv/envFile.
+  return resolution.key || undefined;
 }
 
 /**
