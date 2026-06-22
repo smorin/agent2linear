@@ -34,10 +34,13 @@ export function editProfileCommand(name: string, options: EditProfileOptions = {
       process.exit(1);
     }
 
+    // Update only fields given a non-empty value (preserve the rest), matching
+    // `profile add`'s truthy filtering so an empty string can't store a broken
+    // workspace/team that the truthy display code would then hide.
     const updated: Profile = { ...existing };
-    if (workspace !== undefined) updated.workspace = workspace;
-    if (options.defaultTeam !== undefined) updated.defaultTeam = options.defaultTeam;
-    if (options.defaultInitiative !== undefined) updated.defaultInitiative = options.defaultInitiative;
+    if (workspace) updated.workspace = workspace;
+    if (options.defaultTeam) updated.defaultTeam = options.defaultTeam;
+    if (options.defaultInitiative) updated.defaultInitiative = options.defaultInitiative;
 
     saveProfile(scope, name, updated);
 

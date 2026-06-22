@@ -65,6 +65,13 @@ describe('parseRemoteOwner - R1 edge-case table', () => {
     expect(parseRemoteOwner('   ')).toBeNull();
     expect(parseRemoteOwner('not-a-remote-url')).toBeNull();
   });
+
+  it('rejects URL/SCP input that has no owner/repo path (owner only)', () => {
+    // host:owner with no repo, and host/owner with no repo — not a real remote.
+    expect(parseRemoteOwner('git@github.com:acme')).toBeNull();
+    expect(parseRemoteOwner('foo:bar')).toBeNull();
+    expect(parseRemoteOwner('https://github.com/acme')).toBeNull();
+  });
 });
 
 describe('normalizeRemoteOwner - accepts bare owner OR full URL', () => {

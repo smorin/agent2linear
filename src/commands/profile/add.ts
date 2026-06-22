@@ -1,6 +1,7 @@
+import { readConfigForScope } from '../../lib/config.js';
 import { getInvocationContext } from '../../lib/invocation-context.js';
 import { showError, showSuccess } from '../../lib/output.js';
-import { loadProfiles, saveProfile } from '../../lib/profiles.js';
+import { saveProfile } from '../../lib/profiles.js';
 import { getScopeInfo } from '../../lib/scope.js';
 import type { Profile } from '../../lib/types.js';
 
@@ -25,12 +26,13 @@ interface AddProfileOptions {
  */
 export function addProfileCommand(name: string, options: AddProfileOptions = {}): void {
   try {
-    if (!name || name.trim() === '') {
+    const profileName = name?.trim();
+    if (!profileName) {
       showError('Profile name cannot be empty');
       process.exit(1);
     }
-    if (name.includes(' ')) {
-      showError('Profile name cannot contain spaces');
+    if (/\s/.test(profileName)) {
+      showError('Profile name cannot contain whitespace');
       process.exit(1);
     }
 
@@ -42,10 +44,13 @@ export function addProfileCommand(name: string, options: AddProfileOptions = {})
     if (options.defaultTeam) profile.defaultTeam = options.defaultTeam;
     if (options.defaultInitiative) profile.defaultInitiative = options.defaultInitiative;
 
-    const isUpdate = name in loadProfiles();
-    saveProfile(scope, name, profile);
+    // Detect create-vs-update against the TARGET scope only — loadProfiles() merges
+    // global+project, which would mislabel a create as an update (and vice versa)
+    // when the same name exists in the other scope.
+    const isUpdate = Boolean(readConfigForScope(scope).profiles?.[profileName]);
+    saveProfile(scope, profileName, profile);
 
-    const details: Record<string, string> = { Profile: name, Scope: scopeLabel };
+    const details: Record<string, string> = { Profile: profileName, Scope: scopeLabel };
     if (profile.workspace) details.Workspace = profile.workspace;
     if (profile.defaultTeam) details['Default Team'] = profile.defaultTeam;
     if (profile.defaultInitiative) details['Default Initiative'] = profile.defaultInitiative;

@@ -103,7 +103,10 @@ export function parseRemoteOwner(url: string | null): { host: string; owner: str
     .replace(/\.git$/, '')
     .split('/')
     .filter(Boolean);
-  if (segments.length === 0) {
+  // A real remote is always owner/repo(+...). Require ≥2 segments so malformed
+  // URL/SCP input (e.g. `foo:bar`, `git@github.com:acme`) is rejected rather than
+  // silently normalized into a wrong owner that could never match a real repo.
+  if (segments.length < 2) {
     return null;
   }
   return { host, owner: segments[0] };

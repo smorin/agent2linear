@@ -894,6 +894,10 @@ async function updateIssueNonInteractive(
       console.log(`✓ Browser opened to ${result.url}\n`);
       process.exit(0);
     }
+
+    // Return the updated issue so a bulk caller can aggregate results (the human
+    // success output above is suppressed by the caller under --json).
+    return result;
   } catch (error) {
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
@@ -914,8 +918,30 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
     // Guard the whole batch ONCE (banner + one confirmation), then skip the
     // per-issue guard so the agent isn't prompted N times. A dry-run writes
     // nothing, so it must not banner/confirm (matches the single-issue path).
-    if (!options.dryRun) {
-      await guardWorkspaceForMutation(options);
+    const ws = options.dryRun
+      ? resolveActiveWorkspace()
+      : await guardWorkspaceForMutation(options);
+
+    // --json (and not a dry-run): collect each issue's result and emit ONE
+    // machine-readable object so a scripted caller can parse the whole batch.
+    // Child stdout (per-issue progress/success) is silenced so only the final
+    // JSON lands on stdout.
+    if (options.json && !options.dryRun) {
+      const restore = silenceStdoutWhile(true);
+      const issues: Array<Awaited<ReturnType<typeof updateIssueNonInteractive>>> = [];
+      for (const raw of identifiers) {
+        const r = await updateIssueNonInteractive(
+          raw.trim(),
+          { ...options, bulk: undefined, web: undefined, json: undefined },
+          true
+        );
+        if (r) issues.push(r);
+      }
+      restore();
+      console.log(
+        JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2)
+      );
+      process.exit(0);
     }
 
     console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);
