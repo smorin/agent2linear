@@ -212,12 +212,13 @@ export interface WhenLeaf {
   repo?: string;    // "owner/name" glob, e.g. "acme/web", "acme/*"
   owner?: string;   // owner/group path glob, e.g. "acme"
   host?: string;    // host glob, e.g. "github.com"
-  path?: string;    // root-anchored path glob (relative = repo-anchored; ~//abs = disk)
+  path?: string;    // path glob (relative = repo-anchored; leading ~/ or / = disk)
   branch?: string;  // branch glob, e.g. "release/*"
   // Which remote(s) the identity criteria (repo/owner/host) in THIS node read.
-  // string | string[] | "*"(any remote). Omitted ⇒ "origin". Alone (no identity
-  // criterion) ⇒ matches if a remote of that name exists (e.g. { remote: "upstream" }).
-  remote?: string | string[];
+  // A remote name, list of names, or "*" (any remote). Omitted ⇒ "origin". Alone (no
+  // identity criterion) ⇒ matches if a remote of that name exists (e.g. { remote: "upstream" }).
+  // `(string & {})` keeps the "*" literal visible in editors without widening to `string`.
+  remote?: '*' | (string & {}) | string[];
 }
 export interface WhenComposite {
   allOf?: WhenClause[]; // AND of children   (allOf: [] ⇒ true, vacuous)
@@ -293,7 +294,7 @@ node     = "{" { criterion | composite } "}" ;   (* all entries AND together *)
 criterion = "repo"   ":" glob              (* identity, read via `remote` (default origin) *)
           | "owner"  ":" glob              (* identity *)
           | "host"   ":" glob              (* identity *)
-          | "path"   ":" glob              (* repo-anchored, or ~//abs disk — §5.3 *)
+          | "path"   ":" glob              (* repo-anchored, or leading ~/ or / = disk — §5.3 *)
           | "branch" ":" glob
           | "remote" ":" ( name | name[] | "*" ) ;  (* selects remote(s) for identity above *)
 
