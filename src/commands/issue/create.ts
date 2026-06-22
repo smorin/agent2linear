@@ -1,6 +1,7 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { getConfig } from '../../lib/config.js';
+import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { readContentFile } from '../../lib/file-utils.js';
 import { resolveIssueId } from '../../lib/issue-resolver.js';
 import {
@@ -10,7 +11,10 @@ import {
   resolveMemberIdentifier,
   validateTeamExists,
 } from '../../lib/linear-client.js';
-import type { IssueCreateInput } from '../../lib/types.js';
+import { getLogLevel } from '../../lib/logger.js';
+import { silenceStdoutWhile } from '../../lib/output.js';
+import type { IssueCreateInput, WorkspaceResolution } from '../../lib/types.js';
+import { workspaceForJson } from '../../lib/workspace-banner.js';
 
 interface CreateOptions {
   // Required
@@ -48,12 +52,17 @@ interface CreateOptions {
   // Mode
   web?: boolean; // Open in browser after creation
   dryRun?: boolean; // Print payload without creating
+  json?: boolean; // Machine-readable output (incl. workspace.source)
+  yes?: boolean; // Skip the auto-detected-workspace confirmation
 }
 
 /**
  * Create an issue non-interactively
  */
 async function createIssueNonInteractive(options: CreateOptions) {
+  // Under --json, silence stdout progress so only the final JSON object lands on
+  // stdout (errors still go to stderr). --dry-run keeps its own payload output.
+  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
   try {
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 1: VALIDATION - Mutual Exclusivity & Required Fields
@@ -537,12 +546,26 @@ async function createIssueNonInteractive(options: CreateOptions) {
       return;
     }
 
-    console.log('\n🚀 Creating issue...');
+    // Workspace safety (R11): banner + auto-detected-write confirmation. Runs
+    // after dry-run (which never writes) and before the create.
+    const ws = await guardWorkspaceForMutation(options);
+    const silent = options.json || getLogLevel() === 'quiet';
+
+    if (!silent) console.log('\n🚀 Creating issue...');
 
     const result = await createIssue(issueData);
 
+    if (options.json) {
+      restoreLog();
+      const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
+      console.log(
+        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), issue: result }, null, 2)
+      );
+      process.exit(0);
+    }
+
     // Display success message
-    displaySuccess(result, options.noAssignee, assigneeId !== undefined);
+    displaySuccess(result, options.noAssignee, assigneeId !== undefined, ws);
 
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 16: WEB MODE (open in browser)
@@ -566,9 +589,13 @@ async function createIssueNonInteractive(options: CreateOptions) {
 function displaySuccess(
   result: { id: string; identifier: string; title: string; url: string },
   noAssignee?: boolean,
-  hasAssignee?: boolean
+  hasAssignee?: boolean,
+  ws?: WorkspaceResolution
 ) {
   console.log('\n✅ Issue created successfully!');
+  if (ws) {
+    console.log(`   Workspace:  ${ws.name ?? (ws.source === 'flag' ? '(ad-hoc)' : '(default)')}`);
+  }
   console.log(`   Identifier: ${result.identifier}`);
   console.log(`   Title: ${result.title}`);
   console.log(`   ID: ${result.id}`);

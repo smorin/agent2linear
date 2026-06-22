@@ -16,11 +16,90 @@ export interface Config {
   enableSessionCache?: boolean; // Enable/disable in-memory cache (default: true)
   enableBatchFetching?: boolean; // Enable/disable batch API calls (default: true)
   prewarmCacheOnCreate?: boolean; // Auto-prewarm cache on project create (default: true)
+
+  // Multi-workspace configuration (M28)
+  profile?: string; // Repo-level selector: use this profile for this repository
+  workspace?: string; // Repo-level selector: use this workspace for this repository
+  linear?: boolean; // Repo-level opt-out: false = this repo is off-limits (Phase 3)
+  defaultProfile?: string; // Global default profile when nothing else resolves
+  profiles?: Record<string, Profile>; // Named profiles (settings + detection rules)
+  noMatchPolicy?: 'deny' | 'default' | 'match-only'; // No-match behavior (Phase 3)
+  confirmAutoDetectedWrites?: boolean; // Confirm mutating writes to an auto-detected workspace (Phase 5)
 }
 
 export interface ConfigLocation {
-  type: 'global' | 'project' | 'env' | 'none';
+  type: 'global' | 'project' | 'env' | 'profile' | 'none';
   path?: string;
+}
+
+/**
+ * A profile's git-remote detection rule (Phase 3). A profile auto-resolves for a
+ * repo whose `origin` owner is listed in `gitRemoteOwner`. `linear: false` marks
+ * the matched org off-limits.
+ */
+export interface MatchRule {
+  gitRemoteOwner?: string[];
+  linear?: boolean;
+}
+
+/**
+ * A named profile: a bundle of config defaults (any recognized Config key, R10) +
+ * a pointer to a workspace + detection/exclusion + non-secret key-source refs.
+ * Profiles live in committable config (config.json), never holding a raw key.
+ *
+ * Inherits `workspace`/`linear` (and the default* keys) from Partial<Config>;
+ * adds `match`/`apiKeyEnv`/`envFile`. The non-config meta keys
+ * (workspace/match/linear/apiKeyEnv/envFile) are stripped by getProfileScope().
+ *
+ * `apiKey`, `profiles`, and the repo-level `profile` selector are Omitted: a
+ * profile lives in committable config and must never carry a raw key, nest other
+ * profiles, or re-select a profile. getProfileScope() also strips these at runtime
+ * (config.json on disk is not type-checked).
+ */
+export interface Profile extends Partial<Omit<Config, 'apiKey' | 'profiles' | 'profile'>> {
+  match?: MatchRule; // git-remote detection (Phase 3)
+  apiKeyEnv?: string; // override the default env-var name (Phase 4)
+  envFile?: string; // per-profile dotenv path (Phase 4)
+}
+
+/**
+ * Secrets registry entry: a named workspace holding/pointing at one Linear key.
+ * Lives only in the secrets registry (workspaces.json / workspaces.local.json),
+ * never in committable config.
+ */
+export interface Workspace {
+  apiKey: string;
+}
+
+/**
+ * How the active workspace was selected / how its key was sourced.
+ * (Phase 4 adds 'env-file'; Phases 2/3 add 'env', 'project', 'auto-detect', 'default'.)
+ */
+export type WorkspaceSource =
+  | 'flag'
+  | 'env'
+  | 'env-file'
+  | 'project'
+  | 'auto-detect'
+  | 'default'
+  | 'legacy';
+
+/**
+ * The resolved active workspace: which key is active, how the workspace was
+ * selected, and the named workspace/profile (when applicable).
+ */
+export interface WorkspaceResolution {
+  key: string;
+  name?: string;
+  source: WorkspaceSource;
+  profile?: string;
+  /**
+   * Set when resolution REFUSED to pick a workspace (Phase 3): repo/profile
+   * exclusion, or the no-match gate under `noMatchPolicy`. When present, callers
+   * must not act — `getApiKey()` throws and `workspace current` exits non-zero.
+   * `key` is `''` and `source` is unused in this case.
+   */
+  denied?: { reason: string; hint: string };
 }
 
 export interface ResolvedConfig extends Config {
@@ -40,6 +119,9 @@ export interface ResolvedConfig extends Config {
     enableSessionCache: ConfigLocation;
     enableBatchFetching: ConfigLocation;
     prewarmCacheOnCreate: ConfigLocation;
+    defaultProfile: ConfigLocation;
+    noMatchPolicy: ConfigLocation;
+    confirmAutoDetectedWrites: ConfigLocation;
   };
 }
 

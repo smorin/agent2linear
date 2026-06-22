@@ -34,3 +34,8 @@ coverage/
 
 # Generated cleanup scripts
 cleanup-*.sh
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/
+# Riptide per-developer worktree config (local only)
+.humanlayer/workspace.local.json

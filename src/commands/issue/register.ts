@@ -73,6 +73,8 @@ Use --show-history to see the change history.
     .option('--template <id|alias>', 'Issue template ID or alias')
     .option('-w, --web', 'Open created issue in browser')
     .option('--dry-run', 'Preview the payload without creating the issue')
+    .option('--json', 'Output the created issue + active workspace as JSON')
+    .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .addHelpText('after', `
 Examples:
   # Minimal (uses defaultTeam, auto-assigns to you)
@@ -182,6 +184,8 @@ Config Defaults:
     .option('-w, --web', 'Open updated issue in browser')
     .option('--dry-run', 'Preview the payload without updating the issue')
     .option('--bulk <identifiers>', 'Apply same update to multiple issues (comma-separated identifiers)')
+    .option('--json', 'Output the updated issue + active workspace as JSON')
+    .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .addHelpText('after', `
 Examples:
   # Update single field
