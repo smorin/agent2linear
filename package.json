@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/picomatch": "^4.0.3",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vitest/coverage-v8": "^4.0.4",
@@ -75,6 +76,7 @@
     "ink": "^6.3.1",
     "ink-select-input": "^6.2.0",
     "ink-text-input": "^6.0.0",
+    "picomatch": "^4.0.4",
     "react": "^19.2.0"
   },
   "engines": {

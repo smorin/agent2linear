@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { realpathSync } from 'fs';
 
 import { registerAliasCommands } from './commands/alias/register.js';
 import { registerCacheCommands } from './commands/cache/register.js';
@@ -39,6 +40,10 @@ cli
   .option('--no-color', 'Disable emojis and colored output')
   .option('--workspace <name>', 'Select workspace/profile for this invocation')
   .option('--api-key <key>', 'Use this Linear API key (use "-" to read from stdin)')
+  .option(
+    '-C, --cwd <dir>',
+    'Resolve config, override matching, and relative paths as if launched in <dir> (else $AGENT2LINEAR_CWD, else the current directory)'
+  )
   .hook('preAction', async (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.quiet) setLogLevel('quiet');
@@ -57,7 +62,21 @@ cli
     if (opts.workspace !== undefined && apiKey !== undefined) {
       throw new Error('Pass either --workspace or --api-key, not both.');
     }
-    setInvocationContext({ workspace: opts.workspace, apiKey });
+
+    // M29 §5.7: resolution-context dir (-C/--cwd → $AGENT2LINEAR_CWD → cwd).
+    // realpath-canonicalize it once; execute mode hard-errors on a missing dir.
+    // (Query commands use a positional [dir] for the non-crashing path instead.)
+    const rawCwd = opts.cwd ?? process.env.AGENT2LINEAR_CWD;
+    let contextDir: string | undefined;
+    if (rawCwd) {
+      try {
+        contextDir = realpathSync(rawCwd);
+      } catch {
+        throw new Error(`--cwd directory not found or unreadable: ${rawCwd}`);
+      }
+    }
+
+    setInvocationContext({ workspace: opts.workspace, apiKey, contextDir });
   })
   .action(() => {
     cli.help();

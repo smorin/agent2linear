@@ -13,6 +13,12 @@ export interface InvocationContext {
   workspace?: string;
   /** Literal API key from `--api-key <key>` (or read from stdin for `--api-key -`). */
   apiKey?: string;
+  /**
+   * Resolution-context dir from the program-level `-C, --cwd` flag (or
+   * `AGENT2LINEAR_CWD`), realpath-canonicalized in the preAction hook (M29 §5.7).
+   * Governs config discovery and override matching downstream.
+   */
+  contextDir?: string;
 }
 
 let context: InvocationContext = {};

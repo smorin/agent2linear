@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
+import { getInvocationContext } from './invocation-context.js';
+import { type OverrideLayer, resolveOverrides } from './overrides.js';
 import { getProfileScope } from './profiles.js';
 import type { Scope } from './scope.js';
 import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
@@ -14,9 +16,28 @@ function globalConfigFile(): string {
 }
 
 /** Project config file for reading (walk-up discovery), or null if none exists. */
-function projectConfigReadFile(): string | null {
-  const dir = findProjectConfigDir();
+function projectConfigReadFile(startDir?: string): string | null {
+  const dir = findProjectConfigDir(startDir);
   return dir ? join(dir, CONFIG_FILENAME) : null;
+}
+
+/** Canonicalize a context dir (realpath); fall back to the raw path if it doesn't exist. */
+export function canonicalizeDir(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+/**
+ * Repo root for override matching (M29 §5.3): the dir containing the discovered
+ * `.agent2linear/`, or null when none is found. (Phase 2 adds the Git work-tree
+ * root as a fallback.)
+ */
+export function resolveRepoRoot(contextDir: string): string | null {
+  const projectDir = findProjectConfigDir(contextDir);
+  return projectDir ? dirname(projectDir) : null;
 }
 
 /** Project config file for writing (discovered dir, else cwd/.agent2linear). */
@@ -87,10 +108,17 @@ export function writeConfigForScope(scope: Scope, config: Partial<Config>): void
 /**
  * Get configuration with priority: project > profile > global > env
  */
-export function getConfig(): ResolvedConfig {
+export function getConfig(contextDir?: string): ResolvedConfig {
+  // Resolution-context dir (M29 §5.7): explicit arg → preAction `-C`/`--cwd` →
+  // process.cwd(). Canonicalized once and used for config discovery + override
+  // matching. With no context supplied this is the canonical cwd, so the
+  // no-overrides path stays identical to today.
+  const effectiveDir = canonicalizeDir(
+    contextDir ?? getInvocationContext().contextDir ?? process.cwd()
+  );
   const envConfig: Partial<Config> = {};
   const globalConfig = readConfigFile(globalConfigFile());
-  const projectReadFile = projectConfigReadFile();
+  const projectReadFile = projectConfigReadFile(effectiveDir);
   const projectConfig = projectReadFile ? readConfigFile(projectReadFile) : {};
 
   // Profile scope: the active profile's recognized Config defaults, slotted into
@@ -275,6 +303,36 @@ export function getConfig(): ResolvedConfig {
   // API key from env takes precedence
   if (envConfig.apiKey) {
     merged.apiKey = envConfig.apiKey;
+  }
+
+  // M29: context-aware overrides. Concatenate the global + repo `overrides` arrays
+  // into layers and resolve per field; a winning rule overwrites the merged
+  // (catch-all) value and is labeled with `override` provenance. apiKey is never
+  // overridable, and a config with no `overrides` skips this entirely (byte-identical).
+  const overrideLayers: OverrideLayer[] = [];
+  if (Array.isArray(globalConfig.overrides) && globalConfig.overrides.length > 0) {
+    overrideLayers.push({ scope: 'global', rules: globalConfig.overrides });
+  }
+  if (Array.isArray(projectConfig.overrides) && projectConfig.overrides.length > 0) {
+    overrideLayers.push({ scope: 'project', rules: projectConfig.overrides });
+  }
+  if (overrideLayers.length > 0) {
+    const resolved = resolveOverrides(
+      { contextDir: effectiveDir, repoRoot: resolveRepoRoot(effectiveDir) },
+      overrideLayers
+    );
+    for (const [field, value] of Object.entries(resolved.values)) {
+      const provenance = resolved.locations[field];
+      const current = (locations as Record<string, ConfigLocation>)[field];
+      // Repo scope beats global (§5.6 / §6 example): a global override must not
+      // clobber a value supplied by the repo (project) top-level config. (Refines
+      // the outline's literal "overwrite the merged value".)
+      if (provenance.scope === 'global' && current.type === 'project') {
+        continue;
+      }
+      (merged as Record<string, unknown>)[field] = value;
+      (locations as Record<string, ConfigLocation>)[field] = provenance;
+    }
   }
 
   return {

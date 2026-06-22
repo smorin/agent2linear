@@ -25,11 +25,73 @@ export interface Config {
   profiles?: Record<string, Profile>; // Named profiles (settings + detection rules)
   noMatchPolicy?: 'deny' | 'default' | 'match-only'; // No-match behavior (Phase 3)
   confirmAutoDetectedWrites?: boolean; // Confirm mutating writes to an auto-detected workspace (Phase 5)
+
+  // M29: context-aware config overrides (CONTEXT_OVERRIDES_PROPOSAL.md §5.1).
+  // Optional + additive: absent ⇒ behavior identical to today.
+  overrides?: ConfigOverride[];
+}
+
+/**
+ * A `when` node's leaf criteria (M29 §5.1). Every key present at a node is AND'd
+ * together; identity criteria (repo/owner/host) read the remote(s) named by
+ * `remote` (default `origin`). A relative `path` is repo-root-anchored; a leading
+ * `~/` or `/` switches to an absolute disk match (§5.3).
+ */
+export interface WhenLeaf {
+  repo?: string; // "owner/name" glob, e.g. "acme/web", "acme/*"
+  owner?: string; // owner/group path glob, e.g. "acme"
+  host?: string; // host glob, e.g. "github.com"
+  path?: string; // path glob (relative = repo-anchored; leading ~/ or / = disk)
+  branch?: string; // branch glob, e.g. "release/*"
+  // Which remote(s) the identity criteria in THIS node read. A remote name, a list
+  // of names, or "*" (any). Omitted ⇒ "origin". Alone (no identity criterion) ⇒
+  // matches if a remote of that name exists. The `string & {}` idiom keeps the "*"
+  // literal visible in editors without widening the union to `string` (intentional).
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  remote?: '*' | (string & {}) | string[];
+}
+
+/** JSON-Schema-style boolean composition for a `when` node (M29 §5.1). */
+export interface WhenComposite {
+  allOf?: WhenClause[]; // AND of children (allOf: [] ⇒ true, vacuous)
+  anyOf?: WhenClause[]; // OR of children (anyOf: [] ⇒ false)
+  not?: WhenClause; // negation
+}
+
+/** A recursive `when` clause: leaf criteria AND'd with any composite results. */
+export type WhenClause = WhenLeaf & WhenComposite;
+
+/**
+ * The config keys an override rule may set (M29 §5.1): the same overridable
+ * defaults `config.json` supports today, plus a per-rule `aliases` block
+ * (namespaced by entity type; each value is a Linear ID). `apiKey` is NOT
+ * overridable (security; no use case).
+ */
+export type OverridableConfig = Pick<
+  Config,
+  | 'defaultTeam'
+  | 'defaultInitiative'
+  | 'defaultProject'
+  | 'defaultIssueTemplate'
+  | 'defaultProjectTemplate'
+  | 'defaultMilestoneTemplate'
+  | 'defaultAutoAssignLead'
+> & {
+  aliases?: Partial<Aliases>;
+};
+
+/** A single context-aware override: a `when` clause plus the values it supplies. */
+export interface ConfigOverride extends OverridableConfig {
+  when: WhenClause;
 }
 
 export interface ConfigLocation {
-  type: 'global' | 'project' | 'env' | 'profile' | 'none';
+  type: 'global' | 'project' | 'env' | 'profile' | 'override' | 'none';
   path?: string;
+  // Set only when type === 'override' (M29): which scope/rule supplied the value.
+  scope?: 'global' | 'project';
+  ruleIndex?: number;
+  when?: WhenClause;
 }
 
 /**

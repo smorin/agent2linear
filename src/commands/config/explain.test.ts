@@ -1,0 +1,159 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { resetInvocationContext, setInvocationContext } from '../../lib/invocation-context.js';
+import type { ConfigLocation } from '../../lib/types.js';
+import {
+  buildExplainData,
+  buildExplainJson,
+  explainConfig,
+  type ExplainData,
+  renderExplainText,
+  sourceLabel,
+} from './explain.js';
+
+describe('sourceLabel — provenance labels', () => {
+  it('labels every location type', () => {
+    expect(sourceLabel({ type: 'override', scope: 'project', when: { path: 'cli/**' } })).toMatch(/^repo override/);
+    expect(sourceLabel({ type: 'override', scope: 'global', when: {} })).toMatch(/^global override/);
+    expect(sourceLabel({ type: 'project' })).toBe('repo config');
+    expect(sourceLabel({ type: 'profile' })).toBe('profile');
+    expect(sourceLabel({ type: 'global' })).toBe('global config');
+    expect(sourceLabel({ type: 'env' })).toBe('environment');
+    expect(sourceLabel({ type: 'none' })).toBe('unset');
+  });
+});
+
+describe('renderExplainText', () => {
+  it('renders context + per-field winner when an override matched', () => {
+    const data: ExplainData = {
+      contextDir: '/repo/cli',
+      repoRoot: '/repo',
+      fields: [
+        { key: 'defaultTeam', value: 'cli-team', location: { type: 'override', scope: 'project', when: { path: 'cli/**' } } },
+        { key: 'defaultInitiative', value: undefined, location: { type: 'none' } },
+      ],
+    };
+    const text = renderExplainText(data);
+    expect(text).toContain('contextDir  /repo/cli');
+    expect(text).toContain('repoRoot    /repo');
+    expect(text).toContain('cli-team');
+    expect(text).toContain('repo override');
+    expect(text).toContain('(not set)');
+    expect(text).not.toContain('(no override rules matched');
+  });
+
+  it('shows (none) repoRoot and the no-match note when nothing overrides', () => {
+    const data: ExplainData = {
+      contextDir: '/tmp/x',
+      repoRoot: null,
+      fields: [{ key: 'defaultTeam', value: 'platform', location: { type: 'global' } }],
+    };
+    const text = renderExplainText(data);
+    expect(text).toContain('repoRoot    (none)');
+    expect(text).toContain('(no override rules matched this context)');
+  });
+});
+
+describe('buildExplainJson', () => {
+  it('adds override metadata only for override-sourced fields', () => {
+    const data: ExplainData = {
+      contextDir: '/repo/cli',
+      repoRoot: '/repo',
+      fields: [
+        {
+          key: 'defaultTeam',
+          value: 'cli-team',
+          location: { type: 'override', scope: 'project', ruleIndex: 0, when: { path: 'cli/**' } } as ConfigLocation,
+        },
+        { key: 'defaultInitiative', value: undefined, location: { type: 'none' } },
+      ],
+    };
+    const json = buildExplainJson(data);
+    expect(json.contextDir).toBe('/repo/cli');
+    expect(json.repoRoot).toBe('/repo');
+    const resolved = json.resolved as Record<string, unknown>;
+    expect(resolved.defaultTeam).toEqual({
+      value: 'cli-team',
+      source: 'override',
+      scope: 'project',
+      ruleIndex: 0,
+      when: { path: 'cli/**' },
+    });
+    expect(resolved.defaultInitiative).toEqual({ value: null, source: 'none' });
+  });
+});
+
+describe('buildExplainData / explainConfig — query path', () => {
+  let xdgConfig: string;
+  let repoRoot: string;
+
+  beforeEach(() => {
+    xdgConfig = mkdtempSync(join(tmpdir(), 'a2l-explain-xdg-'));
+    repoRoot = mkdtempSync(join(tmpdir(), 'a2l-explain-repo-'));
+    vi.stubEnv('XDG_CONFIG_HOME', xdgConfig);
+    vi.stubEnv('LINEAR_API_KEY', '');
+    vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
+    resetInvocationContext();
+  });
+
+  afterEach(() => {
+    resetInvocationContext();
+    vi.restoreAllMocks();
+    rmSync(xdgConfig, { recursive: true, force: true });
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+
+  function writeRepoOverride(): string {
+    mkdirSync(join(repoRoot, '.agent2linear'), { recursive: true });
+    writeFileSync(
+      join(repoRoot, '.agent2linear', 'config.json'),
+      JSON.stringify({ defaultTeam: 'platform', overrides: [{ when: { path: 'cli/**' }, defaultTeam: 'cli-team' }] })
+    );
+    const cli = join(repoRoot, 'cli');
+    mkdirSync(cli, { recursive: true });
+    return cli;
+  }
+
+  it('resolves an override for a real context dir (positional)', () => {
+    const cli = writeRepoOverride();
+    const data = buildExplainData(cli);
+    const team = data.fields.find((f) => f.key === 'defaultTeam');
+    expect(team?.value).toBe('cli-team');
+    expect(team?.location.type).toBe('override');
+    expect(data.repoRoot).not.toBeNull();
+  });
+
+  it('falls back to the invocation context dir when no positional dir is given', () => {
+    const cli = writeRepoOverride();
+    setInvocationContext({ contextDir: cli });
+    const data = buildExplainData();
+    expect(data.fields.find((f) => f.key === 'defaultTeam')?.value).toBe('cli-team');
+  });
+
+  it('falls back to process.cwd() when neither positional nor context dir is set', () => {
+    const data = buildExplainData();
+    expect(data.fields).toHaveLength(7);
+  });
+
+  it('yields no override for a missing/repo-less dir without crashing (§9 query)', () => {
+    const data = buildExplainData(join(tmpdir(), `a2l-explain-missing-${Date.now()}`));
+    expect(data.fields.every((f) => f.location.type !== 'override')).toBe(true);
+  });
+
+  it('explainConfig prints text and json', async () => {
+    const cli = writeRepoOverride();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await explainConfig(cli, {});
+    expect(String(log.mock.calls[0][0])).toContain('cli-team');
+
+    log.mockClear();
+    await explainConfig(cli, { json: true });
+    const out = String(log.mock.calls[0][0]);
+    expect(() => JSON.parse(out)).not.toThrow();
+    expect(JSON.parse(out).resolved.defaultTeam.value).toBe('cli-team');
+  });
+});

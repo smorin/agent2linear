@@ -2,6 +2,7 @@ import { Argument,Command } from 'commander';
 
 import type { ConfigKey } from '../../lib/config.js';
 import { editConfig } from './edit.js';
+import { explainConfig } from './explain.js';
 import { getConfigValue } from './get.js';
 import { listConfig } from './list.js';
 import { setConfig } from './set.js';
@@ -115,6 +116,22 @@ Examples:
 `)
     .action(async (key: string, options) => {
       await unsetConfig(key, options);
+    });
+
+  config
+    .command('explain')
+    .argument('[dir]', 'Resolution-context directory (positional sugar for the global -C/--cwd)')
+    .description('Explain how config defaults resolve for a directory context')
+    .option('--json', 'Output machine-readable JSON (for agents)')
+    .addHelpText('after', `
+Examples:
+  $ agent2linear config explain                 # explain defaults for the current directory
+  $ agent2linear config explain apps/web        # explain defaults as if in apps/web
+  $ agent2linear config explain --json          # machine-readable output
+  $ agent2linear -C ~/work/acme/web config explain  # same, via the global -C/--cwd lever
+`)
+    .action(async (dir: string | undefined, options: { json?: boolean }) => {
+      await explainConfig(dir, options);
     });
 
   config
