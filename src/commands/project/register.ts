@@ -56,6 +56,8 @@ export function registerProjectCommands(cli: Command): void {
     .option('--blocks <projects>', 'Projects this blocks (comma-separated IDs/aliases) - creates dependencies where other projects depend on this')
     .option('--dependency <spec>', 'Advanced: "project:myAnchor:theirAnchor" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
     .option('--dry-run', 'Preview the payload without creating the project')
+    .option('--json', 'Output the created project + active workspace as JSON')
+    .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .addHelpText('after', `
 Examples:
   Basic (auto-assigns you as lead):

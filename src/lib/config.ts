@@ -1,7 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
-import type { Config, ResolvedConfig } from './types.js';
+import { getProfileScope } from './profiles.js';
+import type { Scope } from './scope.js';
+import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
+import { resolveActiveProfile, resolveActiveWorkspace } from './workspace-resolver.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
 const CONFIG_FILENAME = 'config.json';
@@ -53,13 +56,48 @@ function writeConfigFile(path: string, config: Partial<Config>): void {
 }
 
 /**
- * Get configuration with priority: project > global > env
+ * Read the RAW global config.json (no merge, no profile scope, no env).
+ *
+ * Exposed for the workspace resolver and profile store, which must read config
+ * WITHOUT calling getConfig() — getConfig() now depends on the resolved profile,
+ * so any getConfig() call from the resolution path would recurse infinitely.
+ */
+export function readGlobalConfig(): Partial<Config> {
+  return readConfigFile(globalConfigFile());
+}
+
+/** Read the RAW nearest project config.json (walk-up discovery; {} if none). */
+export function readProjectConfig(): Partial<Config> {
+  const f = projectConfigReadFile();
+  return f ? readConfigFile(f) : {};
+}
+
+/** Read the RAW config.json for a scope's write target (read-modify-write helper). */
+export function readConfigForScope(scope: Scope): Partial<Config> {
+  const file = scope === 'global' ? globalConfigFile() : projectConfigWriteFile();
+  return readConfigFile(file);
+}
+
+/** Write the RAW config.json for a scope's write target. */
+export function writeConfigForScope(scope: Scope, config: Partial<Config>): void {
+  const file = scope === 'global' ? globalConfigFile() : projectConfigWriteFile();
+  writeConfigFile(file, config);
+}
+
+/**
+ * Get configuration with priority: project > profile > global > env
  */
 export function getConfig(): ResolvedConfig {
   const envConfig: Partial<Config> = {};
   const globalConfig = readConfigFile(globalConfigFile());
   const projectReadFile = projectConfigReadFile();
   const projectConfig = projectReadFile ? readConfigFile(projectReadFile) : {};
+
+  // Profile scope: the active profile's recognized Config defaults, slotted into
+  // the merge between global and project. `getProfileScope(undefined)` returns {}
+  // so the no-profile path stays byte-identical to {...global, ...project}.
+  // `resolveActiveProfile()` reads raw config only — it must never call getConfig().
+  const profileScope = getProfileScope(resolveActiveProfile());
 
   // Read from environment
   if (process.env.LINEAR_API_KEY) {
@@ -83,7 +121,29 @@ export function getConfig(): ResolvedConfig {
     enableSessionCache: { type: 'none' },
     enableBatchFetching: { type: 'none' },
     prewarmCacheOnCreate: { type: 'none' },
+    defaultProfile: { type: 'none' },
+    noMatchPolicy: { type: 'none' },
+    confirmAutoDetectedWrites: { type: 'none' },
   };
+
+  // Default Profile location (global-only setting)
+  if (globalConfig.defaultProfile) {
+    locations.defaultProfile = { type: 'global', path: globalConfigFile() };
+  }
+
+  // No-Match Policy location
+  if (projectConfig.noMatchPolicy) {
+    locations.noMatchPolicy = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.noMatchPolicy) {
+    locations.noMatchPolicy = { type: 'global', path: globalConfigFile() };
+  }
+
+  // Confirm Auto-Detected Writes location
+  if (projectConfig.confirmAutoDetectedWrites !== undefined) {
+    locations.confirmAutoDetectedWrites = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.confirmAutoDetectedWrites !== undefined) {
+    locations.confirmAutoDetectedWrites = { type: 'global', path: globalConfigFile() };
+  }
 
   // API Key location (env has highest priority for security)
   if (envConfig.apiKey) {
@@ -192,9 +252,23 @@ export function getConfig(): ResolvedConfig {
     locations.prewarmCacheOnCreate = { type: 'global', path: globalConfigFile() };
   }
 
-  // Merge configs with priority: project > global for most settings, but env > all for API key
+  // Profile-source labeling: a key supplied by the profile scope (and NOT
+  // overridden by the project) is labeled `profile`. Precedence is
+  // project > profile > global, so this overrides a `global` label set above but
+  // never a `project` one.
+  for (const key of Object.keys(profileScope)) {
+    if (key in projectConfig) {
+      continue;
+    }
+    if (key in locations) {
+      (locations as Record<string, ConfigLocation>)[key] = { type: 'profile' };
+    }
+  }
+
+  // Merge configs with priority: project > profile > global, but env > all for API key
   const merged = {
     ...globalConfig,
+    ...profileScope,
     ...projectConfig,
   };
 
@@ -210,11 +284,24 @@ export function getConfig(): ResolvedConfig {
 }
 
 /**
- * Get API key from config or environment
+ * Get API key from the resolved active workspace.
+ *
+ * Routes through the workspace resolver chokepoint so multi-workspace selection
+ * (--workspace / --api-key, secrets registry) funnels through one place. With no
+ * workspaces/profiles configured and no explicit selection, this returns exactly
+ * today's value (env LINEAR_API_KEY, else config-file apiKey) — byte-identical.
  */
 export function getApiKey(): string | undefined {
-  const config = getConfig();
-  return config.apiKey;
+  const resolution = resolveActiveWorkspace();
+  // Refuse to guess: the no-match gate / exclusion (Phase 3) or the ambiguity
+  // guard (Phase 4) denied resolution.
+  if (resolution.denied) {
+    throw new Error(`${resolution.denied.reason} ${resolution.denied.hint}`);
+  }
+  // resolveActiveWorkspace() already sourced the key WITH full profile context
+  // (named env var / env-file / secrets). Reuse it — re-sourcing here would drop
+  // the profile and miss apiKeyEnv/envFile.
+  return resolution.key || undefined;
 }
 
 /**
@@ -288,7 +375,10 @@ const VALID_CONFIG_KEYS = [
   'enablePersistentCache',
   'enableSessionCache',
   'enableBatchFetching',
-  'prewarmCacheOnCreate'
+  'prewarmCacheOnCreate',
+  'defaultProfile', // M28: persisted default profile
+  'noMatchPolicy', // M28: no-match behavior (deny|default|match-only)
+  'confirmAutoDetectedWrites' // M28: confirm writes to an auto-detected workspace
 ] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 
@@ -329,7 +419,8 @@ export function setConfigValue(
     key === 'enablePersistentCache' ||
     key === 'enableSessionCache' ||
     key === 'enableBatchFetching' ||
-    key === 'prewarmCacheOnCreate'
+    key === 'prewarmCacheOnCreate' ||
+    key === 'confirmAutoDetectedWrites'
   ) {
     // Parse boolean value
     const lowerValue = value.toLowerCase();
@@ -340,6 +431,11 @@ export function setConfigValue(
     } else {
       throw new Error(`${key} must be true or false`);
     }
+  } else if (key === 'noMatchPolicy') {
+    if (value !== 'deny' && value !== 'default' && value !== 'match-only') {
+      throw new Error('noMatchPolicy must be one of: deny, default, match-only');
+    }
+    existingConfig[key] = value;
   } else {
     existingConfig[key] = value;
   }

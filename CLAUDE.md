@@ -203,12 +203,25 @@
   Persistent defaults for common values:
   - Storage: $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
   - Supported: defaultTeam, defaultInitiative, defaultMilestoneTemplate
+  - Multi-workspace keys (M28): defaultProfile, profiles, noMatchPolicy (deny|default|match-only), confirmAutoDetectedWrites
   - Commands: config list/get/set/unset/edit
+
+  Multi-Workspace & Profiles (M28)
+
+  Three-tier defaults hierarchy `global < profile < repo`. The single-key "simple
+  case" (LINEAR_API_KEY env or apiKey in config) is unchanged — profiles/workspaces
+  are strictly opt-in.
+  - Workspaces (secrets): name → { apiKey }. Storage: $XDG_CONFIG_HOME/agent2linear/workspaces.json (global, mode 0600) or .agent2linear/workspaces.local.json (project, auto-gitignored). Commands: workspace add/list/remove/current.
+  - Profiles (settings, commit-safe): name → { workspace, default*, match, linear, apiKeyEnv, envFile }. Live in config.json under `profiles`. Commands: profile add/list/edit/remove, profile match add/list/remove, profile exclude.
+  - Selection precedence (R8): --workspace/--api-key → AGENT2LINEAR_WORKSPACE → repo config profile/workspace → git-remote auto-detect (origin owner → profile.match.gitRemoteOwner) → defaultProfile → legacy key.
+  - Key-source precedence (R7): --api-key → named env var (apiKeyEnv or LINEAR_API_KEY_<NAME>) → per-profile envFile (dotenv) → workspaces secrets registry → legacy plain LINEAR_API_KEY. Committable config never holds a raw key.
+  - Safety (R11): mutating commands (issue create/update, project create) print a workspace/source banner (stderr) and support --json (incl. workspace.source) + -y/--yes. An auto-detected write in a multi-workspace setup confirms on a TTY and fail-safe errors (exit 1) non-interactively. noMatchPolicy=deny (default) refuses to guess; explicit --workspace/--api-key always forces through. whoami/doctor show the active workspace + source; doctor warns on secrets-hygiene issues.
 
   Storage Locations (XDG)
 
   - Config (config.json, aliases.json, milestone-templates.json) honors $XDG_CONFIG_HOME/agent2linear/ (default: ~/.config/agent2linear/).
-  - Caches live at $XDG_CACHE_HOME/agent2linear/<workspace-key>/ (default: ~/.cache/agent2linear/<workspace-key>/), keyed per workspace.
+  - Secrets registry: workspaces.json (global, mode 0600) and .agent2linear/workspaces.local.json (project, auto-added to .gitignore). Never committed.
+  - Caches live at $XDG_CACHE_HOME/agent2linear/<workspace-key>/ (default: ~/.cache/agent2linear/<workspace-key>/), keyed per workspace (sha256(apiKey) slice), so switching workspaces never mixes cached data.
   - Project config is discovered by walking up from the current directory toward $HOME for the nearest .agent2linear/ directory.
 
   Common Commands

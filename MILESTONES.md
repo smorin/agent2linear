@@ -13,6 +13,45 @@
 
 ---
 
+## [x] Milestone M28: Multi-Workspace Configuration with Org-Based Defaults (v0.28.0)
+**Goal**: Introduce a three-tier `global < profile < repo` defaults hierarchy so agent2linear can target multiple Linear workspaces, auto-detect the right workspace from a repo's git remote, and keep secrets out of committable config — while the single-key "simple case" stays byte-identical.
+
+### Requirements
+- Single-key users (env var or `apiKey` in config) see byte-identical behavior (R4) — profiles/workspaces are strictly opt-in.
+- Named **workspaces** (each holding a `lin_api_…` key) + **profiles** bundling a workspace + defaults + detection rules (R5).
+- Git-remote **owner** auto-detection routes a repo to the right workspace, configured once per profile (R1).
+- Committable config never holds a raw key — keys come from a secrets file, named env vars, a per-profile env-file, or `--api-key`/stdin (R6/R7).
+- Clear selection precedence (R8) with a configurable **no-match policy** and explicit **exclusion** (R9).
+- Mutating commands gain a workspace/source banner + `--json` (incl. `workspace.source`) and a confirmation that never blocks non-interactive callers (R11).
+- `whoami`/`doctor` show the active workspace + source; `doctor` warns on secrets-hygiene issues.
+
+### Out of Scope
+- Cross-workspace fan-out (one invocation resolves to exactly one workspace).
+- OAuth / multi-tenant tokens; OS-keychain integration.
+- Auto-migrating single-key users into the profile system.
+- Interactive Ink editors for `workspace add`/`profile edit`/`setup` additional-workspace step (flag-based equivalents shipped; Ink deferred).
+
+### Tasks
+- [x] [M28-T01] Phase 1: resolver chokepoint (`workspace-resolver.ts`) + secrets registry (`workspaces.ts`) + `--workspace`/`--api-key` globals + `workspace` command group
+- [x] [M28-T02] Phase 2: profiles as a config scope (`profiles.ts`, workspace-aware `getConfig()` merge, recursion-safe `resolveActiveProfile`) + `profile` command group + `defaultProfile`
+- [x] [M28-T03] Phase 3: git-remote auto-detection (`git-remote.ts`, injectable), no-match policy gate, exclusion + `profile match`/`profile exclude` + `noMatchPolicy`
+- [x] [M28-T04] Phase 4: named env vars + per-profile env-files (`env-file.ts`) + ambiguity guard (Scheme-D Option 2)
+- [x] [M28-T05] Phase 5: safety UX — banner (`workspace-banner.ts`) + `--json`/`-y` + confirm gate (`confirm-write.ts`) on mutations; `whoami`/`doctor` active workspace + hygiene; `confirmAutoDetectedWrites`
+- [x] [M28-T06] Phase 6: docs (README, CLAUDE.md), this milestone, version bump 0.27.0 → 0.28.0
+- [x] [M28-TS01] Vitest: `workspace-resolver`, `workspaces.xdg`, `profiles`(+`.xdg`), `git-remote`, `env-file`, `config.xdg` merge, `confirm-write`, `workspace-banner`, profile command regression tests
+- [x] [M28-TS02] Offline shell: `tests/scripts/test-xdg-paths.sh` extended (workspace add, profile-scope, git auto-detect + deny, named env var + env-file, `--workspace` pointer regression)
+
+### Automated Verification
+- `npm run build`, `npm run typecheck`, `npm run lint`, `npm test` (295 tests) pass
+- `bash tests/scripts/test-xdg-paths.sh` (offline) passes
+- `a2l --version` reports `0.28.0`
+
+### Manual Verification
+- Fresh single-key user sees today's behavior unchanged
+- Two-workspace user registers two workspaces + two profiles with `match` rules; auto-detection routes each repo to the right workspace (verified live against two real workspaces)
+
+---
+
 ## Backlog (Future Milestones)
 
 ## [ ] Milestone M26: Output Format Standardization & Stream Separation (v0.26.0)
