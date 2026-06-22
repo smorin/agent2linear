@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 
 import {
   addAlias,
+  getGlobalAliasesPath,
+  getProjectAliasesPath,
   loadAliases,
   removeAlias,
   renameAlias,
@@ -585,8 +587,8 @@ function AliasEditor({ options }: { options: EditOptions }) {
   // Step 1: Select scope
   if (step === 'scope') {
     const scopeItems = [
-      { label: 'Global (~/.config/agent2linear/aliases.json)', value: 'global' as const },
-      { label: 'Project (.agent2linear/aliases.json)', value: 'project' as const },
+      { label: `Global (${getGlobalAliasesPath()})`, value: 'global' as const },
+      { label: `Project (${getProjectAliasesPath()})`, value: 'project' as const },
     ];
 
     return (

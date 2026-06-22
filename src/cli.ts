@@ -13,6 +13,7 @@ import { registerIssueCommands } from './commands/issue/register.js';
 import { registerIssueLabelsCommands } from './commands/issue-labels/register.js';
 import { registerMembersCommands } from './commands/members/register.js';
 import { registerMilestoneTemplatesCommands } from './commands/milestone-templates/register.js';
+import { registerProfileCommands } from './commands/profile/register.js';
 import { registerProjectCommands } from './commands/project/register.js';
 import { registerProjectLabelsCommands } from './commands/project-labels/register.js';
 import { registerProjectStatusCommands } from './commands/project-status/register.js';
@@ -21,23 +22,42 @@ import { registerTeamsCommands } from './commands/teams/register.js';
 import { registerTemplatesCommands } from './commands/templates/register.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { registerWorkflowStatesCommands } from './commands/workflow-states/register.js';
+import { registerWorkspaceCommands } from './commands/workspace/register.js';
+import { setInvocationContext } from './lib/invocation-context.js';
 import { setLogLevel } from './lib/logger.js';
 import { setNoColor } from './lib/output.js';
+import { readStdinKey } from './lib/workspace-resolver.js';
 
 const cli = new Command();
 
 cli
   .name('agent2linear')
   .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
-  .version('0.24.1')
+  .version('0.28.0')
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
   .option('--no-color', 'Disable emojis and colored output')
-  .hook('preAction', (thisCommand) => {
+  .option('--workspace <name>', 'Select workspace/profile for this invocation')
+  .option('--api-key <key>', 'Use this Linear API key (use "-" to read from stdin)')
+  .hook('preAction', async (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.quiet) setLogLevel('quiet');
     if (opts.verbose) setLogLevel('verbose');
     if (opts.color === false) setNoColor(true);
+
+    // Resolve `--api-key -` from stdin eagerly so the resolver only ever sees a
+    // literal string and getApiKey() can stay synchronous.
+    let apiKey: string | undefined = opts.apiKey;
+    if (apiKey === '-') {
+      apiKey = await readStdinKey();
+    }
+    // The resolver treats --api-key as explicit only when --workspace is absent
+    // (workspace wins), so accepting both would silently drop the key. Fail fast
+    // rather than resolve to an unintended workspace/credential.
+    if (opts.workspace !== undefined && apiKey !== undefined) {
+      throw new Error('Pass either --workspace or --api-key, not both.');
+    }
+    setInvocationContext({ workspace: opts.workspace, apiKey });
   })
   .action(() => {
     cli.help();
@@ -61,6 +81,8 @@ registerColorsCommands(cli);
 registerCacheCommands(cli);
 registerIssueCommands(cli);
 registerCyclesCommands(cli);
+registerWorkspaceCommands(cli);
+registerProfileCommands(cli);
 
 // Stub command groups (future releases)
 const issues = cli

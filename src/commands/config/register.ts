@@ -17,14 +17,15 @@ Current respected settings:
 - \`apiKey\`: Linear API authentication key (get yours at linear.app/settings/api)
 - \`defaultInitiative\`: Default initiative ID for project creation (format: init_xxx)
 - \`defaultTeam\`: Default team ID for project creation (format: team_xxx)
+- \`defaultProject\`: Default project ID for issue creation
 - \`defaultIssueTemplate\`: Default template ID for issue creation (format: template_xxx)
 - \`defaultProjectTemplate\`: Default template ID for project creation (format: template_xxx)
 - \`defaultMilestoneTemplate\`: Default milestone template name for project milestones
 - \`projectCacheMinTTL\`: Cache time-to-live in minutes (default: 60, range: 1-1440)
 
 Configuration files:
-- Global:  ~/.config/agent2linear/config.json
-- Project: .agent2linear/config.json
+- Global:  $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
+- Project: .agent2linear/config.json (nearest, searching up from the current directory)
 - Priority: environment > project > global (for apiKey)
             project > global (for other settings)
 `)
@@ -57,7 +58,7 @@ Examples:
     .command('get')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .description('Get a single configuration value')
     .addHelpText('after', `
@@ -76,7 +77,7 @@ Examples:
     .command('set')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .addArgument(new Argument('<value>', 'Configuration value'))
     .description('Set a configuration value')
@@ -99,7 +100,7 @@ Examples:
     .command('unset')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .description('Remove a configuration value')
     .option('-g, --global', 'Remove from global config (default)')

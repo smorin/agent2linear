@@ -185,7 +185,7 @@ export async function syncAliasesCore<T extends SyncableEntity>(
     if (dryRun) {
       console.log('');
       console.log('💡 To create these aliases:');
-      console.log('   --global: Save to global config (~/.config/agent2linear/aliases.json)');
+      console.log('   --global: Save to global config ($XDG_CONFIG_HOME/agent2linear/aliases.json, default ~/.config/agent2linear/aliases.json)');
       console.log('   --project: Save to project config (.agent2linear/aliases.json)');
       return;
     }

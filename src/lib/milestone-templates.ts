@@ -1,13 +1,23 @@
-import { existsSync, mkdirSync,readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
-import type { MilestoneDefinition,MilestoneTemplate, MilestoneTemplates } from './types.js';
+import type { MilestoneDefinition, MilestoneTemplate, MilestoneTemplates } from './types.js';
+import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
-const GLOBAL_TEMPLATES_DIR = join(homedir(), '.config', 'agent2linear');
-const GLOBAL_TEMPLATES_FILE = join(GLOBAL_TEMPLATES_DIR, 'milestone-templates.json');
-const PROJECT_TEMPLATES_DIR = '.agent2linear';
-const PROJECT_TEMPLATES_FILE = join(PROJECT_TEMPLATES_DIR, 'milestone-templates.json');
+const TEMPLATES_FILENAME = 'milestone-templates.json';
+
+function globalTemplatesFile(): string {
+  return join(userConfigDir(), TEMPLATES_FILENAME);
+}
+
+function projectTemplatesReadFile(): string | null {
+  const dir = findProjectConfigDir();
+  return dir ? join(dir, TEMPLATES_FILENAME) : null;
+}
+
+function projectTemplatesWriteFile(): string {
+  return join(projectConfigWriteDir(), TEMPLATES_FILENAME);
+}
 
 /**
  * Read milestone templates from a JSON file
@@ -34,7 +44,7 @@ export function loadMilestoneTemplates(): { [name: string]: { template: Mileston
   const result: { [name: string]: { template: MilestoneTemplate; source: 'global' | 'project' } } = {};
 
   // Load global templates first
-  const globalTemplates = readTemplatesFile(GLOBAL_TEMPLATES_FILE);
+  const globalTemplates = readTemplatesFile(globalTemplatesFile());
   if (globalTemplates?.templates) {
     for (const [name, template] of Object.entries(globalTemplates.templates)) {
       result[name] = { template, source: 'global' };
@@ -42,7 +52,8 @@ export function loadMilestoneTemplates(): { [name: string]: { template: Mileston
   }
 
   // Load project templates (override global)
-  const projectTemplates = readTemplatesFile(PROJECT_TEMPLATES_FILE);
+  const projectReadFile = projectTemplatesReadFile();
+  const projectTemplates = projectReadFile ? readTemplatesFile(projectReadFile) : null;
   if (projectTemplates?.templates) {
     for (const [name, template] of Object.entries(projectTemplates.templates)) {
       result[name] = { template, source: 'project' };
@@ -161,28 +172,29 @@ export function resolveMilestoneDates(
  * Get the path to the global templates file
  */
 export function getGlobalTemplatesPath(): string {
-  return GLOBAL_TEMPLATES_FILE;
+  return globalTemplatesFile();
 }
 
 /**
  * Get the path to the project templates file
  */
 export function getProjectTemplatesPath(): string {
-  return PROJECT_TEMPLATES_FILE;
+  return projectTemplatesReadFile() ?? projectTemplatesWriteFile();
 }
 
 /**
  * Check if global templates file exists
  */
 export function hasGlobalTemplates(): boolean {
-  return existsSync(GLOBAL_TEMPLATES_FILE);
+  return existsSync(globalTemplatesFile());
 }
 
 /**
  * Check if project templates file exists
  */
 export function hasProjectTemplates(): boolean {
-  return existsSync(PROJECT_TEMPLATES_FILE);
+  const f = projectTemplatesReadFile();
+  return f !== null && existsSync(f);
 }
 
 /**
@@ -215,7 +227,7 @@ export function createMilestoneTemplate(
   }
 
   // Determine file path
-  const filePath = scope === 'global' ? GLOBAL_TEMPLATES_FILE : PROJECT_TEMPLATES_FILE;
+  const filePath = scope === 'global' ? globalTemplatesFile() : projectTemplatesWriteFile();
 
   // Load existing templates
   const existing = readTemplatesFile(filePath) || { templates: {} };
@@ -256,7 +268,7 @@ export function updateMilestoneTemplate(
   }
 
   // Determine file path
-  const filePath = scope === 'global' ? GLOBAL_TEMPLATES_FILE : PROJECT_TEMPLATES_FILE;
+  const filePath = scope === 'global' ? globalTemplatesFile() : projectTemplatesWriteFile();
 
   // Load existing templates
   const existing = readTemplatesFile(filePath);
@@ -287,7 +299,7 @@ export function removeMilestoneTemplate(
   scope: 'global' | 'project'
 ): { success: boolean; error?: string } {
   // Determine file path
-  const filePath = scope === 'global' ? GLOBAL_TEMPLATES_FILE : PROJECT_TEMPLATES_FILE;
+  const filePath = scope === 'global' ? globalTemplatesFile() : projectTemplatesWriteFile();
 
   // Load existing templates
   const existing = readTemplatesFile(filePath);

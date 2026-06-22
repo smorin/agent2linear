@@ -483,7 +483,7 @@ function SetupWizard() {
 	if (step === 'scope-selection') {
 		const scopeItems = [
 			{
-				label: 'Global (~/.config/agent2linear/)',
+				label: `Global (${getGlobalConfigPath().replace(/config\.json$/, '')})`,
 				value: 'global' as const,
 			},
 			{
@@ -927,7 +927,7 @@ function SetupWizard() {
 			<WalkthroughScreen
 				title="Configuration Management"
 				icon="⚙️"
-				description={`Your configuration is stored in ${scope === 'global' ? '~/.config/agent2linear/' : '.agent2linear/'}. You can edit it anytime or use config commands.`}
+				description={`Your configuration is stored in ${scope === 'global' ? getGlobalConfigPath().replace(/config\.json$/, '') : '.agent2linear/'}. You can edit it anytime or use config commands.`}
 				examples={[
 					'agent2linear config edit',
 					'agent2linear config get',
@@ -1112,7 +1112,7 @@ function SetupWizard() {
 				<Box flexDirection="column">
 					<Text bold>Your configuration:</Text>
 					<Box marginLeft={2}>
-						<Text>📁 Scope: {scope === 'global' ? 'Global' : 'Project'} ({scope === 'global' ? '~/.config/agent2linear/' : '.agent2linear/'})</Text>
+						<Text>📁 Scope: {scope === 'global' ? 'Global' : 'Project'} ({scope === 'global' ? getGlobalConfigPath().replace(/config\.json$/, '') : '.agent2linear/'})</Text>
 					</Box>
 					<Box marginLeft={2}>
 						<Text>🔑 API Key: {maskApiKey(apiKey)} ✓ valid</Text>

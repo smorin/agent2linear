@@ -1,4 +1,4 @@
-import { hasGlobalTemplates, hasProjectTemplates,loadMilestoneTemplates } from '../../lib/milestone-templates.js';
+import { getGlobalTemplatesPath, getProjectTemplatesPath,hasGlobalTemplates, hasProjectTemplates,loadMilestoneTemplates } from '../../lib/milestone-templates.js';
 import { formatListJSON } from '../../lib/output.js';
 
 interface ListOptions {
@@ -15,10 +15,10 @@ export async function listMilestoneTemplates(options: ListOptions = {}) {
       console.log('');
       console.log('Create templates at:');
       if (!hasGlobalTemplates()) {
-        console.log('  Global:  ~/.config/agent2linear/milestone-templates.json');
+        console.log(`  Global:  ${getGlobalTemplatesPath()}`);
       }
       if (!hasProjectTemplates()) {
-        console.log('  Project: .agent2linear/milestone-templates.json');
+        console.log(`  Project: ${getProjectTemplatesPath()}`);
       }
       console.log('');
       return;

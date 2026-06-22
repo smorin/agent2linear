@@ -1,4 +1,5 @@
 import { type ConfigKey,getConfig, maskApiKey } from '../../lib/config.js';
+import { resolveActiveProfile } from '../../lib/workspace-resolver.js';
 
 export async function getConfigValue(key: ConfigKey) {
   try {
@@ -17,6 +18,9 @@ export async function getConfigValue(key: ConfigKey) {
       locationStr = ' (from environment)';
     } else if (location.type === 'project') {
       locationStr = ' (from project config)';
+    } else if (location.type === 'profile') {
+      const profileName = resolveActiveProfile();
+      locationStr = profileName ? ` (from profile '${profileName}')` : ' (from profile)';
     } else if (location.type === 'global') {
       locationStr = ' (from global config)';
     }

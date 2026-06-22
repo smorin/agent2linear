@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { dirname, join } from 'path';
 
 import {
@@ -15,11 +14,24 @@ import {
   validateTeamExists,
 } from './linear-client.js';
 import type { AliasEntityType, Aliases, AliasLocation,ResolvedAliases } from './types.js';
+import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 
-const GLOBAL_ALIASES_DIR = join(homedir(), '.config', 'agent2linear');
-const GLOBAL_ALIASES_FILE = join(GLOBAL_ALIASES_DIR, 'aliases.json');
-const PROJECT_ALIASES_DIR = '.agent2linear';
-const PROJECT_ALIASES_FILE = join(PROJECT_ALIASES_DIR, 'aliases.json');
+const ALIASES_FILENAME = 'aliases.json';
+
+function globalAliasesFile(): string {
+  return join(userConfigDir(), ALIASES_FILENAME);
+}
+
+/** Project aliases file for reading (walk-up), or null if none exists. */
+function projectAliasesReadFile(): string | null {
+  const dir = findProjectConfigDir();
+  return dir ? join(dir, ALIASES_FILENAME) : null;
+}
+
+/** Project aliases file for writing (discovered dir, else cwd/.agent2linear). */
+function projectAliasesWriteFile(): string {
+  return join(projectConfigWriteDir(), ALIASES_FILENAME);
+}
 
 /**
  * Default empty aliases structure
@@ -155,8 +167,9 @@ function getAliasesKey(type: AliasEntityType): keyof Aliases {
  * Load aliases with priority: project > global
  */
 export function loadAliases(): ResolvedAliases {
-  const globalAliases = readAliasesFile(GLOBAL_ALIASES_FILE);
-  const projectAliases = readAliasesFile(PROJECT_ALIASES_FILE);
+  const globalAliases = readAliasesFile(globalAliasesFile());
+  const projectReadFile = projectAliasesReadFile();
+  const projectAliases = projectReadFile ? readAliasesFile(projectReadFile) : getEmptyAliases();
 
   // Track locations
   const locations: ResolvedAliases['locations'] = {
@@ -176,111 +189,111 @@ export function loadAliases(): ResolvedAliases {
   // Merge and track locations for initiatives
   const initiatives = { ...globalAliases.initiatives };
   Object.keys(globalAliases.initiatives).forEach((alias) => {
-    locations.initiative[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations.initiative[alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.initiatives).forEach((alias) => {
     initiatives[alias] = projectAliases.initiatives[alias];
-    locations.initiative[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations.initiative[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for teams
   const teams = { ...globalAliases.teams };
   Object.keys(globalAliases.teams).forEach((alias) => {
-    locations.team[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations.team[alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.teams).forEach((alias) => {
     teams[alias] = projectAliases.teams[alias];
-    locations.team[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations.team[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for projects
   const projects = { ...globalAliases.projects };
   Object.keys(globalAliases.projects).forEach((alias) => {
-    locations.project[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations.project[alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.projects).forEach((alias) => {
     projects[alias] = projectAliases.projects[alias];
-    locations.project[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations.project[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for project statuses
   const projectStatuses = { ...globalAliases.projectStatuses };
   Object.keys(globalAliases.projectStatuses).forEach((alias) => {
-    locations['project-status'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['project-status'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.projectStatuses).forEach((alias) => {
     projectStatuses[alias] = projectAliases.projectStatuses[alias];
-    locations['project-status'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['project-status'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for issue templates
   const issueTemplates = { ...globalAliases.issueTemplates };
   Object.keys(globalAliases.issueTemplates).forEach((alias) => {
-    locations['issue-template'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['issue-template'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.issueTemplates).forEach((alias) => {
     issueTemplates[alias] = projectAliases.issueTemplates[alias];
-    locations['issue-template'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['issue-template'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for project templates
   const projectTemplates = { ...globalAliases.projectTemplates };
   Object.keys(globalAliases.projectTemplates).forEach((alias) => {
-    locations['project-template'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['project-template'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.projectTemplates).forEach((alias) => {
     projectTemplates[alias] = projectAliases.projectTemplates[alias];
-    locations['project-template'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['project-template'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for members
   const members = { ...globalAliases.members };
   Object.keys(globalAliases.members).forEach((alias) => {
-    locations.member[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations.member[alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.members).forEach((alias) => {
     members[alias] = projectAliases.members[alias];
-    locations.member[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations.member[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for issue labels
   const issueLabels = { ...globalAliases.issueLabels };
   Object.keys(globalAliases.issueLabels).forEach((alias) => {
-    locations['issue-label'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['issue-label'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.issueLabels).forEach((alias) => {
     issueLabels[alias] = projectAliases.issueLabels[alias];
-    locations['issue-label'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['issue-label'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for project labels
   const projectLabels = { ...globalAliases.projectLabels };
   Object.keys(globalAliases.projectLabels).forEach((alias) => {
-    locations['project-label'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['project-label'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.projectLabels).forEach((alias) => {
     projectLabels[alias] = projectAliases.projectLabels[alias];
-    locations['project-label'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['project-label'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for workflow states
   const workflowStates = { ...globalAliases.workflowStates };
   Object.keys(globalAliases.workflowStates).forEach((alias) => {
-    locations['workflow-state'][alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations['workflow-state'][alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.workflowStates).forEach((alias) => {
     workflowStates[alias] = projectAliases.workflowStates[alias];
-    locations['workflow-state'][alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations['workflow-state'][alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   // Merge and track locations for cycles (M15.1)
   const cycles = { ...globalAliases.cycles };
   Object.keys(globalAliases.cycles).forEach((alias) => {
-    locations.cycle[alias] = { type: 'global', path: GLOBAL_ALIASES_FILE };
+    locations.cycle[alias] = { type: 'global', path: globalAliasesFile() };
   });
   Object.keys(projectAliases.cycles).forEach((alias) => {
     cycles[alias] = projectAliases.cycles[alias];
-    locations.cycle[alias] = { type: 'project', path: PROJECT_ALIASES_FILE };
+    locations.cycle[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
   return {
@@ -507,7 +520,7 @@ export async function addAlias(
   }
 
   // Load existing aliases from the target scope
-  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const filePath = scope === 'global' ? globalAliasesFile() : projectAliasesWriteFile();
   const existingAliases = readAliasesFile(filePath);
   const key = getAliasesKey(type);
 
@@ -541,7 +554,7 @@ export function removeAlias(
   alias: string,
   scope: 'global' | 'project' = 'global'
 ): { success: boolean; error?: string; id?: string } {
-  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const filePath = scope === 'global' ? globalAliasesFile() : projectAliasesWriteFile();
   const existingAliases = readAliasesFile(filePath);
   const key = getAliasesKey(type);
 
@@ -795,7 +808,7 @@ export async function updateAliasId(
   options: { skipValidation?: boolean } = {}
 ): Promise<{ success: boolean; error?: string; entityName?: string; oldId?: string }> {
   // Get the current ID
-  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const filePath = scope === 'global' ? globalAliasesFile() : projectAliasesWriteFile();
   const existingAliases = readAliasesFile(filePath);
   const key = getAliasesKey(type);
 
@@ -839,7 +852,7 @@ export function renameAlias(
     return { success: false, error: 'Alias cannot contain spaces' };
   }
 
-  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const filePath = scope === 'global' ? globalAliasesFile() : projectAliasesWriteFile();
   const existingAliases = readAliasesFile(filePath);
   const key = getAliasesKey(type);
 
@@ -874,28 +887,29 @@ export function renameAlias(
  * Get global aliases file path
  */
 export function getGlobalAliasesPath(): string {
-  return GLOBAL_ALIASES_FILE;
+  return globalAliasesFile();
 }
 
 /**
  * Get project aliases file path
  */
 export function getProjectAliasesPath(): string {
-  return PROJECT_ALIASES_FILE;
+  return projectAliasesReadFile() ?? projectAliasesWriteFile();
 }
 
 /**
  * Check if global aliases file exists
  */
 export function hasGlobalAliases(): boolean {
-  return existsSync(GLOBAL_ALIASES_FILE);
+  return existsSync(globalAliasesFile());
 }
 
 /**
  * Check if project aliases file exists
  */
 export function hasProjectAliases(): boolean {
-  return existsSync(PROJECT_ALIASES_FILE);
+  const f = projectAliasesReadFile();
+  return f !== null && existsSync(f);
 }
 
 /**
@@ -927,7 +941,7 @@ export function clearAliases(
   scope: 'global' | 'project' = 'global',
   options: { preview?: boolean } = {}
 ): { success: boolean; error?: string; count: number; aliases?: string[] } {
-  const filePath = scope === 'global' ? GLOBAL_ALIASES_FILE : PROJECT_ALIASES_FILE;
+  const filePath = scope === 'global' ? globalAliasesFile() : projectAliasesWriteFile();
   const existingAliases = readAliasesFile(filePath);
   const key = getAliasesKey(type);
 

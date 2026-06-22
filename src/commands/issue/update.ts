@@ -1,5 +1,6 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { readContentFile } from '../../lib/file-utils.js';
 import {
   findProjectByName,
@@ -9,7 +10,11 @@ import {
   updateIssue,
   validateTeamExists,
 } from '../../lib/linear-client.js';
-import type { IssueUpdateInput } from '../../lib/types.js';
+import { getLogLevel } from '../../lib/logger.js';
+import { silenceStdoutWhile } from '../../lib/output.js';
+import type { IssueUpdateInput, WorkspaceResolution } from '../../lib/types.js';
+import { workspaceForJson } from '../../lib/workspace-banner.js';
+import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
 
 interface UpdateOptions {
   // Basic Fields
@@ -62,12 +67,19 @@ interface UpdateOptions {
   web?: boolean; // Open in browser after update
   dryRun?: boolean; // Print payload without updating
   bulk?: string; // Comma-separated identifiers for bulk update
+  json?: boolean; // Machine-readable output (incl. workspace.source)
+  yes?: boolean; // Skip the auto-detected-workspace confirmation
 }
 
 /**
  * Update an issue non-interactively
  */
-async function updateIssueNonInteractive(identifier: string, options: UpdateOptions) {
+async function updateIssueNonInteractive(
+  identifier: string,
+  options: UpdateOptions,
+  skipGuard = false
+) {
+  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
   try {
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 1: VALIDATION - Mutual Exclusivity Checks
@@ -843,12 +855,29 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
       return;
     }
 
-    console.log('\n🚀 Updating issue...');
+    // Workspace safety (R11): banner + auto-detected-write confirmation. Skipped
+    // for bulk children (the batch is guarded once by the caller).
+    const ws: WorkspaceResolution = skipGuard
+      ? resolveActiveWorkspace()
+      : await guardWorkspaceForMutation(options);
+    const silent = options.json || getLogLevel() === 'quiet';
+
+    if (!silent) console.log('\n🚀 Updating issue...');
 
     const result = await updateIssue(issueId, updates);
 
+    if (options.json) {
+      restoreLog();
+      const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
+      console.log(
+        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), issue: result }, null, 2)
+      );
+      process.exit(0);
+    }
+
     // Display success message
     console.log('\n✅ Issue updated successfully!');
+    console.log(`   Workspace:  ${ws.name ?? (ws.source === 'flag' ? '(ad-hoc)' : '(default)')}`);
     console.log(`   Identifier: ${result.identifier}`);
     console.log(`   Title: ${result.title}`);
     console.log(`   ID: ${result.id}`);
@@ -865,6 +894,10 @@ async function updateIssueNonInteractive(identifier: string, options: UpdateOpti
       console.log(`✓ Browser opened to ${result.url}\n`);
       process.exit(0);
     }
+
+    // Return the updated issue so a bulk caller can aggregate results (the human
+    // success output above is suppressed by the caller under --json).
+    return result;
   } catch (error) {
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
@@ -882,12 +915,45 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
     const { parseCommaSeparated } = await import('../../lib/parsers.js');
     const identifiers = [identifier, ...parseCommaSeparated(options.bulk)];
 
+    // Guard the whole batch ONCE (banner + one confirmation), then skip the
+    // per-issue guard so the agent isn't prompted N times. A dry-run writes
+    // nothing, so it must not banner/confirm (matches the single-issue path).
+    const ws = options.dryRun
+      ? resolveActiveWorkspace()
+      : await guardWorkspaceForMutation(options);
+
+    // --json (and not a dry-run): collect each issue's result and emit ONE
+    // machine-readable object so a scripted caller can parse the whole batch.
+    // Child stdout (per-issue progress/success) is silenced so only the final
+    // JSON lands on stdout.
+    if (options.json && !options.dryRun) {
+      const restore = silenceStdoutWhile(true);
+      const issues: Array<Awaited<ReturnType<typeof updateIssueNonInteractive>>> = [];
+      for (const raw of identifiers) {
+        const r = await updateIssueNonInteractive(
+          raw.trim(),
+          { ...options, bulk: undefined, web: undefined, json: undefined },
+          true
+        );
+        if (r) issues.push(r);
+      }
+      restore();
+      console.log(
+        JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2)
+      );
+      process.exit(0);
+    }
+
     console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);
 
     for (let i = 0; i < identifiers.length; i++) {
       const id = identifiers[i].trim();
       console.log(`\n─── [${i + 1}/${identifiers.length}] ${id} ───`);
-      await updateIssueNonInteractive(id, { ...options, bulk: undefined, web: undefined });
+      await updateIssueNonInteractive(
+        id,
+        { ...options, bulk: undefined, web: undefined, json: undefined },
+        true
+      );
     }
 
     console.log(`\n📦 Bulk update complete: ${identifiers.length} issue(s) updated\n`);

@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 
 import {
   getConfig,
+  getGlobalConfigPath,
   maskApiKey,
   setConfigValue,
   unsetConfigValue,
@@ -355,7 +356,7 @@ function ConfigEditor({ options }: { options: EditOptions }) {
   // Step 1: Select scope
   if (step === 'scope') {
     const scopeItems = [
-      { label: 'Global (~/.config/agent2linear/config.json)', value: 'global' as const },
+      { label: `Global (${getGlobalConfigPath()})`, value: 'global' as const },
       { label: 'Project (.agent2linear/config.json)', value: 'project' as const },
     ];
 

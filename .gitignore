@@ -35,5 +35,7 @@ coverage/
 # Generated cleanup scripts
 cleanup-*.sh
 
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/
 # Riptide per-machine workspace overrides (workspace.json stays tracked)
 .humanlayer/workspace.local.json
