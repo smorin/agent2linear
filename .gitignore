@@ -34,3 +34,6 @@ coverage/
 
 # Generated cleanup scripts
 cleanup-*.sh
+
+# Riptide per-machine workspace overrides (workspace.json stays tracked)
+.humanlayer/workspace.local.json

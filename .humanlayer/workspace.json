@@ -1,0 +1,21 @@
+{
+  "disabled": false,
+  "pathTemplate": "~/wt/{{ REPOBASENAME }}/{{ TASKSLUG }}",
+  "branchTemplate": "{{ TASKSLUG }}",
+  "sourceRef": "origin/main",
+  "setupCommand": "npm install && npm run build",
+  "copyGlobs": [
+    ".env",
+    ".env.local",
+    ".env.development.local",
+    ".claude/settings.local.json",
+    ".humanlayer/workspace.local.json"
+  ],
+  "repos": [
+    {
+      "localPath": ".",
+      "description": "agent2linear CLI",
+      "primary": true
+    }
+  ]
+}
