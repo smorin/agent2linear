@@ -51,6 +51,12 @@ cli
     if (apiKey === '-') {
       apiKey = await readStdinKey();
     }
+    // The resolver treats --api-key as explicit only when --workspace is absent
+    // (workspace wins), so accepting both would silently drop the key. Fail fast
+    // rather than resolve to an unintended workspace/credential.
+    if (opts.workspace !== undefined && apiKey !== undefined) {
+      throw new Error('Pass either --workspace or --api-key, not both.');
+    }
     setInvocationContext({ workspace: opts.workspace, apiKey });
   })
   .action(() => {

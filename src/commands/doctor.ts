@@ -18,8 +18,15 @@ export async function doctorCommand() {
   let passed = 0;
   let failed = 0;
 
-  // 1. API Key check
-  const apiKey = getApiKey();
+  // 1. API Key check. getApiKey() THROWS when resolution is denied (exclusion /
+  // no-match policy / ambiguity guard); treat that as "no key configured" so
+  // doctor still runs and reports the denial in the Active-workspace section below.
+  let apiKey: string | undefined;
+  try {
+    apiKey = getApiKey();
+  } catch {
+    apiKey = undefined;
+  }
   if (apiKey) {
     console.log('  ✓ API key configured');
     passed++;
@@ -100,6 +107,10 @@ export async function doctorCommand() {
   }
   if (hygieneOk) {
     console.log('  ✓ No secrets-hygiene issues detected');
+  } else {
+    // A committed/committable key is a real failure — don't let the summary
+    // below report "All checks passed" while a secret is exposed.
+    failed++;
   }
 
   // 4. Cache

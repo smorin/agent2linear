@@ -50,8 +50,13 @@ export interface MatchRule {
  * Inherits `workspace`/`linear` (and the default* keys) from Partial<Config>;
  * adds `match`/`apiKeyEnv`/`envFile`. The non-config meta keys
  * (workspace/match/linear/apiKeyEnv/envFile) are stripped by getProfileScope().
+ *
+ * `apiKey`, `profiles`, and the repo-level `profile` selector are Omitted: a
+ * profile lives in committable config and must never carry a raw key, nest other
+ * profiles, or re-select a profile. getProfileScope() also strips these at runtime
+ * (config.json on disk is not type-checked).
  */
-export interface Profile extends Partial<Config> {
+export interface Profile extends Partial<Omit<Config, 'apiKey' | 'profiles' | 'profile'>> {
   match?: MatchRule; // git-remote detection (Phase 3)
   apiKeyEnv?: string; // override the default env-var name (Phase 4)
   envFile?: string; // per-profile dotenv path (Phase 4)

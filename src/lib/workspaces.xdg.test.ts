@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,6 +49,28 @@ describe('workspaces.ts global path honors XDG and writes mode 0600', () => {
     process.chdir(workdir); // empty cwd: no project secrets to merge
     const workspaces = loadWorkspaces();
     expect(workspaces.acme).toEqual({ apiKey: 'lin_api_acme' });
+  });
+});
+
+describe('workspaces.ts refuses to clobber a corrupt registry', () => {
+  it('saveWorkspace throws on an existing-but-invalid file instead of discarding it', () => {
+    vi.stubEnv('XDG_CONFIG_HOME', xdgConfig);
+    const file = join(xdgConfig, 'agent2linear', 'workspaces.json');
+    mkdirSync(join(xdgConfig, 'agent2linear'), { recursive: true });
+    // Simulate a truncated/corrupt secrets file that still holds (unparseable) data.
+    writeFileSync(file, '{ "acme": { "apiKey": "lin_api_acme" ', 'utf-8');
+
+    expect(() => saveWorkspace('global', 'beta', { apiKey: 'lin_api_beta' })).toThrow(
+      /unreadable workspaces file/
+    );
+    // The corrupt file is left untouched — nothing was overwritten.
+    expect(readFileSync(file, 'utf-8')).toBe('{ "acme": { "apiKey": "lin_api_acme" ');
+  });
+
+  it('loadWorkspaces stays lenient (missing file -> {})', () => {
+    vi.stubEnv('XDG_CONFIG_HOME', xdgConfig);
+    process.chdir(workdir);
+    expect(loadWorkspaces()).toEqual({});
   });
 });
 

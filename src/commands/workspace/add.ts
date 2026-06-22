@@ -19,12 +19,13 @@ interface AddWorkspaceOptions {
  */
 export async function addWorkspaceCommand(name: string, options: AddWorkspaceOptions = {}) {
   try {
-    if (!name || name.trim() === '') {
+    const workspaceName = name?.trim();
+    if (!workspaceName) {
       showError('Workspace name cannot be empty');
       process.exit(1);
     }
-    if (name.includes(' ')) {
-      showError('Workspace name cannot contain spaces');
+    if (/\s/.test(workspaceName)) {
+      showError('Workspace name cannot contain whitespace');
       process.exit(1);
     }
 
@@ -38,12 +39,12 @@ export async function addWorkspaceCommand(name: string, options: AddWorkspaceOpt
     const { scope, label: scopeLabel } = getScopeInfo(options);
 
     const existing = loadWorkspaces();
-    const isUpdate = name in existing;
+    const isUpdate = workspaceName in existing;
 
-    saveWorkspace(scope, name, { apiKey: key });
+    saveWorkspace(scope, workspaceName, { apiKey: key });
 
     showSuccess(isUpdate ? 'Workspace updated successfully!' : 'Workspace added successfully!', {
-      Workspace: name,
+      Workspace: workspaceName,
       Scope: scopeLabel,
       'API Key': maskApiKey(key),
     });

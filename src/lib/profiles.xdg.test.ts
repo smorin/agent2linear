@@ -99,4 +99,24 @@ describe('getProfileScope - strips non-config meta keys', () => {
     expect('apiKeyEnv' in scope).toBe(false);
     expect('envFile' in scope).toBe(false);
   });
+
+  it('never leaks a raw apiKey (or nested profiles/profile) from a hand-edited config', () => {
+    writeGlobalConfig({
+      profiles: {
+        // A config.json could carry these even though the Profile type forbids them.
+        acme: {
+          apiKey: 'lin_api_committed_secret',
+          profile: 'other',
+          profiles: { nested: {} },
+          defaultTeam: 'backend',
+        } as unknown as Profile,
+      },
+    });
+
+    const scope = getProfileScope('acme');
+    expect(scope).toEqual({ defaultTeam: 'backend' });
+    expect('apiKey' in scope).toBe(false);
+    expect('profiles' in scope).toBe(false);
+    expect('profile' in scope).toBe(false);
+  });
 });

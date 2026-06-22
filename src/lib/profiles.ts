@@ -22,8 +22,24 @@ import { parseRemoteOwner, readGitOriginUrl } from './git-remote.js';
 import type { Scope } from './scope.js';
 import type { Config, Profile } from './types.js';
 
-/** Profile meta keys that are NOT config defaults — stripped from the merge scope. */
-const PROFILE_META_KEYS = ['workspace', 'match', 'linear', 'apiKeyEnv', 'envFile'] as const;
+/**
+ * Profile keys that are NOT config defaults — stripped from the merge scope.
+ *
+ * Beyond the meta keys (workspace/match/linear/apiKeyEnv/envFile), this also
+ * strips `apiKey`/`profiles`/`profile`: a hand-edited `profiles.<name>.apiKey`
+ * in committable config must never flow into the resolved config (commit-safety),
+ * and a nested `profiles`/repo-level `profile` selector has no meaning in a scope.
+ */
+const PROFILE_META_KEYS = [
+  'workspace',
+  'match',
+  'linear',
+  'apiKeyEnv',
+  'envFile',
+  'apiKey',
+  'profiles',
+  'profile',
+] as const;
 
 /**
  * Load all profiles, merging global config.json `profiles` with the project

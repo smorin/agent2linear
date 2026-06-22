@@ -912,8 +912,11 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
     const identifiers = [identifier, ...parseCommaSeparated(options.bulk)];
 
     // Guard the whole batch ONCE (banner + one confirmation), then skip the
-    // per-issue guard so the agent isn't prompted N times.
-    await guardWorkspaceForMutation(options);
+    // per-issue guard so the agent isn't prompted N times. A dry-run writes
+    // nothing, so it must not banner/confirm (matches the single-issue path).
+    if (!options.dryRun) {
+      await guardWorkspaceForMutation(options);
+    }
 
     console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);
 

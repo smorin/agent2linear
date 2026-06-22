@@ -27,20 +27,30 @@ function projectWorkspacesWriteFile(): string {
 type WorkspacesFile = Record<string, Workspace>;
 
 /**
- * Read a workspaces registry file safely. Returns {} for missing/unparseable files.
+ * Read a workspaces registry file. A MISSING file is always `{}`. A file that
+ * EXISTS but is unreadable or invalid JSON returns `{}` in lenient mode (reads),
+ * but THROWS in `strict` mode — used by save/remove so a corrupt/truncated
+ * registry is never silently overwritten, which would discard stored keys.
  */
-function readWorkspacesFile(path: string): WorkspacesFile {
+function readWorkspacesFile(path: string, options: { strict?: boolean } = {}): WorkspacesFile {
+  if (!existsSync(path)) {
+    return {};
+  }
   try {
-    if (!existsSync(path)) {
-      return {};
-    }
     const content = readFileSync(path, 'utf-8');
     const parsed = JSON.parse(content);
     if (!parsed || typeof parsed !== 'object') {
-      return {};
+      throw new Error('not a JSON object');
     }
     return parsed as WorkspacesFile;
-  } catch {
+  } catch (error) {
+    if (options.strict) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Refusing to overwrite unreadable workspaces file ${path}: ${msg}. ` +
+          'Fix or remove it before adding/removing a workspace.'
+      );
+    }
     return {};
   }
 }
@@ -113,7 +123,7 @@ export function loadWorkspaces(): Record<string, Workspace> {
  */
 export function saveWorkspace(scope: Scope, name: string, ws: Workspace): void {
   const filePath = scope === 'global' ? globalWorkspacesFile() : projectWorkspacesWriteFile();
-  const existing = readWorkspacesFile(filePath);
+  const existing = readWorkspacesFile(filePath, { strict: true });
   existing[name] = ws;
   writeWorkspacesFile(filePath, existing);
 
@@ -127,7 +137,7 @@ export function saveWorkspace(scope: Scope, name: string, ws: Workspace): void {
  */
 export function removeWorkspace(scope: Scope, name: string): boolean {
   const filePath = scope === 'global' ? globalWorkspacesFile() : projectWorkspacesWriteFile();
-  const existing = readWorkspacesFile(filePath);
+  const existing = readWorkspacesFile(filePath, { strict: true });
   if (!(name in existing)) {
     return false;
   }

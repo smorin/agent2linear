@@ -1,4 +1,5 @@
 import { readConfigForScope } from '../../../lib/config.js';
+import { normalizeRemoteOwner } from '../../../lib/git-remote.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { saveProfile } from '../../../lib/profiles.js';
 import { getScopeInfo } from '../../../lib/scope.js';
@@ -14,9 +15,19 @@ interface MatchRemoveOptions {
  */
 export function profileMatchRemoveCommand(name: string, options: MatchRemoveOptions = {}): void {
   try {
-    const owner = options.gitRemoteOwner;
-    if (!owner) {
+    const rawOwner = options.gitRemoteOwner;
+    if (!rawOwner) {
       showError('--git-remote-owner <owner> is required');
+      process.exit(1);
+    }
+    // Normalize the same way `profile match add` stored it (accept a bare owner OR
+    // a full repo URL) so an equivalent input form can always remove the rule.
+    const owner = normalizeRemoteOwner(rawOwner);
+    if (!owner) {
+      showError(
+        `Invalid git remote owner: "${rawOwner}"`,
+        'Pass a bare owner (e.g. "acme-co") or a full repo URL to extract it from.'
+      );
       process.exit(1);
     }
 
@@ -28,12 +39,16 @@ export function profileMatchRemoveCommand(name: string, options: MatchRemoveOpti
     }
 
     const owners = profile.match?.gitRemoteOwner ?? [];
-    if (!owners.includes(owner)) {
+    const target = owner.toLowerCase();
+    if (!owners.some((o) => o.toLowerCase() === target)) {
       showError(`Owner "${owner}" is not a match rule on profile "${name}"`);
       process.exit(1);
     }
 
-    profile.match = { ...profile.match, gitRemoteOwner: owners.filter((o) => o !== owner) };
+    profile.match = {
+      ...profile.match,
+      gitRemoteOwner: owners.filter((o) => o.toLowerCase() !== target),
+    };
     saveProfile(scope, name, profile);
 
     showSuccess('Match rule removed!', {
