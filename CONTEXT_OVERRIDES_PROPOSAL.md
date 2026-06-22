@@ -357,7 +357,8 @@ split. **Anchoring depends on the pattern, not on which file the rule lives in:*
 - A `path` starting with `~/` or `/` is an **absolute disk match** (Git `gitdir` style)
   — the escape hatch for §4.
 - Any other `path` is **relative to the repo root** and matched against
-  `relative(repoRoot, cwd)`. The repo root is resolved at runtime (the dir containing
+  `relative(repoRoot, contextDir)` (the context dir is `process.cwd()` by default, or
+  `-C`/`AGENT2LINEAR_CWD` — §5.7). The repo root is resolved at runtime (the dir containing
   the discovered `.agent2linear/`, else the Git work-tree root).
 
 Because the repo root is resolved at runtime, a **relative `path` works identically in
@@ -366,7 +367,7 @@ global and repo-local files**. Combined with an identity matcher (U4), the rule 
 
 Glob conventions: we use gitignore's wildcard *tokens* — `*` (one path segment), `**`
 (zero or more segments), trailing `/` ≡ `/**`, `!` (negation) — but a **relative** pattern
-is **anchored at the repo root** (matched against `relative(repoRoot, cwd)`), so `cli/**`
+is **anchored at the repo root** (matched against `relative(repoRoot, contextDir)`), so `cli/**`
 means "under `<repoRoot>/cli`," **not** "any `cli/` at any depth." Use a leading `**/`
 explicitly for any-depth matching (e.g. `**/cli/**`). A leading `~/` or `/` switches the
 pattern to an **absolute disk match** (per the first bullet above). We do **not**
@@ -374,7 +375,7 @@ auto-prepend `**/` (Git's surprising behavior).
 
 ### 5.4 Repo Identity Normalization
 
-Resolve the `origin` remote URL and normalize across forms:
+Resolve each remote's URL and normalize across forms (examples below use one remote):
 
 | Raw URL | host | owner | name |
 |---------|------|-------|------|
@@ -457,7 +458,9 @@ criteria that actually caused the match**: an `allOf` (and plain AND'd leaves) s
 matched leaves; an `anyOf` contributes its **single most-specific matching branch**; `not`
 contributes only a small presence weight (never negative). So the `anyOf` "base OR
 upstream" example scores like a single `owner` identity match — exactly as if you'd written
-the matching branch directly. (Exact weights are an implementation detail; the tiers above
+the matching branch directly. A bare `remote`-presence predicate (`{ "remote": "upstream" }`,
+no identity criterion) scores at the identity-**presence** tier (alongside `host`), below any
+`repo`/`owner` value match. (Exact weights are an implementation detail; the tiers above
 are the contract.)
 
 Because the winner is score-based (file order matters only as the final tie-break),
@@ -580,7 +583,7 @@ considered (concatenated), then sorted per §5.6.
   that serves both execute and query modes.
 - **New `config explain` (a.k.a. `config which`):** for the context dir, print each
   resolved field, its value, and the winning rule — the answer to "why did it pick team
-  X here?" Include resolved context (contextDir, repoRoot, identity, branch) and the
+  X here?" Include resolved context (contextDir, repoRoot, remotes, branch) and the
   ordered list of matching rules with scores. Accepts an optional **positional `[dir]`**
   (sugar for `--cwd`) and **`--json`** for agents. This is the key debuggability feature.
 - **`config get <key> --cwd <dir>`:** returns a single **override-resolved** field for the
@@ -617,8 +620,8 @@ resolved:
 | Tests | `tests/scripts/test-config-overrides.sh` (integration) + unit tests for glob-match, git-context normalization, and specificity ordering (Vitest, matching existing `*.test.ts`). |
 
 **Performance:** the Git context is resolved lazily and only when at least one override
-declares an identity/path/branch matcher; result cached for the process. Pure path-only
-configs that don't use overrides pay nothing.
+declares a context matcher (identity/`path`/`branch`/`remote`); result cached for the
+process. Configs without overrides pay nothing.
 
 ---
 
@@ -674,11 +677,11 @@ configs that don't use overrides pay nothing.
   network and auth — deliberately out of scope for the offline core).
 - **`extends`/includes** if `overrides` arrays grow large enough to warrant splitting out
   of `config.json` (the routes.json option we deferred).
-
-(Resolved in this revision: `remote` qualifier + multi-remote matching, and boolean
-composition `anyOf`/`allOf`/`not` — see §5.2.)
 - **Batch targeting** — resolving defaults for *many* directories in one call (beyond
   `config explain --json` per dir) if agents need to map a whole tree at once.
 - **`getConfig()` is currently cwd-implicit at call sites** — threading an explicit
   context dir (§5.7) through all command handlers is the bulk of the wiring; a
   request-scoped context object could carry it instead of an extra parameter everywhere.
+
+*Resolved in this revision:* `remote` qualifier + multi-remote matching, and boolean
+composition `anyOf`/`allOf`/`not` — see §5.2.
