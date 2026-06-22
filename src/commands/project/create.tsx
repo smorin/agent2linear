@@ -4,6 +4,7 @@ import React, { useEffect,useState } from 'react';
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
 import { getConfig } from '../../lib/config.js';
+import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
 import { readContentFile } from '../../lib/file-utils.js';
 import {
@@ -18,6 +19,9 @@ import {
   validateInitiativeExists,
   validateTeamExists,
 } from '../../lib/linear-client.js';
+import { silenceStdoutWhile } from '../../lib/output.js';
+import type { WorkspaceResolution } from '../../lib/types.js';
+import { workspaceForJson } from '../../lib/workspace-banner.js';
 import { ProjectForm } from '../../ui/components/ProjectForm.js';
 
 interface CreateOptions {
@@ -51,10 +55,15 @@ interface CreateOptions {
   dependency?: string[];
   // Dry-run mode
   dryRun?: boolean;
+  json?: boolean; // Machine-readable output (incl. workspace.source)
+  yes?: boolean; // Skip the auto-detected-workspace confirmation
 }
 
 // Non-interactive mode
 async function createProjectNonInteractive(options: CreateOptions) {
+  // Under --json, silence stdout progress so only the final JSON object lands on
+  // stdout (errors still go to stderr). --dry-run keeps its own payload output.
+  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
   try {
     // Validate mutual exclusivity of --content and --content-file
     if (options.content && options.contentFile) {
@@ -402,6 +411,10 @@ async function createProjectNonInteractive(options: CreateOptions) {
       return;
     }
 
+    // Workspace safety (R11): banner + auto-detected-write confirmation, before
+    // the create (and after dry-run, which never writes).
+    const ws = await guardWorkspaceForMutation(options);
+
     const result = await createProject(projectData);
 
     // Create external links if provided
@@ -565,8 +578,17 @@ async function createProjectNonInteractive(options: CreateOptions) {
       }
     }
 
+    if (options.json) {
+      restoreLog();
+      const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
+      console.log(
+        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), project: result }, null, 2)
+      );
+      process.exit(0);
+    }
+
     // Display success message
-    displaySuccess(result);
+    displaySuccess(result, ws);
   } catch (error) {
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
@@ -690,8 +712,11 @@ function App({ options: _options }: { options: CreateOptions }) {
   );
 }
 
-function displaySuccess(result: ProjectResult) {
+function displaySuccess(result: ProjectResult, ws?: WorkspaceResolution) {
   console.log('\n✅ Project created successfully!');
+  if (ws) {
+    console.log(`   Workspace: ${ws.name ?? (ws.source === 'flag' ? '(ad-hoc)' : '(default)')}`);
+  }
   console.log(`   Name: ${result.name}`);
   console.log(`   ID: ${result.id}`);
   console.log(`   URL: ${result.url}`);

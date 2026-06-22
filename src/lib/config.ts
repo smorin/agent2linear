@@ -123,6 +123,7 @@ export function getConfig(): ResolvedConfig {
     prewarmCacheOnCreate: { type: 'none' },
     defaultProfile: { type: 'none' },
     noMatchPolicy: { type: 'none' },
+    confirmAutoDetectedWrites: { type: 'none' },
   };
 
   // Default Profile location (global-only setting)
@@ -135,6 +136,13 @@ export function getConfig(): ResolvedConfig {
     locations.noMatchPolicy = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.noMatchPolicy) {
     locations.noMatchPolicy = { type: 'global', path: globalConfigFile() };
+  }
+
+  // Confirm Auto-Detected Writes location
+  if (projectConfig.confirmAutoDetectedWrites !== undefined) {
+    locations.confirmAutoDetectedWrites = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.confirmAutoDetectedWrites !== undefined) {
+    locations.confirmAutoDetectedWrites = { type: 'global', path: globalConfigFile() };
   }
 
   // API Key location (env has highest priority for security)
@@ -369,7 +377,8 @@ const VALID_CONFIG_KEYS = [
   'enableBatchFetching',
   'prewarmCacheOnCreate',
   'defaultProfile', // M28: persisted default profile
-  'noMatchPolicy' // M28: no-match behavior (deny|default|match-only)
+  'noMatchPolicy', // M28: no-match behavior (deny|default|match-only)
+  'confirmAutoDetectedWrites' // M28: confirm writes to an auto-detected workspace
 ] as const;
 export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 
@@ -410,7 +419,8 @@ export function setConfigValue(
     key === 'enablePersistentCache' ||
     key === 'enableSessionCache' ||
     key === 'enableBatchFetching' ||
-    key === 'prewarmCacheOnCreate'
+    key === 'prewarmCacheOnCreate' ||
+    key === 'confirmAutoDetectedWrites'
   ) {
     // Parse boolean value
     const lowerValue = value.toLowerCase();

@@ -20,6 +20,23 @@ export function setNoColor(enabled: boolean): void {
 }
 
 /**
+ * Temporarily silence `console.log` (stdout) when `silent` is true, so a command
+ * can emit a single clean JSON object on stdout without interleaved progress
+ * messages. Returns a restore function (a no-op when `silent` is false). Errors
+ * still surface — they go to `console.error` (stderr), which is untouched.
+ */
+export function silenceStdoutWhile(silent: boolean): () => void {
+  if (!silent) {
+    return () => {};
+  }
+  const original = console.log;
+  console.log = () => {};
+  return () => {
+    console.log = original;
+  };
+}
+
+/**
  * Strip leading emoji from a message if no-color mode is active.
  */
 function stripEmoji(message: string): string {

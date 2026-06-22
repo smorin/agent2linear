@@ -24,6 +24,7 @@ export interface Config {
   defaultProfile?: string; // Global default profile when nothing else resolves
   profiles?: Record<string, Profile>; // Named profiles (settings + detection rules)
   noMatchPolicy?: 'deny' | 'default' | 'match-only'; // No-match behavior (Phase 3)
+  confirmAutoDetectedWrites?: boolean; // Confirm mutating writes to an auto-detected workspace (Phase 5)
 }
 
 export interface ConfigLocation {
@@ -115,6 +116,7 @@ export interface ResolvedConfig extends Config {
     prewarmCacheOnCreate: ConfigLocation;
     defaultProfile: ConfigLocation;
     noMatchPolicy: ConfigLocation;
+    confirmAutoDetectedWrites: ConfigLocation;
   };
 }
 

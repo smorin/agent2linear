@@ -262,7 +262,7 @@ export function normalizeEnvVarName(name: string): string {
 }
 
 /** Number of distinct configured workspaces (registry entries ∪ profile pointers). */
-function configuredWorkspaceCount(): number {
+export function configuredWorkspaceCount(): number {
   const names = new Set<string>(Object.keys(loadWorkspaces()));
   for (const profile of Object.values(loadProfiles())) {
     if (profile.workspace) {

@@ -34,6 +34,7 @@ const KEY_LABELS: Record<ConfigKey, string> = {
   prewarmCacheOnCreate: 'Prewarm Cache On Create',
   defaultProfile: 'Default Profile',
   noMatchPolicy: 'No-Match Policy',
+  confirmAutoDetectedWrites: 'Confirm Auto-Detected Writes',
 };
 
 export async function setConfig(key: string, value: string, options: SetConfigOptions) {
