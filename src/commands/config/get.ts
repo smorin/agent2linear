@@ -1,9 +1,11 @@
 import { type ConfigKey,getConfig, maskApiKey } from '../../lib/config.js';
 import { resolveActiveProfile } from '../../lib/workspace-resolver.js';
 
-export async function getConfigValue(key: ConfigKey) {
+export async function getConfigValue(key: ConfigKey, dir?: string) {
   try {
-    const config = getConfig();
+    // M29: an optional positional [dir] override-resolves the key for that context
+    // (sugar for the global -C/--cwd); undefined falls back to -C / cwd as before.
+    const config = getConfig(dir);
     const value = config[key];
     const location = config.locations[key];
 
@@ -16,6 +18,8 @@ export async function getConfigValue(key: ConfigKey) {
     let locationStr = '';
     if (location.type === 'env') {
       locationStr = ' (from environment)';
+    } else if (location.type === 'override') {
+      locationStr = ` (from ${location.scope === 'project' ? 'repo' : 'global'} override)`;
     } else if (location.type === 'project') {
       locationStr = ' (from project config)';
     } else if (location.type === 'profile') {

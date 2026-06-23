@@ -208,8 +208,10 @@ export interface Aliases {
 }
 
 export interface AliasLocation {
-  type: 'global' | 'project';
-  path: string;
+  // M29: `override` = supplied by a context-aware override rule's `aliases` block
+  // (highest precedence; lives in config.json, so it has no aliases.json `path`).
+  type: 'global' | 'project' | 'override';
+  path?: string;
 }
 
 export interface ResolvedAliases extends Aliases {

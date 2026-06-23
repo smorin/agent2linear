@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { dirname, join } from 'path';
 
 import { buildGitContext, type RemoteIdentity } from './git-context.js';
-import { getInvocationContext } from './invocation-context.js';
+import { getInvocationContext, setInvocationContext } from './invocation-context.js';
 import { needsGitContext, type OverrideLayer, resolveOverrides } from './overrides.js';
 import { getProfileScope } from './profiles.js';
 import type { Scope } from './scope.js';
@@ -344,6 +344,10 @@ export function getConfig(contextDir?: string): ResolvedConfig {
       (merged as Record<string, unknown>)[field] = value;
       (locations as Record<string, ConfigLocation>)[field] = provenance;
     }
+    // Stash the per-rule alias overlay for this context so `loadAliases()` /
+    // `resolveAlias()` can apply it at highest precedence (M29 §5.1/U6). Preserve
+    // the rest of the invocation context (workspace/apiKey/contextDir).
+    setInvocationContext({ ...getInvocationContext(), overrideAliases: resolved.aliases });
   }
 
   return {

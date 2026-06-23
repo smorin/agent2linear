@@ -8,6 +8,8 @@
  * synchronous.
  */
 
+import type { Aliases } from './types.js';
+
 export interface InvocationContext {
   /** Value of the program-level `--workspace <name>` flag, if provided. */
   workspace?: string;
@@ -19,6 +21,12 @@ export interface InvocationContext {
    * Governs config discovery and override matching downstream.
    */
   contextDir?: string;
+  /**
+   * Per-rule alias overlay resolved by `getConfig()` for the current context
+   * (M29 §5.1/U6). `loadAliases()` overlays it at highest precedence (override >
+   * project > global) so `resolveAlias()` stays drop-in.
+   */
+  overrideAliases?: Partial<Aliases>;
 }
 
 let context: InvocationContext = {};

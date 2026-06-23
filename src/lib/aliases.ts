@@ -13,8 +13,24 @@ import {
   validateInitiativeExists,
   validateTeamExists,
 } from './linear-client.js';
+import { getInvocationContext } from './invocation-context.js';
 import type { AliasEntityType, Aliases, AliasLocation,ResolvedAliases } from './types.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
+
+/** All alias entity types, paired with their `Aliases` map key (for the override overlay). */
+const ALIAS_ENTITY_TYPES: readonly AliasEntityType[] = [
+  'initiative',
+  'team',
+  'project',
+  'project-status',
+  'issue-template',
+  'project-template',
+  'member',
+  'issue-label',
+  'project-label',
+  'workflow-state',
+  'cycle',
+];
 
 const ALIASES_FILENAME = 'aliases.json';
 
@@ -296,7 +312,7 @@ export function loadAliases(): ResolvedAliases {
     locations.cycle[alias] = { type: 'project', path: projectReadFile ?? projectAliasesWriteFile() };
   });
 
-  return {
+  const resolved: ResolvedAliases = {
     initiatives,
     teams,
     projects,
@@ -310,6 +326,30 @@ export function loadAliases(): ResolvedAliases {
     cycles, // M15.1: Cycle aliases
     locations,
   };
+
+  // M29 (U6): overlay the per-rule alias overrides resolved for the current context
+  // at HIGHEST precedence (override > project > global), labeled `'override'`. With no
+  // overlay stashed, this is a no-op and behavior is identical to today.
+  applyOverrideAliases(resolved);
+  return resolved;
+}
+
+/** Overlay `getInvocationContext().overrideAliases` onto a resolved alias set in place. */
+function applyOverrideAliases(resolved: ResolvedAliases): void {
+  const overrideAliases = getInvocationContext().overrideAliases;
+  if (!overrideAliases) {
+    return;
+  }
+  for (const type of ALIAS_ENTITY_TYPES) {
+    const overrides = overrideAliases[getAliasesKey(type)];
+    if (!overrides) {
+      continue;
+    }
+    for (const [alias, id] of Object.entries(overrides)) {
+      resolved[getAliasesKey(type)][alias] = id;
+      resolved.locations[type][alias] = { type: 'override' };
+    }
+  }
 }
 
 /**

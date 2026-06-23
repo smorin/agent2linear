@@ -61,6 +61,7 @@ Examples:
       new Argument('<key>', 'Configuration key')
         .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
+    .addArgument(new Argument('[dir]', 'Resolution-context directory to override-resolve for (positional sugar for the global -C/--cwd)'))
     .description('Get a single configuration value')
     .addHelpText('after', `
 Examples:
@@ -69,9 +70,10 @@ Examples:
   $ agent2linear cfg get defaultProjectTemplate
   $ agent2linear cfg get defaultMilestoneTemplate
   $ agent2linear cfg get projectCacheMinTTL
+  $ agent2linear cfg get defaultTeam apps/web   # resolve overrides as if in apps/web
 `)
-    .action(async (key: string) => {
-      await getConfigValue(key as ConfigKey);
+    .action(async (key: string, dir: string | undefined) => {
+      await getConfigValue(key as ConfigKey, dir);
     });
 
   config
