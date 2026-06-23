@@ -49,7 +49,9 @@ trap 'rm -rf "$SANDBOX"' EXIT
 # dir before matching (§5.7), so an ABSOLUTE `path` pattern must be written canonically
 # too (on macOS /var -> /private/var). Relative patterns are unaffected.
 SANDBOX_REAL="$(cd "$SANDBOX" && pwd -P)"
-export HOME="$SANDBOX/home"; mkdir -p "$HOME"
+# Canonical HOME so a `~/` (home-anchored absolute) pattern — which expands via the OS
+# homedir — matches the realpath-canonicalized context dir in test 17.
+mkdir -p "$SANDBOX/home"; export HOME="$(cd "$SANDBOX/home" && pwd -P)"
 export XDG_CONFIG_HOME="$SANDBOX/xdgcfg"
 export XDG_CACHE_HOME="$SANDBOX/xdgcache"
 unset AGENT2LINEAR_WORKSPACE 2>/dev/null || true
@@ -76,11 +78,14 @@ cat > "$XDG_CONFIG_HOME/agent2linear/config.json" <<EOF
 {
   "overrides": [
     { "when": { "owner": "acme" }, "defaultTeam": "acme-eng" },
-    { "when": { "path": "$SANDBOX_REAL/scratch/**" }, "defaultTeam": "personal" }
+    { "when": { "path": "$SANDBOX_REAL/scratch/**" }, "defaultTeam": "personal" },
+    { "when": { "path": "~/scratch-home/**" }, "defaultTeam": "home-team" }
   ]
 }
 EOF
-mkdir -p "$SANDBOX/scratch/proj"
+mkdir -p "$SANDBOX/scratch/proj" "$HOME/scratch-home/proj"
+# Symlink whose real target is under the /-absolute pattern above (canonicalization test).
+ln -s "$SANDBOX_REAL/scratch" "$SANDBOX/scratch-link"
 
 # A monorepo with path overrides (no git remote needed for path rules).
 MONO="$SANDBOX/mono"
@@ -223,6 +228,18 @@ if should_run 16; then
   CW="$SANDBOX/chdirproj"; mkdir -p "$CW"
   ( cd "$SANDBOX" && cli -C "$CW" config set --project projectCacheMinTTL 120 >/dev/null 2>&1 )
   if [ -f "$CW/.agent2linear/config.json" ]; then pass_test; else fail_test "expected $CW/.agent2linear/config.json to be written under the -C dir"; fi
+fi
+
+# 17. absolute `~/`-home pattern: expands via $HOME and matches a dir under it (§5.3).
+if should_run 17; then
+  run_test 17 "~/ home-absolute path override -> home-team"
+  assert_contains "$(cli -C "$HOME/scratch-home/proj" config get defaultTeam 2>&1)" "home-team" "~/ home expansion"
+fi
+
+# 18. symlinked context dir is realpath-canonicalized before matching an absolute pattern (§5.7/§9).
+if should_run 18; then
+  run_test 18 "symlinked -C dir canonicalizes to match a /-absolute pattern"
+  assert_contains "$(cli -C "$SANDBOX/scratch-link/proj" config get defaultTeam 2>&1)" "personal" "symlink -> real abs path"
 fi
 
 echo "=========================================="
