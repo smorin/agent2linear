@@ -1,13 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { RemoteIdentity } from './git-context.js';
 import { logger } from './logger.js';
-import { type OverrideContext, type OverrideLayer, resolveOverrides } from './overrides.js';
+import { needsGitContext, type OverrideContext, type OverrideLayer, resolveOverrides } from './overrides.js';
 import type { ConfigOverride } from './types.js';
 
 const REPO = '/work/acme/web';
+const ORIGIN: RemoteIdentity = { host: 'github.com', owner: 'acme', name: 'web' };
 
-function ctx(contextDir: string, repoRoot: string | null = REPO): OverrideContext {
-  return { contextDir, repoRoot };
+function ctx(
+  contextDir: string,
+  repoRoot: string | null = REPO,
+  extra: { branch?: string; remotes?: Record<string, RemoteIdentity> } = {}
+): OverrideContext {
+  return { contextDir, repoRoot, branch: extra.branch, remotes: extra.remotes ?? {} };
 }
 
 function layer(scope: 'global' | 'project', rules: ConfigOverride[]): OverrideLayer {
@@ -152,5 +158,110 @@ describe('resolveOverrides — warn and skip (§9)', () => {
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toMatch(/unsupported/);
     expect(r.values.defaultTeam).toBeUndefined();
+  });
+
+  it('still warns+skips the remote qualifier (Phase 3)', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const r = resolveOverrides(ctx(REPO, REPO, { remotes: { origin: ORIGIN } }), [
+      layer('project', [{ when: { remote: 'upstream', owner: 'acme' } as never, defaultTeam: 't' }]),
+    ]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(r.values.defaultTeam).toBeUndefined();
+  });
+});
+
+describe('resolveOverrides — identity matching against origin (Phase 2)', () => {
+  const withOrigin = ctx(REPO, REPO, { remotes: { origin: ORIGIN } });
+
+  it('matches repo (exact + glob), owner, and host', () => {
+    const team = (when: ConfigOverride['when']) =>
+      resolveOverrides(withOrigin, [layer('global', [{ when, defaultTeam: 't' }])]).values.defaultTeam;
+    expect(team({ repo: 'acme/web' })).toBe('t');
+    expect(team({ repo: 'acme/*' })).toBe('t');
+    expect(team({ owner: 'acme' })).toBe('t');
+    expect(team({ host: 'github.com' })).toBe('t');
+  });
+
+  it('does not match on identity mismatch', () => {
+    const team = (when: ConfigOverride['when']) =>
+      resolveOverrides(withOrigin, [layer('global', [{ when, defaultTeam: 't' }])]).values.defaultTeam;
+    expect(team({ repo: 'acme/other' })).toBeUndefined();
+    expect(team({ owner: 'other' })).toBeUndefined();
+    expect(team({ host: '*.gitlab.com' })).toBeUndefined();
+  });
+
+  it('identity criteria fail (not throw) without an origin remote (§9 no remote)', () => {
+    const noRemote = ctx(REPO, REPO, { remotes: {} });
+    const team = (when: ConfigOverride['when']) =>
+      resolveOverrides(noRemote, [layer('global', [{ when, defaultTeam: 't' }])]).values.defaultTeam;
+    expect(team({ repo: 'acme/web' })).toBeUndefined();
+    expect(team({ owner: 'acme' })).toBeUndefined();
+    expect(team({ host: 'github.com' })).toBeUndefined();
+  });
+});
+
+describe('resolveOverrides — branch matching (Phase 2)', () => {
+  const rule: ConfigOverride[] = [{ when: { branch: 'release/*' }, defaultInitiative: 'hardening' }];
+
+  it('matches the current branch', () => {
+    const c = ctx(REPO, REPO, { branch: 'release/1.0' });
+    expect(resolveOverrides(c, [layer('project', rule)]).values.defaultInitiative).toBe('hardening');
+  });
+
+  it('does not match a different branch', () => {
+    const c = ctx(REPO, REPO, { branch: 'main' });
+    expect(resolveOverrides(c, [layer('project', rule)]).values.defaultInitiative).toBeUndefined();
+  });
+
+  it('does not match in detached HEAD (no branch)', () => {
+    const c = ctx(REPO, REPO, {}); // branch undefined
+    expect(resolveOverrides(c, [layer('project', rule)]).values.defaultInitiative).toBeUndefined();
+  });
+});
+
+describe('resolveOverrides — identity/path/branch specificity (§5.6)', () => {
+  const c = ctx(`${REPO}/cli/x`, REPO, { branch: 'release/1.0', remotes: { origin: ORIGIN } });
+
+  it('repo+path beats owner beats bare path', () => {
+    const all = resolveOverrides(c, [
+      layer('project', [
+        { when: { path: 'cli/**' }, defaultTeam: 'path' },
+        { when: { owner: 'acme' }, defaultTeam: 'owner' },
+        { when: { repo: 'acme/web', path: 'cli/**' }, defaultTeam: 'repo-path' },
+      ]),
+    ]);
+    expect(all.values.defaultTeam).toBe('repo-path');
+
+    const ownerVsPath = resolveOverrides(c, [
+      layer('project', [
+        { when: { path: 'cli/**' }, defaultTeam: 'path' },
+        { when: { owner: 'acme' }, defaultTeam: 'owner' },
+      ]),
+    ]);
+    expect(ownerVsPath.values.defaultTeam).toBe('owner');
+  });
+
+  it('a path criterion outranks a branch criterion', () => {
+    const r = resolveOverrides(c, [
+      layer('project', [
+        { when: { branch: 'release/*' }, defaultTeam: 'branch' },
+        { when: { path: 'cli/**' }, defaultTeam: 'path' },
+      ]),
+    ]);
+    expect(r.values.defaultTeam).toBe('path');
+  });
+});
+
+describe('needsGitContext', () => {
+  it('is false for catch-all-only or empty layers', () => {
+    expect(needsGitContext([])).toBe(false);
+    expect(needsGitContext([layer('project', [{ when: {}, defaultTeam: 'x' }])])).toBe(false);
+    expect(needsGitContext([layer('project', [{ defaultTeam: 'x' } as unknown as ConfigOverride])])).toBe(false);
+  });
+
+  it('is true when any rule declares a context matcher', () => {
+    expect(needsGitContext([layer('project', [{ when: { path: 'cli/**' }, defaultTeam: 'x' }])])).toBe(true);
+    expect(needsGitContext([layer('global', [{ when: { owner: 'acme' }, defaultTeam: 'x' }])])).toBe(true);
+    expect(needsGitContext([layer('global', [{ when: { branch: 'main' }, defaultTeam: 'x' }])])).toBe(true);
   });
 });

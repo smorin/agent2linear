@@ -1,9 +1,11 @@
+import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getConfig, getGlobalConfigPath, setConfigValue } from './config.js';
+import { __resetGitContextCache } from './git-context.js';
 import { resetInvocationContext } from './invocation-context.js';
 import { logger } from './logger.js';
 import type { Config } from './types.js';
@@ -134,10 +136,12 @@ describe('getConfig() — context-aware overrides (M29)', () => {
     vi.stubEnv('LINEAR_API_KEY', '');
     vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
     resetInvocationContext();
+    __resetGitContextCache();
   });
 
   afterEach(() => {
     resetInvocationContext();
+    __resetGitContextCache();
     rmSync(xdgConfig, { recursive: true, force: true });
     rmSync(repoRoot, { recursive: true, force: true });
   });
@@ -280,5 +284,61 @@ describe('getConfig() — context-aware overrides (M29)', () => {
     const cfg = getConfig(cli);
     expect(cfg.defaultTeam).toBe('cli-team');
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('resolves a catch-all-only override without needing git context', () => {
+    writeRepo({ overrides: [{ when: {}, defaultTeam: 'catch-all' }] });
+
+    const cfg = getConfig(repoRoot);
+    expect(cfg.defaultTeam).toBe('catch-all');
+    expect(cfg.locations.defaultTeam).toMatchObject({ type: 'override', scope: 'project' });
+  });
+
+  describe('git-derived context (Phase 2, real git)', () => {
+    let gitRepo: string;
+
+    beforeEach(() => {
+      gitRepo = mkdtempSync(join(tmpdir(), 'a2l-ovr-git-'));
+      const git = (args: string[]) =>
+        execFileSync('git', ['-C', gitRepo, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
+      git(['init', '-q', '-b', 'release/1.0']);
+      git(['config', 'user.email', 't@t.co']);
+      git(['config', 'user.name', 't']);
+      git(['remote', 'add', 'origin', 'git@github.com:acme/web.git']);
+      git(['commit', '-q', '--allow-empty', '-m', 'init']);
+    });
+
+    afterEach(() => {
+      __resetGitContextCache();
+      rmSync(gitRepo, { recursive: true, force: true });
+    });
+
+    it('uses the git work-tree root for repoRoot when no .agent2linear exists', () => {
+      // No .agent2linear in gitRepo → repoRoot falls back to the git toplevel, so the
+      // global relative path override anchors and matches.
+      writeGlobal({
+        defaultTeam: 'platform',
+        overrides: [{ when: { path: 'sub/**' }, defaultTeam: 'sub-team' }],
+      });
+      const sub = join(gitRepo, 'sub');
+      mkdirSync(sub, { recursive: true });
+
+      expect(getConfig(sub).defaultTeam).toBe('sub-team');
+      expect(getConfig(gitRepo).defaultTeam).toBe('platform'); // catch-all at the root
+    });
+
+    it('matches an owner identity override against the origin remote', () => {
+      writeGlobal({ overrides: [{ when: { owner: 'acme' }, defaultTeam: 'acme-eng' }] });
+
+      const cfg = getConfig(gitRepo);
+      expect(cfg.defaultTeam).toBe('acme-eng');
+      expect(cfg.locations.defaultTeam).toMatchObject({ type: 'override', scope: 'global' });
+    });
+
+    it('matches a branch override against the current branch', () => {
+      writeGlobal({ overrides: [{ when: { branch: 'release/*' }, defaultInitiative: 'hardening' }] });
+
+      expect(getConfig(gitRepo).defaultInitiative).toBe('hardening');
+    });
   });
 });

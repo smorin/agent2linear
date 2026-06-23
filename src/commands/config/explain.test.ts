@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { __resetGitContextCache } from '../../lib/git-context.js';
 import { resetInvocationContext, setInvocationContext } from '../../lib/invocation-context.js';
 import type { ConfigLocation } from '../../lib/types.js';
 import {
@@ -27,10 +28,15 @@ describe('sourceLabel — provenance labels', () => {
 });
 
 describe('renderExplainText', () => {
-  it('renders context + per-field winner when an override matched', () => {
+  it('renders context + remotes/branch + per-field winner when an override matched', () => {
     const data: ExplainData = {
       contextDir: '/repo/cli',
       repoRoot: '/repo',
+      branch: 'feature/login',
+      remotes: {
+        origin: { host: 'github.com', owner: 'myuser', name: 'web' },
+        upstream: { host: 'github.com', owner: 'acme', name: 'web' },
+      },
       fields: [
         { key: 'defaultTeam', value: 'cli-team', location: { type: 'override', scope: 'project', when: { path: 'cli/**' } } },
         { key: 'defaultInitiative', value: undefined, location: { type: 'none' } },
@@ -39,29 +45,37 @@ describe('renderExplainText', () => {
     const text = renderExplainText(data);
     expect(text).toContain('contextDir  /repo/cli');
     expect(text).toContain('repoRoot    /repo');
+    expect(text).toContain('origin → github.com  myuser/web');
+    expect(text).toContain('upstream → github.com  acme/web');
+    expect(text).toContain('branch      feature/login');
     expect(text).toContain('cli-team');
     expect(text).toContain('repo override');
     expect(text).toContain('(not set)');
     expect(text).not.toContain('(no override rules matched');
   });
 
-  it('shows (none) repoRoot and the no-match note when nothing overrides', () => {
+  it('shows (none) for repoRoot/remotes/branch and the no-match note when nothing overrides', () => {
     const data: ExplainData = {
       contextDir: '/tmp/x',
       repoRoot: null,
+      remotes: {},
       fields: [{ key: 'defaultTeam', value: 'platform', location: { type: 'global' } }],
     };
     const text = renderExplainText(data);
     expect(text).toContain('repoRoot    (none)');
+    expect(text).toContain('remotes     (none)');
+    expect(text).toContain('branch      (none)');
     expect(text).toContain('(no override rules matched this context)');
   });
 });
 
 describe('buildExplainJson', () => {
-  it('adds override metadata only for override-sourced fields', () => {
+  it('adds override metadata only for override-sourced fields, plus git context', () => {
     const data: ExplainData = {
       contextDir: '/repo/cli',
       repoRoot: '/repo',
+      branch: 'main',
+      remotes: { origin: { host: 'github.com', owner: 'acme', name: 'web' } },
       fields: [
         {
           key: 'defaultTeam',
@@ -74,6 +88,8 @@ describe('buildExplainJson', () => {
     const json = buildExplainJson(data);
     expect(json.contextDir).toBe('/repo/cli');
     expect(json.repoRoot).toBe('/repo');
+    expect(json.branch).toBe('main');
+    expect(json.remotes).toEqual({ origin: { host: 'github.com', owner: 'acme', name: 'web' } });
     const resolved = json.resolved as Record<string, unknown>;
     expect(resolved.defaultTeam).toEqual({
       value: 'cli-team',
@@ -83,6 +99,11 @@ describe('buildExplainJson', () => {
       when: { path: 'cli/**' },
     });
     expect(resolved.defaultInitiative).toEqual({ value: null, source: 'none' });
+  });
+
+  it('renders null branch as null in JSON', () => {
+    const data: ExplainData = { contextDir: '/x', repoRoot: null, remotes: {}, fields: [] };
+    expect(buildExplainJson(data).branch).toBeNull();
   });
 });
 
@@ -97,10 +118,12 @@ describe('buildExplainData / explainConfig — query path', () => {
     vi.stubEnv('LINEAR_API_KEY', '');
     vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
     resetInvocationContext();
+    __resetGitContextCache();
   });
 
   afterEach(() => {
     resetInvocationContext();
+    __resetGitContextCache();
     vi.restoreAllMocks();
     rmSync(xdgConfig, { recursive: true, force: true });
     rmSync(repoRoot, { recursive: true, force: true });

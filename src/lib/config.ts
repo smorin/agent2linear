@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
+import { buildGitContext, type RemoteIdentity } from './git-context.js';
 import { getInvocationContext } from './invocation-context.js';
-import { type OverrideLayer, resolveOverrides } from './overrides.js';
+import { needsGitContext, type OverrideLayer, resolveOverrides } from './overrides.js';
 import { getProfileScope } from './profiles.js';
 import type { Scope } from './scope.js';
 import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
@@ -317,10 +318,20 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     overrideLayers.push({ scope: 'project', rules: projectConfig.overrides });
   }
   if (overrideLayers.length > 0) {
-    const resolved = resolveOverrides(
-      { contextDir: effectiveDir, repoRoot: resolveRepoRoot(effectiveDir) },
-      overrideLayers
-    );
+    // §5.3 repoRoot: the dir containing the discovered `.agent2linear/` (primary).
+    // §8 performance: build the git context only when a rule actually needs it
+    // (identity/path/branch) — then fall back to the git work-tree root for repoRoot
+    // and supply branch + remotes for identity/branch matching.
+    let repoRoot = resolveRepoRoot(effectiveDir);
+    let branch: string | undefined;
+    let remotes: Record<string, RemoteIdentity> = {};
+    if (needsGitContext(overrideLayers)) {
+      const git = buildGitContext(effectiveDir);
+      repoRoot = repoRoot ?? git.repoRoot;
+      branch = git.branch;
+      remotes = git.remotes;
+    }
+    const resolved = resolveOverrides({ contextDir: effectiveDir, repoRoot, branch, remotes }, overrideLayers);
     for (const [field, value] of Object.entries(resolved.values)) {
       const provenance = resolved.locations[field];
       const current = (locations as Record<string, ConfigLocation>)[field];

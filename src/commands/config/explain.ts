@@ -1,4 +1,5 @@
 import { canonicalizeDir, getConfig, resolveRepoRoot } from '../../lib/config.js';
+import { buildGitContext, type RemoteIdentity } from '../../lib/git-context.js';
 import { getInvocationContext } from '../../lib/invocation-context.js';
 import type { ConfigLocation, ResolvedConfig } from '../../lib/types.js';
 
@@ -28,6 +29,8 @@ export interface ExplainField {
 export interface ExplainData {
   contextDir: string;
   repoRoot: string | null;
+  branch?: string;
+  remotes: Record<string, RemoteIdentity>;
   fields: ExplainField[];
 }
 
@@ -58,7 +61,8 @@ export function sourceLabel(location: ConfigLocation): string {
  */
 export function buildExplainData(dir?: string): ExplainData {
   const contextDir = canonicalizeDir(dir ?? getInvocationContext().contextDir ?? process.cwd());
-  const repoRoot = resolveRepoRoot(contextDir);
+  const git = buildGitContext(contextDir);
+  const repoRoot = resolveRepoRoot(contextDir) ?? git.repoRoot;
   const config = getConfig(dir);
   const fields: ExplainField[] = EXPLAIN_FIELDS.map((key) => {
     const value = config[key as keyof ResolvedConfig];
@@ -68,7 +72,7 @@ export function buildExplainData(dir?: string): ExplainData {
       location: config.locations[key],
     };
   });
-  return { contextDir, repoRoot, fields };
+  return { contextDir, repoRoot, branch: git.branch, remotes: git.remotes, fields };
 }
 
 /** Render the explain model as human-readable text. */
@@ -77,8 +81,17 @@ export function renderExplainText(data: ExplainData): string {
     'context:',
     `  contextDir  ${data.contextDir}`,
     `  repoRoot    ${data.repoRoot ?? '(none)'}`,
-    'resolved:',
   ];
+  const remoteNames = Object.keys(data.remotes);
+  if (remoteNames.length === 0) {
+    lines.push('  remotes     (none)');
+  } else {
+    remoteNames.forEach((name, i) => {
+      const r = data.remotes[name];
+      lines.push(`  ${(i === 0 ? 'remotes' : '').padEnd(9)} ${name} → ${r.host}  ${r.owner}/${r.name}`);
+    });
+  }
+  lines.push(`  branch      ${data.branch ?? '(none)'}`, 'resolved:');
   for (const field of data.fields) {
     lines.push(`  ${field.key.padEnd(24)} ${(field.value ?? '(not set)').padEnd(16)} ← ${sourceLabel(field.location)}`);
   }
@@ -93,6 +106,8 @@ export function buildExplainJson(data: ExplainData): Record<string, unknown> {
   return {
     contextDir: data.contextDir,
     repoRoot: data.repoRoot,
+    branch: data.branch ?? null,
+    remotes: data.remotes,
     resolved: Object.fromEntries(
       data.fields.map((field) => [
         field.key,

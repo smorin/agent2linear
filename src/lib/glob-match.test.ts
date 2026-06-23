@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 
-import { matchPath } from './glob-match.js';
+import { matchGlob, matchPath } from './glob-match.js';
 
 const REPO = '/work/acme/web';
 
@@ -82,5 +82,26 @@ describe('matchPath — edge cases (§9)', () => {
   it('throws on an empty/blank pattern (invalid glob → resolver warn+skip)', () => {
     expect(() => matchPath('', REPO, REPO)).toThrow(/invalid glob/);
     expect(() => matchPath('   ', REPO, REPO)).toThrow(/invalid glob/);
+  });
+});
+
+describe('matchGlob — identity/branch globs (plain, unanchored)', () => {
+  it('matches exact and wildcard identity values', () => {
+    expect(matchGlob('github.com', 'github.com')).toBe(true);
+    expect(matchGlob('github.com', 'gitlab.com')).toBe(false);
+    expect(matchGlob('acme', 'acme')).toBe(true);
+  });
+
+  it('treats * as one segment and ** as nested for repo/owner', () => {
+    expect(matchGlob('acme/*', 'acme/web')).toBe(true);
+    expect(matchGlob('acme/*', 'acme/platform/web')).toBe(false);
+    expect(matchGlob('acme/**', 'acme/platform/web')).toBe(true);
+  });
+
+  it('matches host and branch wildcards', () => {
+    expect(matchGlob('*.gitlab.com', 'group.gitlab.com')).toBe(true);
+    expect(matchGlob('*.gitlab.com', 'gitlab.com')).toBe(false);
+    expect(matchGlob('release/*', 'release/1.2')).toBe(true);
+    expect(matchGlob('release/*', 'main')).toBe(false);
   });
 });

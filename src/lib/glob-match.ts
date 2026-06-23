@@ -89,3 +89,14 @@ export function matchPath(pattern: string, contextDir: string, repoRoot: string 
   }
   return compile(pattern)(rel);
 }
+
+/**
+ * Plain glob match for identity/branch values (M29 — `repo`/`owner`/`host`/`branch`).
+ * Unlike `matchPath` there is NO repo-root anchoring or directory base-self transform:
+ * the pattern matches the full value directly — e.g. `acme/*` vs `acme/web`,
+ * `acme/**` vs a nested-group `acme/platform/web`, `*.gitlab.com` vs a host,
+ * `release/*` vs a branch.
+ */
+export function matchGlob(pattern: string, value: string): boolean {
+  return picomatch(pattern, PICOMATCH_OPTS)(value);
+}
