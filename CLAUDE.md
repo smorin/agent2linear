@@ -57,6 +57,49 @@
   - Libraries: src/lib/ - shared utilities (aliases, config, linear-client, etc.)
   - Types: src/lib/types.ts - TypeScript interfaces for all entities
 
+  ## Code Intelligence Tooling
+
+  This repo enables two Claude Code plugins for code intelligence. They are
+  declared in the committed `.claude/settings.json` (`enabledPlugins`), so they
+  apply to everyone who clones the repo:
+
+  ```json
+  {
+    "enabledPlugins": {
+      "typescript-lsp@claude-plugins-official": true,
+      "ast-grep@ast-grep-marketplace": true
+    }
+  }
+  ```
+
+  **Note:** `enabledPlugins` is read at session startup; after editing
+  `.claude/settings.json`, start a fresh session for changes to take effect.
+  Personal/machine-specific overrides belong in `.claude/settings.local.json`
+  (gitignored, not shared).
+
+  ### TypeScript LSP (semantic navigation)
+
+  Use for questions that require **type resolution** — "where is X defined / used",
+  type/JSDoc info, refactor-grade reference analysis, and call hierarchy. Resolves
+  this repo's ESM `.js`-extension imports back to their `.ts` sources via
+  `tsconfig.json`.
+  - Operations: `goToDefinition`, `findReferences`, `hover`, `documentSymbol`,
+    `workspaceSymbol`, `goToImplementation`, `incomingCalls`/`outgoingCalls`.
+  - Plugin: `typescript-lsp@claude-plugins-official`.
+
+  ### ast-grep (structural pattern matching)
+
+  Use for **structural** queries that ignore types — "every exported async function
+  that awaits", "all `console.error(...)` call sites". Complements the LSP; it
+  matches on AST shape, not semantics.
+  - Requires the `ast-grep` binary on PATH (`brew install ast-grep`).
+  - Match the grammar to the file's role: `--lang ts` for pure-logic `.ts` files,
+    `--lang tsx` for Ink/React `.tsx` command files (JSX is a different grammar).
+  - For relational YAML rules (`has`/`inside`), add `stopBy: end` so the traversal
+    reaches descendants buried in function bodies.
+  - Plugin: `ast-grep@ast-grep-marketplace` — docs:
+    https://github.com/ast-grep/claude-skill
+
   ## Icon Handling (v0.13.2+)
 
   **IMPORTANT**: Icons are NOT validated client-side.
