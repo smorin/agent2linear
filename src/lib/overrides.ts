@@ -5,10 +5,13 @@
  * matching rule, where "winning" is decided by (in order): scope (repo-local beats
  * global), specificity within a scope, then declaration order (later wins).
  *
- * Phase 2 evaluates AND'd leaf criteria: `path` plus identity (`repo`/`owner`/
- * `host`, read against `origin`) and `branch`. Composites (`allOf`/`anyOf`/`not`)
- * and the `remote` qualifier remain unsupported (warn-and-skip) until Phase 3; this
- * file is intentionally re-edited per phase so coverage stays meaningful.
+ * Phase 3 makes the `when` tree fully recursive: leaf criteria (`path` + identity
+ * `repo`/`owner`/`host` + `branch`) AND'd with the boolean composites `allOf`/
+ * `anyOf`/`not`, and the `remote` qualifier selecting which remote(s) identity reads
+ * (default `origin`; a name / list / `"*"`; bare `remote` = "a remote of that name
+ * exists"). Matching and scoring are unified in one recursive `matchWhen` because
+ * §5.6 specificity is match-dependent (an `anyOf` scores as its most-specific
+ * *matching* branch).
  */
 
 import { matchGlob, matchPath } from './glob-match.js';
@@ -49,28 +52,36 @@ const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
   'defaultAutoAssignLead',
 ];
 
-/**
- * `when` keys Phase 2 understands (AND'd leaves). `remote`/`allOf`/`anyOf`/`not`
- * remain unsupported ⇒ warn + skip (§9) until Phase 3.
- */
-const KNOWN_WHEN_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host', 'branch'];
+/** `when` keys Phase 3 understands. Anything else ⇒ warn + skip (§9). */
+const KNOWN_WHEN_KEYS: readonly string[] = [
+  'path',
+  'repo',
+  'owner',
+  'host',
+  'branch',
+  'remote',
+  'allOf',
+  'anyOf',
+  'not',
+];
 
-/**
- * `when` keys that require the git/filesystem context to be resolved. If no
- * candidate rule declares one of these (only catch-alls), the caller can skip
- * building the git context entirely (§8 performance). Phase 3 adds `remote` +
- * recursion into composites.
- */
-const CONTEXT_MATCHER_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host', 'branch'];
+/** Leaf `when` keys that require the git/filesystem context to be resolved (§8). */
+const CONTEXT_MATCHER_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host', 'branch', 'remote'];
+
+/** Whether a single `when` node (recursing into composites) needs the git context. */
+function whenNeedsContext(node: WhenClause): boolean {
+  if (CONTEXT_MATCHER_KEYS.some((key) => key in node)) {
+    return true;
+  }
+  if (node.allOf?.some(whenNeedsContext) || node.anyOf?.some(whenNeedsContext)) {
+    return true;
+  }
+  return node.not !== undefined && whenNeedsContext(node.not);
+}
 
 /** Whether any candidate rule needs the git/filesystem context (so it's built lazily). */
 export function needsGitContext(layers: OverrideLayer[]): boolean {
-  return layers.some((layer) =>
-    layer.rules.some((rule) => {
-      const when = rule.when ?? {};
-      return CONTEXT_MATCHER_KEYS.some((key) => key in when);
-    })
-  );
+  return layers.some((layer) => layer.rules.some((rule) => whenNeedsContext(rule.when ?? {})));
 }
 
 /** Path-tier specificity (§5.6): leading literal segments, then wildcard count. */
@@ -92,47 +103,26 @@ function pathSpecificity(pattern: string): { literalLeading: number; wildcardCou
 }
 
 /**
- * Specificity sort key (ascending = weakest first), per §5.6. Lexicographic tuple —
- * earlier slots dominate, so tier ordering is structural rather than weight-tuned:
- *   [ scopeRank,         // repo-local always beats global (primary)
- *     exactRepo,         // exact `repo` (no wildcard) — strongest identity
- *     identityValue,     // repo-glob + owner + host (summed across AND'd leaves)
- *     pathPresent,       // a `path` criterion outranks `branch`
- *     pathLiteralLeading,// finer path = more leading literal segments
- *     -pathWildcards,    // then fewer wildcard segments
- *     branchPresent ]    // `branch` presence — lowest leaf tier
- * Because the rule only reaches scoring once its whole (AND'd) `when` matched, every
- * present leaf is a matched leaf. Declaration order is NOT in the key — a stable sort
- * preserves it, so exact ties resolve to the later-declared rule (applied last).
+ * Per-node specificity score (§5.6), as a lexicographic tuple where earlier slots
+ * dominate (tier ordering is structural, not weight-tuned). `resolveOverrides`
+ * prepends `scopeRank` (repo-local beats global). Indices:
+ *   0 exactRepo   — exact `repo` value match (no wildcard), strongest identity
+ *   1 idValue     — repo-glob + owner value matches
+ *   2 idPresence  — `host` + a bare `remote`-presence predicate (below repo/owner value)
+ *   3 pathPresent
+ *   4 pathLiteral — more leading literal path segments = finer
+ *   5 -pathWild   — then fewer wildcard segments
+ *   6 branch      — `branch` presence (lowest leaf tier)
+ *   7 notPresence — a matched `not` clause contributes presence only (never negative)
+ *   8 originBonus — identity matched via `origin` outranks a non-origin remote (tiebreak)
  */
-function specificityKey(when: WhenClause, scope: 'global' | 'project'): number[] {
-  const scopeRank = scope === 'project' ? 1 : 0;
-  let exactRepo = 0;
-  let identityValue = 0;
-  if (when.repo !== undefined) {
-    if (when.repo.includes('*')) {
-      identityValue++;
-    } else {
-      exactRepo++;
-    }
-  }
-  if (when.owner !== undefined) {
-    identityValue++;
-  }
-  if (when.host !== undefined) {
-    identityValue++;
-  }
-  let pathPresent = 0;
-  let pathLiteralLeading = 0;
-  let pathWildcards = 0;
-  if (when.path !== undefined) {
-    pathPresent = 1;
-    const spec = pathSpecificity(when.path);
-    pathLiteralLeading = spec.literalLeading;
-    pathWildcards = spec.wildcardCount;
-  }
-  const branchPresent = when.branch !== undefined ? 1 : 0;
-  return [scopeRank, exactRepo, identityValue, pathPresent, pathLiteralLeading, -pathWildcards, branchPresent];
+type Spec = number[];
+const SPEC_LEN = 9;
+const zeroSpec = (): Spec => new Array<number>(SPEC_LEN).fill(0);
+
+/** Lexicographically larger of two specs (for `anyOf`'s most-specific branch). */
+function maxSpec(a: Spec, b: Spec): Spec {
+  return compareKeys(a, b) >= 0 ? a : b;
 }
 
 /** Lexicographic compare of two equal-length numeric keys. */
@@ -145,41 +135,146 @@ function compareKeys(a: number[], b: number[]): number {
   return 0;
 }
 
-/**
- * Evaluate a `when` clause against the context. Returns whether it matches.
- * Throws on an unsupported `when` key or an invalid glob — the caller turns either
- * into a warn-and-skip (§9).
- */
-function evaluateWhen(when: WhenClause, ctx: OverrideContext): boolean {
-  const keys = Object.keys(when);
-  if (keys.length === 0) {
-    return true; // catch-all
+/** Resolve the remote(s) a node's identity reads: default `origin`, a name, a list, or `"*"`. */
+function selectRemotes(
+  spec: WhenClause['remote'],
+  remotes: Record<string, RemoteIdentity>
+): Array<{ name: string; identity: RemoteIdentity }> {
+  const all = Object.entries(remotes).map(([name, identity]) => ({ name, identity }));
+  if (spec === undefined) {
+    return all.filter((r) => r.name === 'origin');
   }
-  const unsupported = keys.filter((k) => !KNOWN_WHEN_KEYS.includes(k));
+  if (spec === '*') {
+    return all;
+  }
+  const names = Array.isArray(spec) ? spec : [spec];
+  return all.filter((r) => names.includes(r.name));
+}
+
+/** Whether a remote's identity satisfies the node's identity criteria (those present). */
+function identitySatisfies(node: WhenClause, id: RemoteIdentity): boolean {
+  if (node.repo !== undefined && !matchGlob(node.repo, `${id.owner}/${id.name}`)) {
+    return false;
+  }
+  if (node.owner !== undefined && !matchGlob(node.owner, id.owner)) {
+    return false;
+  }
+  if (node.host !== undefined && !matchGlob(node.host, id.host)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Recursively evaluate a `when` node (§5.2.1): every present key is AND'd; identity
+ * reads the node's selected remote(s); `allOf`/`anyOf`/`not` compose. Returns whether
+ * it matched and the §5.6 specificity it earned. Throws on an unsupported key — the
+ * caller turns that into a warn-and-skip (§9). Graceful: a missing remote / detached
+ * HEAD makes a criterion fail rather than throw.
+ */
+function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; score: Spec } {
+  const fail = { matched: false, score: zeroSpec() };
+  const unsupported = Object.keys(node).filter((k) => !KNOWN_WHEN_KEYS.includes(k));
   if (unsupported.length > 0) {
     throw new Error(`unsupported \`when\` key(s): ${unsupported.join(', ')}`);
   }
 
-  // Every present leaf must match (AND). Identity reads `origin` (the `remote`
-  // qualifier is Phase 3); a missing origin / detached HEAD makes its criterion
-  // fail rather than throw (§9 graceful degradation).
-  if (when.path !== undefined && !matchPath(when.path, ctx.contextDir, ctx.repoRoot)) {
-    return false;
+  const score = zeroSpec();
+  const hasIdentity = node.repo !== undefined || node.owner !== undefined || node.host !== undefined;
+
+  if (hasIdentity) {
+    const selected = selectRemotes(node.remote, ctx.remotes).filter((r) => identitySatisfies(node, r.identity));
+    if (selected.length === 0) {
+      return fail;
+    }
+    if (node.repo !== undefined) {
+      if (node.repo.includes('*')) {
+        score[1] += 1;
+      } else {
+        score[0] += 1;
+      }
+    }
+    if (node.owner !== undefined) {
+      score[1] += 1;
+    }
+    if (node.host !== undefined) {
+      score[2] += 1;
+    }
+    if (selected.some((r) => r.name === 'origin')) {
+      score[8] = 1;
+    }
+  } else if (node.remote !== undefined) {
+    // Bare `remote` predicate: matches if a selected remote exists ("this is a fork").
+    const selected = selectRemotes(node.remote, ctx.remotes);
+    if (selected.length === 0) {
+      return fail;
+    }
+    score[2] += 1;
+    if (selected.some((r) => r.name === 'origin')) {
+      score[8] = 1;
+    }
   }
-  const origin = ctx.remotes.origin;
-  if (when.repo !== undefined && !(origin !== undefined && matchGlob(when.repo, `${origin.owner}/${origin.name}`))) {
-    return false;
+
+  if (node.path !== undefined) {
+    if (!matchPath(node.path, ctx.contextDir, ctx.repoRoot)) {
+      return fail;
+    }
+    const spec = pathSpecificity(node.path);
+    score[3] = 1;
+    score[4] += spec.literalLeading;
+    score[5] += -spec.wildcardCount;
   }
-  if (when.owner !== undefined && !(origin !== undefined && matchGlob(when.owner, origin.owner))) {
-    return false;
+
+  if (node.branch !== undefined) {
+    if (ctx.branch === undefined || !matchGlob(node.branch, ctx.branch)) {
+      return fail;
+    }
+    score[6] = 1;
   }
-  if (when.host !== undefined && !(origin !== undefined && matchGlob(when.host, origin.host))) {
-    return false;
+
+  if (node.allOf !== undefined) {
+    for (const child of node.allOf) {
+      const result = matchWhen(child, ctx);
+      if (!result.matched) {
+        return fail;
+      }
+      addInto(score, result.score);
+    }
   }
-  if (when.branch !== undefined && !(ctx.branch !== undefined && matchGlob(when.branch, ctx.branch))) {
-    return false;
+
+  if (node.anyOf !== undefined) {
+    if (node.anyOf.length === 0) {
+      logger.warn('Override `when` has an empty `anyOf: []` (matches nothing); did you mean `allOf`?');
+      return fail;
+    }
+    let best: Spec | null = null;
+    for (const child of node.anyOf) {
+      const result = matchWhen(child, ctx);
+      if (result.matched) {
+        best = best === null ? result.score : maxSpec(best, result.score);
+      }
+    }
+    if (best === null) {
+      return fail;
+    }
+    addInto(score, best);
   }
-  return true;
+
+  if (node.not !== undefined) {
+    if (matchWhen(node.not, ctx).matched) {
+      return fail;
+    }
+    score[7] += 1;
+  }
+
+  return { matched: true, score };
+}
+
+/** In-place element-wise add (keeps the running node score a single array). */
+function addInto(target: Spec, addend: Spec): void {
+  for (let i = 0; i < target.length; i++) {
+    target[i] += addend[i];
+  }
 }
 
 /** Overlay one rule's alias block onto the accumulator (strongest applied last). */
@@ -208,19 +303,23 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
   }> = [];
 
   for (const layer of layers) {
+    const scopeRank = layer.scope === 'project' ? 1 : 0;
     for (let ruleIndex = 0; ruleIndex < layer.rules.length; ruleIndex++) {
       const rule = layer.rules[ruleIndex];
       const when = rule.when ?? ({} as WhenClause);
+      let result: { matched: boolean; score: Spec };
       try {
-        if (!evaluateWhen(when, ctx)) {
-          continue;
-        }
+        result = matchWhen(when, ctx);
       } catch (error) {
-        // evaluateWhen / matchPath only ever throw Error (unsupported key, invalid glob).
+        // matchWhen / matchPath only ever throw Error (unsupported key, invalid glob).
         logger.warn(`Skipping override rule (${layer.scope} #${ruleIndex}): ${(error as Error).message}`);
         continue;
       }
-      matched.push({ scope: layer.scope, ruleIndex, rule, when, key: specificityKey(when, layer.scope) });
+      if (!result.matched) {
+        continue;
+      }
+      // Scope is the primary sort key (repo-local beats global, §5.6).
+      matched.push({ scope: layer.scope, ruleIndex, rule, when, key: [scopeRank, ...result.score] });
     }
   }
 
