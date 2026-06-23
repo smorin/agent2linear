@@ -215,6 +215,16 @@ if should_run 15; then
   assert_contains "$(cli -C "$PLAIN" config get defaultTeam 2>&1)" "plain-team" "plain config"
 fi
 
+# 16. git-style -C chdir: cwd-relative ops (a project config write) follow -C (§5.7).
+# Offline proxy for relative path-arg rebasing: `config set --project` writes under the
+# write-target dir, which is cwd-based — so with -C it must land under <dir>, not $PWD.
+if should_run 16; then
+  run_test 16 "-C rebases cwd: config set --project writes under <dir>"
+  CW="$SANDBOX/chdirproj"; mkdir -p "$CW"
+  ( cd "$SANDBOX" && cli -C "$CW" config set --project projectCacheMinTTL 120 >/dev/null 2>&1 )
+  if [ -f "$CW/.agent2linear/config.json" ]; then pass_test; else fail_test "expected $CW/.agent2linear/config.json to be written under the -C dir"; fi
+fi
+
 echo "=========================================="
 echo "Passed: $PASS   Failed: $FAIL   Total: $TOTAL"
 echo "=========================================="

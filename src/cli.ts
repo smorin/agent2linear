@@ -74,6 +74,11 @@ cli
       } catch {
         throw new Error(`--cwd directory not found or unreadable: ${rawCwd}`);
       }
+      // git-style `-C`: actually move there so EVERYTHING downstream follows it —
+      // config discovery, override matching, AND relative path args (e.g.
+      // `--description-file ./spec.md`). The stashed contextDir keeps query commands
+      // (config explain/get) working with an explicit positional [dir] too.
+      process.chdir(contextDir);
     }
 
     setInvocationContext({ workspace: opts.workspace, apiKey, contextDir });
