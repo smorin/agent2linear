@@ -270,6 +270,40 @@ else
 fi
 
 # ============================================================
+# RUN TEST SUITE: ISSUE CREATE — M29 CONTEXT-AWARE OVERRIDES
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] ISSUE CREATE (M29 overrides)${NC}"
+echo ""
+
+ISSUE_OVR_OUTPUT="/tmp/test-issue-create-overrides-output-$$.log"
+
+if ./test-issue-create-overrides.sh 2>&1 | tee "$ISSUE_OVR_OUTPUT"; then
+    ISSUE_OVR_EXIT=0
+else
+    ISSUE_OVR_EXIT=$?
+fi
+
+read IOVR_PASSED IOVR_FAILED IOVR_TOTAL <<< $(extract_results "$(cat "$ISSUE_OVR_OUTPUT")")
+
+TOTAL_PASSED=$((TOTAL_PASSED + IOVR_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + IOVR_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + IOVR_TOTAL))
+
+echo ""
+echo -e "${BLUE}Issue Create (overrides) Results:${NC}"
+echo -e "  Passed: ${GREEN}$IOVR_PASSED${NC}"
+echo -e "  Failed: ${RED}$IOVR_FAILED${NC}"
+echo -e "  Total:  $IOVR_TOTAL"
+
+if [ $ISSUE_OVR_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
 # RUN TEST SUITE 5: ISSUE UPDATE
 # ============================================================
 
