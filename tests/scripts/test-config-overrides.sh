@@ -49,9 +49,9 @@ trap 'rm -rf "$SANDBOX"' EXIT
 # dir before matching (§5.7), so an ABSOLUTE `path` pattern must be written canonically
 # too (on macOS /var -> /private/var). Relative patterns are unaffected.
 SANDBOX_REAL="$(cd "$SANDBOX" && pwd -P)"
-# Canonical HOME so a `~/` (home-anchored absolute) pattern — which expands via the OS
-# homedir — matches the realpath-canonicalized context dir in test 17.
-mkdir -p "$SANDBOX/home"; export HOME="$(cd "$SANDBOX/home" && pwd -P)"
+# HOME stays the raw (symlinked, on macOS /var->/private/var) temp path on purpose:
+# the resolver canonicalizes $HOME for `~/` patterns, so test 17 matches even here.
+export HOME="$SANDBOX/home"; mkdir -p "$HOME"
 export XDG_CONFIG_HOME="$SANDBOX/xdgcfg"
 export XDG_CACHE_HOME="$SANDBOX/xdgcache"
 unset AGENT2LINEAR_WORKSPACE 2>/dev/null || true

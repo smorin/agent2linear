@@ -1,8 +1,11 @@
-import { homedir } from 'os';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'fs';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { matchGlob, matchPath } from './glob-match.js';
+
+afterEach(() => vi.unstubAllEnvs());
 
 const REPO = '/work/acme/web';
 
@@ -67,10 +70,29 @@ describe('matchPath — absolute disk patterns (escape hatch, §5.3)', () => {
     expect(matchPath('/work/acme/web/**', '/work/acme/other', null)).toBe(false);
   });
 
-  it('a leading ~/ expands to $HOME', () => {
-    const scratch = join(homedir(), 'scratch', 'proj');
-    expect(matchPath('~/scratch/**', scratch, null)).toBe(true);
-    expect(matchPath('~/scratch/**', join(homedir(), 'other'), null)).toBe(false);
+  it('a leading ~/ expands to the (canonicalized) $HOME', () => {
+    const home = realpathSync(homedir());
+    expect(matchPath('~/scratch/**', join(home, 'scratch', 'proj'), null)).toBe(true);
+    expect(matchPath('~/scratch/**', join(home, 'other'), null)).toBe(false);
+  });
+
+  it('~/ canonicalizes $HOME so it matches even when home traverses a symlink', () => {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'a2l-home-')));
+    mkdirSync(join(base, 'target', 'scratch', 'proj'), { recursive: true });
+    const link = join(base, 'homelink');
+    symlinkSync(join(base, 'target'), link); // $HOME points through a symlink
+    try {
+      vi.stubEnv('HOME', link);
+      // context dir is the canonical (realpath) location under the symlink target
+      expect(matchPath('~/scratch/**', join(base, 'target', 'scratch', 'proj'), null)).toBe(true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('~/ degrades gracefully (no throw) when $HOME cannot be resolved', () => {
+    vi.stubEnv('HOME', '/no/such/home-xyz');
+    expect(matchPath('~/scratch/**', '/somewhere/scratch/proj', null)).toBe(false);
   });
 });
 

@@ -15,11 +15,26 @@
  * use picomatch with a small anchoring transform instead.
  */
 
+import { realpathSync } from 'fs';
 import { homedir } from 'os';
 import { relative } from 'path';
 import picomatch from 'picomatch';
 
 const PICOMATCH_OPTS = { dot: true, strictSlashes: false } as const;
+
+/**
+ * `$HOME`, realpath-canonicalized — symmetric with how the context dir is
+ * canonicalized before matching, so a `~/` pattern still matches when `$HOME`
+ * traverses a symlink (e.g. `/home`→`/data/home`, macOS `/var`→`/private/var`).
+ * Falls back to the raw home dir if it can't be resolved.
+ */
+function canonicalHome(): string {
+  try {
+    return realpathSync(homedir());
+  } catch {
+    return homedir();
+  }
+}
 
 /** Normalize OS path separators to POSIX so globs match consistently. */
 function toPosix(p: string): string {
@@ -72,9 +87,10 @@ export function matchPath(pattern: string, contextDir: string, repoRoot: string 
     throw new Error(`invalid glob: empty path pattern`);
   }
 
-  // Absolute disk match (escape hatch, §5.3): leading ~/ expands to $HOME.
+  // Absolute disk match (escape hatch, §5.3): leading ~/ expands to the
+  // realpath-canonicalized $HOME (symmetric with the canonicalized context dir).
   if (pattern.startsWith('/') || pattern.startsWith('~/')) {
-    const expanded = pattern.startsWith('~/') ? `${homedir()}${pattern.slice(1)}` : pattern;
+    const expanded = pattern.startsWith('~/') ? `${canonicalHome()}${pattern.slice(1)}` : pattern;
     return compile(toPosix(expanded))(toPosix(contextDir));
   }
 
