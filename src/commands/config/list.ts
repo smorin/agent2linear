@@ -20,6 +20,9 @@ function sourceLabelFor(source: ConfigLocation, profileName: string | undefined)
   switch (source.type) {
     case 'env':
       return 'environment variable';
+    case 'override':
+      // M29: which override rule supplied the value (scope + the `when` clause).
+      return `${source.scope === 'project' ? 'repo' : 'global'} override (when ${JSON.stringify(source.when)})`;
     case 'project':
       return 'project config';
     case 'profile':

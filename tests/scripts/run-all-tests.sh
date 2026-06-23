@@ -72,6 +72,40 @@ extract_results() {
 }
 
 # ============================================================
+# CONFIG OVERRIDES (M29 — offline/hermetic, runs regardless of scope)
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] CONFIG OVERRIDES${NC}"
+echo ""
+
+OVERRIDES_OUTPUT_FILE="/tmp/test-config-overrides-output-$$.log"
+
+if ./test-config-overrides.sh 2>&1 | tee "$OVERRIDES_OUTPUT_FILE"; then
+    OVERRIDES_EXIT=0
+else
+    OVERRIDES_EXIT=$?
+fi
+
+read OVERRIDES_PASSED OVERRIDES_FAILED OVERRIDES_TOTAL <<< $(extract_results "$(cat "$OVERRIDES_OUTPUT_FILE")")
+
+TOTAL_PASSED=$((TOTAL_PASSED + OVERRIDES_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + OVERRIDES_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + OVERRIDES_TOTAL))
+
+echo ""
+echo -e "${BLUE}Config Overrides Results:${NC}"
+echo -e "  Passed: ${GREEN}$OVERRIDES_PASSED${NC}"
+echo -e "  Failed: ${RED}$OVERRIDES_FAILED${NC}"
+echo -e "  Total:  $OVERRIDES_TOTAL"
+
+if [ $OVERRIDES_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
 # PROJECT TESTS
 # ============================================================
 
