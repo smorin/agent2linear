@@ -440,14 +440,17 @@ decides; later keys only break ties):
    fine-grained routing.
 2. **Specificity (within a scope)**, most → least specific:
    1. **Exact `repo`** (no wildcard) — strongest identity.
-   2. **`repo` glob / `owner` / `host`** identity.
-   3. **`path`** — finer = **more leading literal (non-wildcard) path segments**, then
+   2. **`repo` glob / `owner`** identity (a *value* match).
+   3. **`host`** identity — coarser than an `owner`/`repo` value (one host spans many
+      owners), so it ranks just below them, in the same identity-**presence** tier as a
+      bare `remote`-presence predicate (see "Scoring composite `when` trees" below).
+   4. **`path`** — finer = **more leading literal (non-wildcard) path segments**, then
       fewer wildcard segments. Specificity is counted in **path segments, never raw
       string length**; relative and absolute `path`s are scored the same way (by segment
       count), so an absolute pattern is not "more specific" merely for being a longer
       string.
-   4. **`branch`** presence.
-   5. The **catch-all** (empty `when`) is lowest.
+   5. **`branch`** presence.
+   6. The **catch-all** (empty `when`) is lowest.
    A compound `when` sums its criteria, so *within a scope* `repo` + `path` outranks
    `owner` alone, which outranks a bare `path`. Sub-tie-break for identity: a match via
    **`origin` outranks a match via a non-origin remote** (your fork's own identity beats

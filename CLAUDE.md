@@ -264,8 +264,8 @@
     qualifies), branch, and composites allOf/anyOf/not. `remote` = name | list | "*"; bare
     `remote` = "a remote of that name exists" (the fork case via anyOf + remote, U9).
   - Precedence (§5.6): repo scope beats global regardless of specificity; within a scope
-    most-specific wins (exact repo > repo-glob/owner/host > path > branch > catch-all); ties
-    break by declaration order.
+    most-specific wins (exact repo > repo-glob/owner value > host/bare-remote presence >
+    path > branch > catch-all); ties break by declaration order.
   - Targeting: global `-C, --cwd <dir>` (git-style) + AGENT2LINEAR_CWD make any command resolve
     as if launched in <dir> (config discovery + override matching + relative path args).
   - Debugging: `config explain [dir] [--json]` prints the resolved context + winning rule per
