@@ -122,7 +122,9 @@ Examples:
 
   config
     .command('explain')
-    .argument('[dir]', 'Resolution-context directory (positional sugar for the global -C/--cwd)')
+    .addArgument(
+      new Argument('[dir]', 'Resolution-context directory (positional sugar for the global -C/--cwd)')
+    )
     .description('Explain how config defaults resolve for a directory context')
     .option('--json', 'Output machine-readable JSON (for agents)')
     .addHelpText('after', `
