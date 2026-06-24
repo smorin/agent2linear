@@ -171,6 +171,62 @@ describe('resolveOverrides — warn and skip (§9)', () => {
   });
 });
 
+describe('resolveOverrides — glob-metacharacter specificity (D)', () => {
+  const withOrigin = ctx(REPO, REPO, { remotes: { origin: ORIGIN } });
+
+  it('treats a `?` repo pattern as a glob, so an exact repo wins regardless of order', () => {
+    const r = resolveOverrides(withOrigin, [
+      layer('global', [
+        { when: { repo: 'acme/web' }, defaultTeam: 'exact' },
+        { when: { repo: 'acme/w?b' }, defaultTeam: 'glob' }, // matches acme/web via `?`, declared later
+      ]),
+    ]);
+    expect(r.values.defaultTeam).toBe('exact');
+  });
+
+  it('treats a `?` path segment as a wildcard, so a fully-literal path wins', () => {
+    const rules: ConfigOverride[] = [
+      { when: { path: 'apps/web' }, defaultTeam: 'exact' },
+      { when: { path: 'apps/w?b' }, defaultTeam: 'glob' }, // matches apps/web via `?`, declared later
+    ];
+    const r = resolveOverrides(ctx(`${REPO}/apps/web`), [layer('project', rules)]);
+    expect(r.values.defaultTeam).toBe('exact');
+  });
+});
+
+describe('needsGitContext / resolveOverrides — malformed composite hardening (C)', () => {
+  it('needsGitContext does not throw on a non-array allOf or a null not', () => {
+    expect(() => needsGitContext([layer('project', [{ when: { allOf: {} } as never }])])).not.toThrow();
+    expect(() => needsGitContext([layer('project', [{ when: { not: null } as never }])])).not.toThrow();
+    expect(needsGitContext([layer('project', [{ when: { allOf: {} } as never }])])).toBe(false);
+  });
+
+  it('warns with an `invalid when` message and skips a non-array allOf, still resolving', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const r = resolveOverrides(ctx(REPO), [
+      layer('project', [
+        { when: { allOf: {} } as never, defaultTeam: 'bad' },
+        { when: {}, defaultTeam: 'catch' },
+      ]),
+    ]);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls[0][0]).toMatch(/invalid `when/);
+    expect(r.values.defaultTeam).toBe('catch');
+  });
+
+  it('warns and skips a null `not`, still resolving', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const r = resolveOverrides(ctx(REPO), [
+      layer('project', [
+        { when: { not: null } as never, defaultTeam: 'bad' },
+        { when: {}, defaultTeam: 'catch' },
+      ]),
+    ]);
+    expect(warn).toHaveBeenCalled();
+    expect(r.values.defaultTeam).toBe('catch');
+  });
+});
+
 describe('resolveOverrides — identity matching against origin (Phase 2)', () => {
   const withOrigin = ctx(REPO, REPO, { remotes: { origin: ORIGIN } });
 

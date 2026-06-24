@@ -68,15 +68,41 @@ const KNOWN_WHEN_KEYS: readonly string[] = [
 /** Leaf `when` keys that require the git/filesystem context to be resolved (§8). */
 const CONTEXT_MATCHER_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host', 'branch', 'remote'];
 
-/** Whether a single `when` node (recursing into composites) needs the git context. */
-function whenNeedsContext(node: WhenClause): boolean {
+/** Type guard: a usable `when` node is a non-null, non-array object. */
+function isWhenObject(value: unknown): value is WhenClause {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Whether a single `when` node (recursing into composites) needs the git context.
+ * Runs before `resolveOverrides`'s warn-and-skip try/catch (§8 lazy git), so it must
+ * never throw on a malformed config — a bad shape is simply "needs nothing" here, and
+ * is rejected later by `matchWhen` (which warn-skips the rule).
+ */
+function whenNeedsContext(node: unknown): boolean {
+  if (!isWhenObject(node)) {
+    return false;
+  }
   if (CONTEXT_MATCHER_KEYS.some((key) => key in node)) {
     return true;
   }
-  if (node.allOf?.some(whenNeedsContext) || node.anyOf?.some(whenNeedsContext)) {
+  if (Array.isArray(node.allOf) && node.allOf.some(whenNeedsContext)) {
+    return true;
+  }
+  if (Array.isArray(node.anyOf) && node.anyOf.some(whenNeedsContext)) {
     return true;
   }
   return node.not !== undefined && whenNeedsContext(node.not);
+}
+
+/**
+ * Whether a string carries a glob metacharacter picomatch honors (`* ? [ ] { } ( )`,
+ * the last covering extglobs like `@(a|b)`). Specificity scoring (§5.6) uses this so a
+ * pattern's "literal vs glob" classification agrees with the actual matchers in
+ * glob-match.ts (which run picomatch) — e.g. `acme/w?b` is a glob, not an exact repo.
+ */
+function hasGlobMeta(s: string): boolean {
+  return /[*?[\]{}()]/.test(s);
 }
 
 /** Whether any candidate rule needs the git/filesystem context (so it's built lazily). */
@@ -93,12 +119,12 @@ function pathSpecificity(pattern: string): { literalLeading: number; wildcardCou
   const segments = p.split('/').filter((s) => s !== '');
   let literalLeading = 0;
   for (const segment of segments) {
-    if (segment.includes('*')) {
+    if (hasGlobMeta(segment)) {
       break;
     }
     literalLeading++;
   }
-  const wildcardCount = segments.filter((s) => s.includes('*')).length;
+  const wildcardCount = segments.filter((s) => hasGlobMeta(s)).length;
   return { literalLeading, wildcardCount };
 }
 
@@ -174,6 +200,20 @@ function identitySatisfies(node: WhenClause, id: RemoteIdentity): boolean {
  */
 function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; score: Spec } {
   const fail = { matched: false, score: zeroSpec() };
+  // Reject malformed composite shapes up front so the caller's try/catch turns them
+  // into a clear warn-and-skip (§9) instead of an opaque "not iterable"/"in null".
+  if (!isWhenObject(node)) {
+    throw new Error('invalid `when`: expected an object');
+  }
+  if (node.allOf !== undefined && !Array.isArray(node.allOf)) {
+    throw new Error('invalid `when.allOf`: expected an array');
+  }
+  if (node.anyOf !== undefined && !Array.isArray(node.anyOf)) {
+    throw new Error('invalid `when.anyOf`: expected an array');
+  }
+  if (node.not !== undefined && !isWhenObject(node.not)) {
+    throw new Error('invalid `when.not`: expected an object');
+  }
   const unsupported = Object.keys(node).filter((k) => !KNOWN_WHEN_KEYS.includes(k));
   if (unsupported.length > 0) {
     throw new Error(`unsupported \`when\` key(s): ${unsupported.join(', ')}`);
@@ -188,7 +228,7 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
       return fail;
     }
     if (node.repo !== undefined) {
-      if (node.repo.includes('*')) {
+      if (hasGlobMeta(node.repo)) {
         score[1] += 1;
       } else {
         score[0] += 1;
