@@ -76,6 +76,7 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
   }
 
   const segments = path
+    .replace(/\/+$/, '') // tolerate a copied URL's trailing slash before stripping .git
     .replace(/\.git$/, '')
     .split('/')
     .filter(Boolean);

@@ -31,6 +31,19 @@ describe('normalizeRemoteUrl (§5.4)', () => {
     });
   });
 
+  it('strips a trailing slash after .git (e.g. a copied URL) (F)', () => {
+    expect(normalizeRemoteUrl('https://github.com/acme/web.git/')).toEqual({
+      host: 'github.com',
+      owner: 'acme',
+      name: 'web',
+    });
+    expect(normalizeRemoteUrl('git@github.com:acme/web.git/')).toEqual({
+      host: 'github.com',
+      owner: 'acme',
+      name: 'web',
+    });
+  });
+
   it('rejects non-remote input', () => {
     expect(normalizeRemoteUrl('')).toBeNull();
     expect(normalizeRemoteUrl('   ')).toBeNull();
