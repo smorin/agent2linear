@@ -22,8 +22,12 @@ set -uo pipefail
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --test) ONLY="$2"; shift 2 ;;
-    --range) ONLY="$2"; shift 2 ;;
+    --test|--range)
+      if [ $# -lt 2 ]; then
+        echo "Error: $1 requires a value (e.g. --test 5 or --range 3-7)" >&2
+        exit 2
+      fi
+      ONLY="$2"; shift 2 ;;
     *) shift ;;
   esac
 done

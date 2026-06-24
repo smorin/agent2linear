@@ -27,8 +27,12 @@ set -uo pipefail
 ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --test) ONLY="$2"; shift 2 ;;
-    --range) ONLY="$2"; shift 2 ;;
+    --test|--range)
+      if [ $# -lt 2 ]; then
+        echo "Error: $1 requires a value (e.g. --test 5 or --range 3-7)" >&2
+        exit 2
+      fi
+      ONLY="$2"; shift 2 ;;
     *) shift ;;
   esac
 done
@@ -178,8 +182,8 @@ CLEAN="cleanup-issue-create-overrides.sh"
   for i in "${!C_IDENT[@]}"; do
     echo "echo '  ${C_IDENT[$i]}  (${C_CASE[$i]})  id=${C_ID[$i]}'"
   done
-} > "$CLEAN"
-chmod +x "$CLEAN"
+} > "$SCRIPT_DIR/$CLEAN"
+chmod +x "$SCRIPT_DIR/$CLEAN"
 echo "Cleanup list: $SCRIPT_DIR/$CLEAN  (${#C_IDENT[@]} issues — delete via Linear UI)"
 
 [ "$FAIL" -eq 0 ]
