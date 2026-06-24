@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { realpathSync } from 'fs';
 
 import { registerAliasCommands } from './commands/alias/register.js';
 import { registerCacheCommands } from './commands/cache/register.js';
@@ -33,12 +34,16 @@ const cli = new Command();
 cli
   .name('agent2linear')
   .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
-  .version('0.28.0')
+  .version('0.29.0')
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
   .option('--no-color', 'Disable emojis and colored output')
   .option('--workspace <name>', 'Select workspace/profile for this invocation')
   .option('--api-key <key>', 'Use this Linear API key (use "-" to read from stdin)')
+  .option(
+    '-C, --cwd <dir>',
+    'Resolve config, override matching, and relative paths as if launched in <dir> (else $AGENT2LINEAR_CWD, else the current directory)'
+  )
   .hook('preAction', async (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.quiet) setLogLevel('quiet');
@@ -57,7 +62,26 @@ cli
     if (opts.workspace !== undefined && apiKey !== undefined) {
       throw new Error('Pass either --workspace or --api-key, not both.');
     }
-    setInvocationContext({ workspace: opts.workspace, apiKey });
+
+    // M29 §5.7: resolution-context dir (-C/--cwd → $AGENT2LINEAR_CWD → cwd).
+    // realpath-canonicalize it once; execute mode hard-errors on a missing dir.
+    // (Query commands use a positional [dir] for the non-crashing path instead.)
+    const rawCwd = opts.cwd ?? process.env.AGENT2LINEAR_CWD;
+    let contextDir: string | undefined;
+    if (rawCwd) {
+      try {
+        contextDir = realpathSync(rawCwd);
+      } catch {
+        throw new Error(`--cwd directory not found or unreadable: ${rawCwd}`);
+      }
+      // git-style `-C`: actually move there so EVERYTHING downstream follows it —
+      // config discovery, override matching, AND relative path args (e.g.
+      // `--description-file ./spec.md`). The stashed contextDir keeps query commands
+      // (config explain/get) working with an explicit positional [dir] too.
+      process.chdir(contextDir);
+    }
+
+    setInvocationContext({ workspace: opts.workspace, apiKey, contextDir });
   })
   .action(() => {
     cli.help();

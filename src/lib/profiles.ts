@@ -43,11 +43,13 @@ const PROFILE_META_KEYS = [
 
 /**
  * Load all profiles, merging global config.json `profiles` with the project
- * config.json `profiles` (project overriding global by name).
+ * config.json `profiles` (project overriding global by name). The optional
+ * `startDir` anchors the project-config walk-up to a resolution-context dir other
+ * than cwd (M29 J); with no `startDir` this reads cwd, unchanged.
  */
-export function loadProfiles(): Record<string, Profile> {
+export function loadProfiles(startDir?: string): Record<string, Profile> {
   const globalProfiles = readGlobalConfig().profiles ?? {};
-  const projectProfiles = readProjectConfig().profiles ?? {};
+  const projectProfiles = readProjectConfig(startDir).profiles ?? {};
   return {
     ...globalProfiles,
     ...projectProfiles,
@@ -58,12 +60,13 @@ export function loadProfiles(): Record<string, Profile> {
  * Return a profile's recognized Config defaults as a Partial<Config> ready to be
  * spread into the merge. Returns `{}` (never undefined) when `name` is undefined
  * or unknown — this is the byte-identical invariant the no-profile merge relies on.
+ * `startDir` anchors the project-profiles lookup to a context dir other than cwd (M29 J).
  */
-export function getProfileScope(name: string | undefined): Partial<Config> {
+export function getProfileScope(name: string | undefined, startDir?: string): Partial<Config> {
   if (!name) {
     return {};
   }
-  const profile = loadProfiles()[name];
+  const profile = loadProfiles(startDir)[name];
   if (!profile) {
     return {};
   }

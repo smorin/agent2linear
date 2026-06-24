@@ -72,6 +72,40 @@ extract_results() {
 }
 
 # ============================================================
+# CONFIG OVERRIDES (M29 — offline/hermetic, runs regardless of scope)
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] CONFIG OVERRIDES${NC}"
+echo ""
+
+OVERRIDES_OUTPUT_FILE="/tmp/test-config-overrides-output-$$.log"
+
+if ./test-config-overrides.sh 2>&1 | tee "$OVERRIDES_OUTPUT_FILE"; then
+    OVERRIDES_EXIT=0
+else
+    OVERRIDES_EXIT=$?
+fi
+
+read OVERRIDES_PASSED OVERRIDES_FAILED OVERRIDES_TOTAL <<< $(extract_results "$(cat "$OVERRIDES_OUTPUT_FILE")")
+
+TOTAL_PASSED=$((TOTAL_PASSED + OVERRIDES_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + OVERRIDES_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + OVERRIDES_TOTAL))
+
+echo ""
+echo -e "${BLUE}Config Overrides Results:${NC}"
+echo -e "  Passed: ${GREEN}$OVERRIDES_PASSED${NC}"
+echo -e "  Failed: ${RED}$OVERRIDES_FAILED${NC}"
+echo -e "  Total:  $OVERRIDES_TOTAL"
+
+if [ $OVERRIDES_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
 # PROJECT TESTS
 # ============================================================
 
@@ -230,6 +264,40 @@ echo -e "  Failed: ${RED}$ICREATE_FAILED${NC}"
 echo -e "  Total:  $ICREATE_TOTAL"
 
 if [ $ISSUE_CREATE_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
+# RUN TEST SUITE: ISSUE CREATE — M29 CONTEXT-AWARE OVERRIDES
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] ISSUE CREATE (M29 overrides)${NC}"
+echo ""
+
+ISSUE_OVR_OUTPUT="/tmp/test-issue-create-overrides-output-$$.log"
+
+if ./test-issue-create-overrides.sh 2>&1 | tee "$ISSUE_OVR_OUTPUT"; then
+    ISSUE_OVR_EXIT=0
+else
+    ISSUE_OVR_EXIT=$?
+fi
+
+read IOVR_PASSED IOVR_FAILED IOVR_TOTAL <<< $(extract_results "$(cat "$ISSUE_OVR_OUTPUT")")
+
+TOTAL_PASSED=$((TOTAL_PASSED + IOVR_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + IOVR_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + IOVR_TOTAL))
+
+echo ""
+echo -e "${BLUE}Issue Create (overrides) Results:${NC}"
+echo -e "  Passed: ${GREEN}$IOVR_PASSED${NC}"
+echo -e "  Failed: ${RED}$IOVR_FAILED${NC}"
+echo -e "  Total:  $IOVR_TOTAL"
+
+if [ $ISSUE_OVR_EXIT -eq 0 ]; then
     echo -e "  Status: ${GREEN}✅ PASSED${NC}"
 else
     echo -e "  Status: ${RED}❌ FAILED${NC}"

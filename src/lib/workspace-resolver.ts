@@ -24,6 +24,7 @@
 
 import { readGlobalConfig, readProjectConfig } from './config.js';
 import { loadEnvFile } from './env-file.js';
+import { readGitOriginUrl } from './git-remote.js';
 import { getInvocationContext } from './invocation-context.js';
 import { detectProfile, loadProfiles } from './profiles.js';
 import type { Profile, WorkspaceResolution, WorkspaceSource } from './types.js';
@@ -93,9 +94,9 @@ function namedOrExcluded(
   return { kind: 'named', name, source, profile: isProfileName(profiles, name) ? name : undefined };
 }
 
-function resolveDecision(): Decision {
+function resolveDecision(startDir?: string): Decision {
   const ctx = getInvocationContext();
-  const profiles = loadProfiles();
+  const profiles = loadProfiles(startDir);
 
   // 1. Explicit per-invocation selection (highest precedence; forces through
   //    exclusion AND the no-match gate).
@@ -112,7 +113,7 @@ function resolveDecision(): Decision {
   }
 
   // Repo-level exclusion: `.agent2linear/config.json` `linear: false`.
-  const project = readProjectConfig();
+  const project = readProjectConfig(startDir);
   if (project.linear === false) {
     return {
       kind: 'denied',
@@ -135,8 +136,10 @@ function resolveDecision(): Decision {
     return namedOrExcluded(project.workspace, 'project', profiles);
   }
 
-  // 4. Profile auto-detection via git-remote owner (negative match wins).
-  const detected = detectProfile(profiles);
+  // 4. Profile auto-detection via git-remote owner (negative match wins). Read the
+  //    origin from `startDir` when querying a context dir other than cwd (M29 J);
+  //    with no `startDir` the default provider reads cwd, unchanged.
+  const detected = detectProfile(profiles, startDir === undefined ? undefined : () => readGitOriginUrl(startDir));
   if (detected) {
     if (detected.exclude) {
       return {
@@ -196,8 +199,8 @@ function workspaceNameFor(name: string): string {
  *
  * MUST NOT call getConfig() (would recurse) — resolveDecision() reads raw config.
  */
-export function resolveActiveProfile(): string | undefined {
-  const decision = resolveDecision();
+export function resolveActiveProfile(startDir?: string): string | undefined {
+  const decision = resolveDecision(startDir);
   return decision.kind === 'named' ? decision.profile : undefined;
 }
 

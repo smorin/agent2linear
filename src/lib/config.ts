@@ -1,6 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
+import { buildGitContext, type RemoteIdentity } from './git-context.js';
+import { getInvocationContext, setInvocationContext } from './invocation-context.js';
+import { needsGitContext, type OverrideLayer, resolveOverrides } from './overrides.js';
 import { getProfileScope } from './profiles.js';
 import type { Scope } from './scope.js';
 import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
@@ -14,9 +17,28 @@ function globalConfigFile(): string {
 }
 
 /** Project config file for reading (walk-up discovery), or null if none exists. */
-function projectConfigReadFile(): string | null {
-  const dir = findProjectConfigDir();
+function projectConfigReadFile(startDir?: string): string | null {
+  const dir = findProjectConfigDir(startDir);
   return dir ? join(dir, CONFIG_FILENAME) : null;
+}
+
+/** Canonicalize a context dir (realpath); fall back to the raw path if it doesn't exist. */
+export function canonicalizeDir(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+/**
+ * Repo root for override matching (M29 §5.3): the dir containing the discovered
+ * `.agent2linear/`, or null when none is found. (Phase 2 adds the Git work-tree
+ * root as a fallback.)
+ */
+export function resolveRepoRoot(contextDir: string): string | null {
+  const projectDir = findProjectConfigDir(contextDir);
+  return projectDir ? dirname(projectDir) : null;
 }
 
 /** Project config file for writing (discovered dir, else cwd/.agent2linear). */
@@ -66,9 +88,9 @@ export function readGlobalConfig(): Partial<Config> {
   return readConfigFile(globalConfigFile());
 }
 
-/** Read the RAW nearest project config.json (walk-up discovery; {} if none). */
-export function readProjectConfig(): Partial<Config> {
-  const f = projectConfigReadFile();
+/** Read the RAW nearest project config.json (walk-up discovery from `startDir`/cwd; {} if none). */
+export function readProjectConfig(startDir?: string): Partial<Config> {
+  const f = projectConfigReadFile(startDir);
   return f ? readConfigFile(f) : {};
 }
 
@@ -87,17 +109,27 @@ export function writeConfigForScope(scope: Scope, config: Partial<Config>): void
 /**
  * Get configuration with priority: project > profile > global > env
  */
-export function getConfig(): ResolvedConfig {
+export function getConfig(contextDir?: string): ResolvedConfig {
+  // Resolution-context dir (M29 §5.7): explicit arg → preAction `-C`/`--cwd` →
+  // process.cwd(). Canonicalized once and used for config discovery + override
+  // matching. With no context supplied this is the canonical cwd, so the
+  // no-overrides path stays identical to today.
+  const effectiveDir = canonicalizeDir(
+    contextDir ?? getInvocationContext().contextDir ?? process.cwd()
+  );
   const envConfig: Partial<Config> = {};
   const globalConfig = readConfigFile(globalConfigFile());
-  const projectReadFile = projectConfigReadFile();
+  const projectReadFile = projectConfigReadFile(effectiveDir);
   const projectConfig = projectReadFile ? readConfigFile(projectReadFile) : {};
 
   // Profile scope: the active profile's recognized Config defaults, slotted into
   // the merge between global and project. `getProfileScope(undefined)` returns {}
   // so the no-profile path stays byte-identical to {...global, ...project}.
   // `resolveActiveProfile()` reads raw config only — it must never call getConfig().
-  const profileScope = getProfileScope(resolveActiveProfile());
+  // M29 (J): resolve the profile FROM `effectiveDir` (not cwd) so `config explain <dir>` /
+  // `config get <key> <dir>` resolve the same profile layer the override + project layers
+  // already do. With no contextDir this is the canonical cwd (unchanged behavior).
+  const profileScope = getProfileScope(resolveActiveProfile(effectiveDir), effectiveDir);
 
   // Read from environment
   if (process.env.LINEAR_API_KEY) {
@@ -275,6 +307,61 @@ export function getConfig(): ResolvedConfig {
   // API key from env takes precedence
   if (envConfig.apiKey) {
     merged.apiKey = envConfig.apiKey;
+  }
+
+  // M29 (B): clear any alias overlay stashed by a previous getConfig() resolution.
+  // `overrideAliases` is process-global invocation state, so without this a later
+  // context that declares no `overrides` would inherit the prior context's overlay and
+  // `loadAliases()` would resolve aliases to stale Linear IDs. Repopulated below only
+  // when THIS context actually resolves override aliases.
+  if (getInvocationContext().overrideAliases !== undefined) {
+    const cleared = { ...getInvocationContext() };
+    delete cleared.overrideAliases;
+    setInvocationContext(cleared);
+  }
+
+  // M29: context-aware overrides. Concatenate the global + repo `overrides` arrays
+  // into layers and resolve per field; a winning rule overwrites the merged
+  // (catch-all) value and is labeled with `override` provenance. apiKey is never
+  // overridable, and a config with no `overrides` skips this entirely (byte-identical).
+  const overrideLayers: OverrideLayer[] = [];
+  if (Array.isArray(globalConfig.overrides) && globalConfig.overrides.length > 0) {
+    overrideLayers.push({ scope: 'global', rules: globalConfig.overrides });
+  }
+  if (Array.isArray(projectConfig.overrides) && projectConfig.overrides.length > 0) {
+    overrideLayers.push({ scope: 'project', rules: projectConfig.overrides });
+  }
+  if (overrideLayers.length > 0) {
+    // §5.3 repoRoot: the dir containing the discovered `.agent2linear/` (primary).
+    // §8 performance: build the git context only when a rule actually needs it
+    // (identity/path/branch) — then fall back to the git work-tree root for repoRoot
+    // and supply branch + remotes for identity/branch matching.
+    let repoRoot = resolveRepoRoot(effectiveDir);
+    let branch: string | undefined;
+    let remotes: Record<string, RemoteIdentity> = {};
+    if (needsGitContext(overrideLayers)) {
+      const git = buildGitContext(effectiveDir);
+      repoRoot = repoRoot ?? git.repoRoot;
+      branch = git.branch;
+      remotes = git.remotes;
+    }
+    const resolved = resolveOverrides({ contextDir: effectiveDir, repoRoot, branch, remotes }, overrideLayers);
+    for (const [field, value] of Object.entries(resolved.values)) {
+      const provenance = resolved.locations[field];
+      const current = (locations as Record<string, ConfigLocation>)[field];
+      // Repo scope beats global (§5.6 / §6 example): a global override must not
+      // clobber a value supplied by the repo (project) top-level config. (Refines
+      // the outline's literal "overwrite the merged value".)
+      if (provenance.scope === 'global' && current.type === 'project') {
+        continue;
+      }
+      (merged as Record<string, unknown>)[field] = value;
+      (locations as Record<string, ConfigLocation>)[field] = provenance;
+    }
+    // Stash the per-rule alias overlay for this context so `loadAliases()` /
+    // `resolveAlias()` can apply it at highest precedence (M29 §5.1/U6). Preserve
+    // the rest of the invocation context (workspace/apiKey/contextDir).
+    setInvocationContext({ ...getInvocationContext(), overrideAliases: resolved.aliases });
   }
 
   return {

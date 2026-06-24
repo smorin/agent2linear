@@ -247,7 +247,34 @@
   - Storage: $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
   - Supported: defaultTeam, defaultInitiative, defaultMilestoneTemplate
   - Multi-workspace keys (M28): defaultProfile, profiles, noMatchPolicy (deny|default|match-only), confirmAutoDetectedWrites
-  - Commands: config list/get/set/unset/edit
+  - Context-aware overrides (M29): overrides[] (see below)
+  - Commands: config list/get/set/unset/edit, config explain [dir]
+
+  Context-Aware Config Overrides (M29)
+
+  Optional `overrides[]` in config.json (global + repo) resolve *defaults* (defaultTeam,
+  defaultInitiative, defaultProject, templates, defaultAutoAssignLead, per-rule aliases) by
+  CONTEXT — filesystem location, repo identity, branch — instead of one flat value per scope.
+  Additive/backward-compatible: no `overrides` ⇒ behavior identical to today; apiKey/workspace
+  selection is never affected.
+  - Rule shape: { when: {…}, …defaults, aliases?: { teams: { <alias>: <id> } } }. Resolution is
+    field-level (a rule setting only defaultTeam leaves defaultInitiative to fall back).
+  - `when` matchers: path (relative = repo-root-anchored gitignore glob; leading ~//= disk),
+    repo/owner/host (identity normalized to host/owner/name; reads `origin` unless `remote`
+    qualifies), branch, and composites allOf/anyOf/not. `remote` = name | list | "*"; bare
+    `remote` = "a remote of that name exists" (the fork case via anyOf + remote, U9).
+  - Precedence (§5.6): repo scope beats global regardless of specificity; within a scope
+    most-specific wins (exact repo > repo-glob/owner value > host/bare-remote presence >
+    path > branch > catch-all); ties break by declaration order.
+  - Targeting: global `-C, --cwd <dir>` (git-style) + AGENT2LINEAR_CWD make any command resolve
+    as if launched in <dir> (config discovery + override matching + relative path args).
+  - Debugging: `config explain [dir] [--json]` prints the resolved context + winning rule per
+    field; `config get <key> [dir]` returns one override-resolved field.
+  - Implementation: src/lib/glob-match.ts (path: picomatch + anchoring; identity/branch glob),
+    src/lib/git-context.ts (§5.4 identity normalization; injectable runner; leaves
+    git-remote.ts untouched), src/lib/overrides.ts (recursive matchWhen → {matched, score}),
+    threaded via getConfig(contextDir?) in src/lib/config.ts. The per-rule alias overlay is
+    stashed in the invocation context and applied at highest precedence by loadAliases().
 
   Multi-Workspace & Profiles (M28)
 

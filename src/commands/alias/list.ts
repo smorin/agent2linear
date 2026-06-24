@@ -13,7 +13,15 @@ import {
   validateInitiativeExists,
   validateTeamExists,
 } from '../../lib/linear-client.js';
-import type { AliasEntityType, ResolvedAliases } from '../../lib/types.js';
+import type { AliasEntityType, ConfigLocation, ResolvedAliases } from '../../lib/types.js';
+
+/** Provenance label for an alias entry in `alias list` output (M29: includes `override`). */
+export function aliasSourceLabel(location: ConfigLocation | undefined): string {
+  if (location?.type === 'override') {
+    return 'override';
+  }
+  return location?.type === 'project' ? 'project' : 'global';
+}
 
 interface ListAliasOptions {
   validate?: boolean;
@@ -163,7 +171,7 @@ async function displayTypeAliases(
 
   for (const [alias, id] of Object.entries(typeAliases)) {
     const location = locations[alias];
-    const sourceLabel = location?.type === 'project' ? 'project' : 'global';
+    const sourceLabel = aliasSourceLabel(location);
 
     console.log(`  ${alias} → ${id}`);
 
@@ -197,7 +205,7 @@ async function displayAllAliases(fullAliases: ResolvedAliases, canValidate: bool
     console.log(`Initiative Aliases (${initiativeCount}):\n`);
     for (const [alias, id] of Object.entries(fullAliases.initiatives)) {
       const location = fullAliases.locations.initiative[alias];
-      const sourceLabel = location?.type === 'project' ? 'project' : 'global';
+      const sourceLabel = aliasSourceLabel(location);
 
       console.log(`  ${alias} → ${id}`);
 
@@ -226,7 +234,7 @@ async function displayAllAliases(fullAliases: ResolvedAliases, canValidate: bool
     console.log(`Team Aliases (${teamCount}):\n`);
     for (const [alias, id] of Object.entries(fullAliases.teams)) {
       const location = fullAliases.locations.team[alias];
-      const sourceLabel = location?.type === 'project' ? 'project' : 'global';
+      const sourceLabel = aliasSourceLabel(location);
 
       console.log(`  ${alias} → ${id}`);
 
@@ -255,7 +263,7 @@ async function displayAllAliases(fullAliases: ResolvedAliases, canValidate: bool
     console.log(`Project Aliases (${projectCount}):\n`);
     for (const [alias, id] of Object.entries(fullAliases.projects)) {
       const location = fullAliases.locations.project[alias];
-      const sourceLabel = location?.type === 'project' ? 'project' : 'global';
+      const sourceLabel = aliasSourceLabel(location);
 
       console.log(`  ${alias} → ${id}`);
 

@@ -221,6 +221,47 @@ Project configuration is discovered by walking up from the current directory tow
 
 **See also:** Run `agent2linear config --help` for all configuration options.
 
+### Context-Aware Overrides (`overrides[]`)
+
+Add an optional `overrides` array to any `config.json` (global or repo) to resolve **defaults by context** — filesystem location, repo identity, or branch — instead of one flat value per scope. Each rule is `{ "when": { … }, …defaults }`: when the current context matches `when`, that rule's values apply. Resolution is **field-level** (a rule setting only `defaultTeam` leaves `defaultInitiative` to fall back), and `apiKey` is **never** overridable.
+
+```jsonc
+{
+  "defaultTeam": "platform",                 // catch-all (lowest precedence)
+  "overrides": [
+    { "when": { "path": "cli/**" },          // repo-root-anchored path glob
+      "defaultTeam": "cli-team",
+      "aliases": { "teams": { "default": "team_cli123" } } },  // per-rule alias remap
+    { "when": { "owner": "acme" },           // repo identity (reads `origin`)
+      "defaultTeam": "acme-eng" },
+    { "when": { "branch": "release/*" },     // current branch
+      "defaultInitiative": "hardening" },
+    { "when": { "anyOf": [ { "owner": "acme" },
+                           { "remote": "upstream", "owner": "acme" } ] },  // fork: base OR upstream
+      "defaultTeam": "acme-eng" }
+  ]
+}
+```
+
+**`when` matchers:** `path` (relative = repo-root-anchored gitignore-style glob; leading `~/` or `/` = absolute disk match), `repo`/`owner`/`host` (identity, normalized to `host/owner/name` from the git remote; reads `origin` unless a `remote` qualifier is given), `branch`, and the boolean composites `allOf`/`anyOf`/`not`. The `remote` qualifier picks which remote(s) identity reads (a name, a list, or `"*"`); a bare `{ "remote": "upstream" }` matches "this checkout has an `upstream` remote".
+
+**Precedence (most → least):** repo scope beats global regardless of specificity; within a scope, most-specific wins (exact `repo` > `repo` glob/`owner`/`host` > `path` > `branch` > catch-all); ties break by declaration order. Configs without `overrides` behave exactly as before.
+
+**Targeting another directory — `-C, --cwd`:** a global, git-style flag makes *any* command resolve as if launched in `<dir>` (config discovery, override matching, and relative path args). Falls back to `$AGENT2LINEAR_CWD`, then the current directory.
+
+```bash
+a2l -C ~/work/acme/web/apps/mobile issue create --title "Bug"   # resolves defaults as if in apps/mobile
+AGENT2LINEAR_CWD=~/work/acme/web a2l issue create --title "Bug" # same, via env
+```
+
+**Debugging routing — `config explain`:** prints the resolved context (contextDir, repoRoot, remotes, branch) and the winning rule per field. `config get <key> [dir]` returns a single override-resolved field for scripting.
+
+```bash
+a2l config explain ~/work/acme/web/apps/mobile        # positional dir = sugar for -C
+a2l config explain --json                             # machine-readable, for agents
+a2l config get defaultTeam apps/web                   # one override-resolved field
+```
+
 ## Multi-Workspace & Profiles
 
 If you work across **multiple Linear workspaces** (e.g. personal + several companies), agent2linear can hold several keys at once and automatically target the right workspace per repository — without naming the workspace in every command.

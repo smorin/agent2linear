@@ -13,6 +13,44 @@
 
 ---
 
+## [x] Milestone M29: Context-Aware Config Overrides (`overrides[]` with `when` matching) (v0.29.0)
+**Goal**: Add an optional `overrides[]` array to `config.json` (global + repo scope) so `getConfig()` resolves its *defaults* (`defaultTeam`, `defaultInitiative`, `defaultProject`, templates, `defaultAutoAssignLead`, and per-rule `aliases`) **by context** — filesystem location, repo identity (host/owner/name across all remotes), and current branch — instead of one flat value per scope. A global `-C, --cwd` lever targets a directory other than `process.cwd()`, and `config explain` makes routing debuggable. Additive and backward-compatible: configs without `overrides` behave exactly as today, and `apiKey`/workspace selection is never affected.
+
+### Requirements
+- Field-level resolution: a rule setting only `defaultTeam` leaves `defaultInitiative` to fall back (U2).
+- Deterministic precedence (§5.6): **repo scope beats global** regardless of specificity; within a scope **most-specific wins**; ties break by declaration order.
+- Identity travels with the repo: all remotes normalize to `host/owner/name`; identity reads `origin` by default; `remote` + `anyOf` express the fork "base OR upstream" case (U9).
+- Boolean composition (`anyOf`/`allOf`/`not`) and the multi-remote `remote` qualifier (name / list / `"*"` / bare-presence).
+- `a2l -C <dir> …` (and `AGENT2LINEAR_CWD`) make any command resolve as if launched in `<dir>`; `config explain [dir]` / `config get <key> [dir]` print/return the resolved context (with `--json`).
+- `apiKey` is **never** overridable; `getConfig()`'s return shape stays a backward-compatible superset.
+
+### Out of Scope
+- Structured `config override add/list/remove` authoring (hand-edit JSON via `config edit`; deferred).
+- GitHub-API upstream discovery (v1 treats "upstream" as the remote literally named `upstream`; offline only).
+- `extends`/includes for splitting large `overrides` arrays out of `config.json`.
+- Batch targeting (resolving many directories in one call beyond `config explain --json` per dir).
+
+### Tasks
+- [x] [M29-T01] Phase 1: path-only resolution spine (`glob-match.ts`, `overrides.ts`), `getConfig(contextDir?)`, global `-C/--cwd` + `AGENT2LINEAR_CWD`, `config explain` (U1, U2, U7, U8)
+- [x] [M29-T02] Phase 2: git context (`git-context.ts`, injectable runner, §5.4 identity normalization) + identity (`repo`/`owner`/`host` via origin) & `branch` matchers; git-work-tree repoRoot fallback (U3, U5)
+- [x] [M29-T03] Phase 3: recursive `matchWhen` — boolean composites (`allOf`/`anyOf`/`not`) + the `remote` qualifier / multi-remote (U9)
+- [x] [M29-T04] Phase 4: per-rule `aliases` overlay through `resolveAlias()` (override > project > global) + `config get [dir]` (U6)
+- [x] [M29-T05] Phase 5: integration script, `config list` provenance, docs, version bump 0.28.0 → 0.29.0
+- [x] [M29-TS01] Vitest: `glob-match`, `overrides`, `git-context`, `config.xdg` (overrides), `config explain`/`get`/`list`, `aliases` overlay — new files at 100% coverage
+- [x] [M29-TS02] Offline shell: `tests/scripts/test-config-overrides.sh` (path/identity/branch/composites, `-C`/`AGENT2LINEAR_CWD`, `config explain`/`get [dir]`), registered in `run-all-tests.sh`
+
+### Automated Verification
+- `npm run build`, `npm run typecheck`, `npm run lint`, `npm test` (400+ tests) pass
+- `bash tests/scripts/test-config-overrides.sh` (offline) passes
+- `a2l --version` reports `0.29.0`
+
+### Manual Verification
+- Monorepo `cli/**` → `cli-team`, `apps/web/**` → `web-team`, root → catch-all (via `config explain` / `config get [dir]`)
+- Fork (`origin=myuser/web`, `upstream=acme/web`): `{anyOf:[{owner:"acme"},{remote:"upstream",owner:"acme"}]}` fires via upstream
+- Live API (dry-run): a per-rule `aliases.teams.default` remap resolves the default team to the mapped Linear team under `cli/**` and falls back outside it
+
+---
+
 ## [x] Milestone M28: Multi-Workspace Configuration with Org-Based Defaults (v0.28.0)
 **Goal**: Introduce a three-tier `global < profile < repo` defaults hierarchy so agent2linear can target multiple Linear workspaces, auto-detect the right workspace from a repo's git remote, and keep secrets out of committable config — while the single-key "simple case" stays byte-identical.
 
