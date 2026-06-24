@@ -25,6 +25,13 @@ describe('sourceLabel — provenance labels', () => {
     expect(sourceLabel({ type: 'env' })).toBe('environment');
     expect(sourceLabel({ type: 'none' })).toBe('unset');
   });
+
+  it('formats an override label as `<scope> override (when <json>)` (A)', () => {
+    expect(sourceLabel({ type: 'override', scope: 'project', when: { path: 'cli/**' } })).toBe(
+      'repo override (when {"path":"cli/**"})'
+    );
+    expect(sourceLabel({ type: 'override', scope: 'global', when: {} })).toBe('global override (when {})');
+  });
 });
 
 describe('renderExplainText', () => {
@@ -105,6 +112,17 @@ describe('buildExplainJson', () => {
     const data: ExplainData = { contextDir: '/x', repoRoot: null, remotes: {}, fields: [] };
     expect(buildExplainJson(data).branch).toBeNull();
   });
+
+  it('preserves a boolean value as a boolean (not a string) in JSON (G)', () => {
+    const data: ExplainData = {
+      contextDir: '/x',
+      repoRoot: null,
+      remotes: {},
+      fields: [{ key: 'defaultAutoAssignLead', value: true, location: { type: 'profile' } }],
+    };
+    const resolved = buildExplainJson(data).resolved as Record<string, { value: unknown }>;
+    expect(resolved.defaultAutoAssignLead.value).toBe(true);
+  });
 });
 
 describe('buildExplainData / explainConfig — query path', () => {
@@ -125,6 +143,7 @@ describe('buildExplainData / explainConfig — query path', () => {
     resetInvocationContext();
     __resetGitContextCache();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs(); // restoreAllMocks does NOT undo stubEnv — unstub so env doesn't leak (K)
     rmSync(xdgConfig, { recursive: true, force: true });
     rmSync(repoRoot, { recursive: true, force: true });
   });

@@ -22,7 +22,8 @@ const EXPLAIN_FIELDS = [
 
 export interface ExplainField {
   key: string;
-  value: string | undefined;
+  /** Raw resolved value (string | boolean | number | undefined); stringified only for text render (G). */
+  value: unknown;
   location: ConfigLocation;
 }
 
@@ -38,7 +39,7 @@ export interface ExplainData {
 export function sourceLabel(location: ConfigLocation): string {
   if (location.type === 'override') {
     const scopeLabel = location.scope === 'project' ? 'repo' : 'global';
-    return `${scopeLabel} override  when${JSON.stringify(location.when)}`;
+    return `${scopeLabel} override (when ${JSON.stringify(location.when)})`;
   }
   if (location.type === 'project') {
     return 'repo config';
@@ -65,10 +66,11 @@ export function buildExplainData(dir?: string): ExplainData {
   const repoRoot = resolveRepoRoot(contextDir) ?? git.repoRoot;
   const config = getConfig(dir);
   const fields: ExplainField[] = EXPLAIN_FIELDS.map((key) => {
-    const value = config[key as keyof ResolvedConfig];
     return {
       key,
-      value: value === undefined ? undefined : String(value),
+      // Keep the raw value so `--json` preserves booleans/numbers (G); the text
+      // renderer stringifies for display.
+      value: config[key as keyof ResolvedConfig],
       location: config.locations[key],
     };
   });
@@ -93,7 +95,8 @@ export function renderExplainText(data: ExplainData): string {
   }
   lines.push(`  branch      ${data.branch ?? '(none)'}`, 'resolved:');
   for (const field of data.fields) {
-    lines.push(`  ${field.key.padEnd(24)} ${(field.value ?? '(not set)').padEnd(16)} ← ${sourceLabel(field.location)}`);
+    const shown = field.value === undefined ? '(not set)' : String(field.value);
+    lines.push(`  ${field.key.padEnd(24)} ${shown.padEnd(16)} ← ${sourceLabel(field.location)}`);
   }
   if (!data.fields.some((f) => f.location.type === 'override')) {
     lines.push('(no override rules matched this context)');
