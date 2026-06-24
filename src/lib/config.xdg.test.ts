@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getConfig, getGlobalConfigPath, setConfigValue } from './config.js';
 import { __resetGitContextCache } from './git-context.js';
-import { resetInvocationContext } from './invocation-context.js';
+import { getInvocationContext, resetInvocationContext } from './invocation-context.js';
 import { logger } from './logger.js';
 import type { Config } from './types.js';
 
@@ -292,6 +292,64 @@ describe('getConfig() — context-aware overrides (M29)', () => {
     const cfg = getConfig(repoRoot);
     expect(cfg.defaultTeam).toBe('catch-all');
     expect(cfg.locations.defaultTeam).toMatchObject({ type: 'override', scope: 'project' });
+  });
+
+  it('does not crash on a malformed composite when; warns and keeps resolving (C)', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    writeRepo({
+      defaultTeam: 'platform',
+      overrides: [
+        { when: { allOf: {} } as never, defaultTeam: 'bad-allof' },
+        { when: { not: null } as never, defaultTeam: 'bad-not' },
+        { when: {}, defaultTeam: 'catch' },
+      ],
+    });
+
+    expect(() => getConfig(repoRoot)).not.toThrow();
+    expect(getConfig(repoRoot).defaultTeam).toBe('catch');
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('clears a prior context overrideAliases when the next context has no overrides (B)', () => {
+    // First context stashes an alias overlay.
+    writeRepo({ overrides: [{ when: {}, aliases: { teams: { default: 'team_from_override' } } }] });
+    getConfig(repoRoot);
+    expect(getInvocationContext().overrideAliases?.teams?.default).toBe('team_from_override');
+
+    // A later context with no overrides must NOT inherit the stale overlay.
+    const noOverrides = mkdtempSync(join(tmpdir(), 'a2l-ovr-none-'));
+    try {
+      getConfig(noOverrides);
+      expect(getInvocationContext().overrideAliases).toBeUndefined();
+    } finally {
+      rmSync(noOverrides, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves the profile layer from the queried dir, not cwd, for getConfig(dir) (J)', () => {
+    writeGlobal({
+      profiles: {
+        acme: { workspace: 'acme-ws', defaultTeam: 'ACME-CORE' },
+        widgets: { workspace: 'widgets-ws', defaultTeam: 'WIDGETS-CORE' },
+      },
+    });
+    const acmeRepo = mkdtempSync(join(tmpdir(), 'a2l-j-acme-'));
+    const widgetsRepo = mkdtempSync(join(tmpdir(), 'a2l-j-widgets-'));
+    try {
+      mkdirSync(join(acmeRepo, '.agent2linear'), { recursive: true });
+      writeFileSync(join(acmeRepo, '.agent2linear', 'config.json'), JSON.stringify({ profile: 'acme' }));
+      mkdirSync(join(widgetsRepo, '.agent2linear'), { recursive: true });
+      writeFileSync(join(widgetsRepo, '.agent2linear', 'config.json'), JSON.stringify({ profile: 'widgets' }));
+
+      process.chdir(acmeRepo); // cwd selects the acme profile
+      const cfg = getConfig(widgetsRepo); // but we query the widgets dir
+      expect(cfg.defaultTeam).toBe('WIDGETS-CORE');
+      expect(cfg.locations.defaultTeam.type).toBe('profile');
+    } finally {
+      process.chdir(origCwd);
+      rmSync(acmeRepo, { recursive: true, force: true });
+      rmSync(widgetsRepo, { recursive: true, force: true });
+    }
   });
 
   describe('git-derived context (Phase 2, real git)', () => {

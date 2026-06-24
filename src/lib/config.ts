@@ -88,9 +88,9 @@ export function readGlobalConfig(): Partial<Config> {
   return readConfigFile(globalConfigFile());
 }
 
-/** Read the RAW nearest project config.json (walk-up discovery; {} if none). */
-export function readProjectConfig(): Partial<Config> {
-  const f = projectConfigReadFile();
+/** Read the RAW nearest project config.json (walk-up discovery from `startDir`/cwd; {} if none). */
+export function readProjectConfig(startDir?: string): Partial<Config> {
+  const f = projectConfigReadFile(startDir);
   return f ? readConfigFile(f) : {};
 }
 
@@ -126,7 +126,10 @@ export function getConfig(contextDir?: string): ResolvedConfig {
   // the merge between global and project. `getProfileScope(undefined)` returns {}
   // so the no-profile path stays byte-identical to {...global, ...project}.
   // `resolveActiveProfile()` reads raw config only — it must never call getConfig().
-  const profileScope = getProfileScope(resolveActiveProfile());
+  // M29 (J): resolve the profile FROM `effectiveDir` (not cwd) so `config explain <dir>` /
+  // `config get <key> <dir>` resolve the same profile layer the override + project layers
+  // already do. With no contextDir this is the canonical cwd (unchanged behavior).
+  const profileScope = getProfileScope(resolveActiveProfile(effectiveDir), effectiveDir);
 
   // Read from environment
   if (process.env.LINEAR_API_KEY) {
@@ -304,6 +307,17 @@ export function getConfig(contextDir?: string): ResolvedConfig {
   // API key from env takes precedence
   if (envConfig.apiKey) {
     merged.apiKey = envConfig.apiKey;
+  }
+
+  // M29 (B): clear any alias overlay stashed by a previous getConfig() resolution.
+  // `overrideAliases` is process-global invocation state, so without this a later
+  // context that declares no `overrides` would inherit the prior context's overlay and
+  // `loadAliases()` would resolve aliases to stale Linear IDs. Repopulated below only
+  // when THIS context actually resolves override aliases.
+  if (getInvocationContext().overrideAliases !== undefined) {
+    const cleared = { ...getInvocationContext() };
+    delete cleared.overrideAliases;
+    setInvocationContext(cleared);
   }
 
   // M29: context-aware overrides. Concatenate the global + repo `overrides` arrays
