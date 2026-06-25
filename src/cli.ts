@@ -18,6 +18,7 @@ import { registerProfileCommands } from './commands/profile/register.js';
 import { registerProjectCommands } from './commands/project/register.js';
 import { registerProjectLabelsCommands } from './commands/project-labels/register.js';
 import { registerProjectStatusCommands } from './commands/project-status/register.js';
+import { registerPromptCommands } from './commands/prompt/register.js';
 import { setup } from './commands/setup.js';
 import { registerTeamsCommands } from './commands/teams/register.js';
 import { registerTemplatesCommands } from './commands/templates/register.js';
@@ -107,6 +108,7 @@ registerIssueCommands(cli);
 registerCyclesCommands(cli);
 registerWorkspaceCommands(cli);
 registerProfileCommands(cli);
+registerPromptCommands(cli);
 
 // Stub command groups (future releases)
 const issues = cli

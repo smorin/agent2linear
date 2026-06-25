@@ -6,6 +6,7 @@ export interface Config {
   defaultIssueTemplate?: string;
   defaultProjectTemplate?: string;
   defaultMilestoneTemplate?: string;
+  defaultPrompt?: string; // M30: local prompt name (mirrors defaultMilestoneTemplate)
   projectCacheMinTTL?: number; // Cache TTL in minutes (default: 60)
   defaultAutoAssignLead?: boolean; // Auto-assign project lead to creator (default: true)
 
@@ -173,6 +174,7 @@ export interface ResolvedConfig extends Config {
     defaultIssueTemplate: ConfigLocation;
     defaultProjectTemplate: ConfigLocation;
     defaultMilestoneTemplate: ConfigLocation;
+    defaultPrompt: ConfigLocation;
     projectCacheMinTTL: ConfigLocation;
     defaultAutoAssignLead: ConfigLocation;
     entityCacheMinTTL: ConfigLocation;
@@ -251,6 +253,25 @@ export interface MilestoneTemplates {
   templates: {
     [templateName: string]: MilestoneTemplate;
   };
+}
+
+/**
+ * Prompt store data structures (M30). A named prompt body is either inline
+ * (`body`) or a file reference (`bodyFile`) — exactly one. Stored in a committable
+ * `prompts.json` (global + project), modeled on milestone-templates. The
+ * `promptRules` team layer lands in Phase 3.
+ */
+export interface PromptEntry {
+  description?: string;
+  body?: string;
+  bodyFile?: string;
+}
+
+export interface Prompts {
+  prompts: {
+    [name: string]: PromptEntry;
+  };
+  // promptRules?: PromptRule[]; — Phase 3 (team layer)
 }
 
 /**

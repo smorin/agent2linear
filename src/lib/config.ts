@@ -145,6 +145,7 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     defaultIssueTemplate: { type: 'none' },
     defaultProjectTemplate: { type: 'none' },
     defaultMilestoneTemplate: { type: 'none' },
+    defaultPrompt: { type: 'none' },
     projectCacheMinTTL: { type: 'none' },
     defaultAutoAssignLead: { type: 'none' },
     entityCacheMinTTL: { type: 'none' },
@@ -226,6 +227,13 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     locations.defaultMilestoneTemplate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultMilestoneTemplate) {
     locations.defaultMilestoneTemplate = { type: 'global', path: globalConfigFile() };
+  }
+
+  // Default Prompt location (M30)
+  if (projectConfig.defaultPrompt) {
+    locations.defaultPrompt = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.defaultPrompt) {
+    locations.defaultPrompt = { type: 'global', path: globalConfigFile() };
   }
 
   // Project Cache Min TTL location
@@ -455,6 +463,7 @@ const VALID_CONFIG_KEYS = [
   'defaultIssueTemplate',
   'defaultProjectTemplate',
   'defaultMilestoneTemplate',
+  'defaultPrompt', // M30: local prompt name
   'projectCacheMinTTL',
   'defaultAutoAssignLead',
   'entityCacheMinTTL',

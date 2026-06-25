@@ -22,6 +22,7 @@ Current respected settings:
 - \`defaultIssueTemplate\`: Default template ID for issue creation (format: template_xxx)
 - \`defaultProjectTemplate\`: Default template ID for project creation (format: template_xxx)
 - \`defaultMilestoneTemplate\`: Default milestone template name for project milestones
+- \`defaultPrompt\`: Default prompt name (from prompts.json) used by \`prompt get\`
 - \`projectCacheMinTTL\`: Cache time-to-live in minutes (default: 60, range: 1-1440)
 
 Configuration files:
@@ -59,7 +60,7 @@ Examples:
     .command('get')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .addArgument(new Argument('[dir]', 'Resolution-context directory to override-resolve for (positional sugar for the global -C/--cwd)'))
     .description('Get a single configuration value')
@@ -80,7 +81,7 @@ Examples:
     .command('set')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .addArgument(new Argument('<value>', 'Configuration value'))
     .description('Set a configuration value')
@@ -103,7 +104,7 @@ Examples:
     .command('unset')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
     )
     .description('Remove a configuration value')
     .option('-g, --global', 'Remove from global config (default)')
