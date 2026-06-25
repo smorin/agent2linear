@@ -1,5 +1,6 @@
-import { Command } from 'commander';
+import { Argument, Command } from 'commander';
 
+import { runPromptGet } from '../prompt/get.js';
 import { commentIssueCommand } from './comment.js';
 import { createIssueCommand } from './create.js';
 import { registerIssueListCommand } from './list.js';
@@ -273,6 +274,29 @@ Member Resolution:
 
   // Register issue list command (M15.5 Phase 1)
   registerIssueListCommand(issue);
+
+  // Issue prompt alias (M30): a thin alias for `prompt get`, so an agent about to
+  // create an issue can fetch the applicable prompt under the `issue` group. Same
+  // flags as `prompt get` (--team, --force, --json) and the same shared action.
+  issue
+    .command('prompt')
+    .addArgument(new Argument('[name]', 'Exact prompt name to fetch (highest precedence)'))
+    .description('Print the applicable issue prompt (alias for `prompt get`)')
+    .option('--team <id|alias>', 'Select the team layer (a promptRule for this team must exist)')
+    .option('--force', 'With an explicit --team, take the team prompt first (outranks a location override); error if no rule matches')
+    .option('--json', 'Output a machine-readable { name, source, selection, body, context } envelope')
+    .addHelpText('after', `
+Alias for \`agent2linear prompt get\` — see that command for full selection precedence.
+
+Examples:
+  $ agent2linear issue prompt                       # the prompt that applies for the current dir
+  $ agent2linear issue prompt payments-issue        # an exact prompt by unique name
+  $ agent2linear issue prompt --team payments       # the team-layer prompt for the payments team
+  $ agent2linear issue prompt --json                # structured envelope (for agents)
+`)
+    .action(async (name: string | undefined, options: { json?: boolean; team?: string; force?: boolean }) => {
+      await runPromptGet(name, options);
+    });
 
   // Issue comment subcommand
   issue

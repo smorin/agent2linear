@@ -1,5 +1,6 @@
 import { Argument, Command } from 'commander';
 
+import { explainPrompt } from './explain.js';
 import { runPromptGet } from './get.js';
 import { listPrompts } from './list.js';
 
@@ -48,15 +49,49 @@ Examples:
   prompt
     .command('list')
     .alias('ls')
+    .addArgument(new Argument('[partial]', 'Filter to prompts whose NAME contains this substring (case-insensitive)'))
     .description('List available prompt names (grouped by source)')
     .option('-f, --format <type>', 'Output format: tsv, json')
+    .option('-d, --descriptions', 'Include each prompt\'s description in the human output')
     .addHelpText('after', `
+Default human output is NAMES ONLY (grouped by source). Add --descriptions to show
+each prompt's description. --format json|tsv always emits the complete record
+(name, description, source). An optional [partial] filters to prompt names that
+contain the substring (case-insensitive); it applies to every format.
+
 Examples:
-  $ agent2linear prompt list              # List all prompts (grouped by source)
-  $ agent2linear prompt list --format json # Output as JSON (flat list)
-  $ agent2linear prompt ls -f tsv | cut -f1 # Get just prompt names
+  $ agent2linear prompt list                # All prompt names (grouped by source)
+  $ agent2linear prompt list --descriptions # Names + descriptions
+  $ agent2linear prompt list pay            # Only names containing "pay"
+  $ agent2linear prompt list --format json  # Complete records as JSON
+  $ agent2linear prompt ls -f tsv | cut -f1 # Just prompt names
 `)
-    .action(async (options?: { format?: 'tsv' | 'json' }) => {
-      await listPrompts(options || {});
+    .action(async (partial: string | undefined, options?: { format?: 'tsv' | 'json'; descriptions?: boolean }) => {
+      await listPrompts({ ...(options || {}), partial });
+    });
+
+  prompt
+    .command('explain')
+    .addArgument(new Argument('[dir]', 'Resolution-context directory (positional sugar for the global -C/--cwd)'))
+    .description('Explain which prompt would be selected for a directory context, and why')
+    .option('--team <id|alias>', 'Evaluate the team layer for this team (mirrors prompt get)')
+    .option('--force', 'With an explicit --team, take the team prompt first (mirrors prompt get)')
+    .option('--json', 'Output machine-readable JSON (for agents)')
+    .addHelpText('after', `
+Mirrors \`config explain\` and adds the prompt team layer: it shows the context, the
+resolved defaultPrompt + provenance, the team (--team/defaultTeam + resolved id), the
+matched promptRule (shown even when a location override outranks it), and the final
+selection + tier. Unlike \`prompt get\`, it never exits 1 — an unresolved selection is
+reported in the trace.
+
+Examples:
+  $ agent2linear prompt explain                  # explain selection for the current dir
+  $ agent2linear prompt explain apps/mobile      # explain as if in apps/mobile
+  $ agent2linear prompt explain --json           # machine-readable output
+  $ agent2linear prompt explain --team payments  # explain the team-layer selection
+  $ agent2linear -C apps/mobile prompt explain   # same, via the global -C/--cwd lever
+`)
+    .action(async (dir: string | undefined, options: { json?: boolean; team?: string; force?: boolean }) => {
+      await explainPrompt(dir, options);
     });
 }

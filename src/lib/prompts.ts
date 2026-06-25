@@ -233,7 +233,7 @@ export type ResolvePromptResult =
  * (like `config explain`), so the team layer and the location layer agree on the
  * directory. `team` is the resolved canonical id (or undefined).
  */
-function buildPromptOverrideContext(contextDir: string, team: string | undefined): OverrideContext {
+export function buildPromptOverrideContext(contextDir: string, team: string | undefined): OverrideContext {
   const git = buildGitContext(contextDir);
   const repoRoot = resolveRepoRoot(contextDir) ?? git.repoRoot;
   const remotes: Record<string, RemoteIdentity> = git.remotes;
@@ -241,17 +241,20 @@ function buildPromptOverrideContext(contextDir: string, team: string | undefined
 }
 
 /**
- * Resolve the winning team prompt name from `promptRules` for the given context,
- * or null when none match. Reuses the team-aware `matchWhen` (with `allowTeam`) and
- * the same scope/specificity/declaration-order sort as `resolveOverrides`: rules are
- * sorted weakest → strongest and the LAST match wins (project beats global on a tie).
+ * Resolve the winning team `promptRule` for the given context, or null when none
+ * match. Reuses the team-aware `matchWhen` (with `allowTeam`) and the same
+ * scope/specificity/declaration-order sort as `resolveOverrides`: rules are sorted
+ * weakest → strongest and the LAST match wins (project beats global on a tie).
  * A malformed/unsupported rule is warn-skipped, never thrown (mirrors `resolveOverrides`).
+ * Returns the whole `LoadedPromptRule` (not just the name) so `prompt explain` can
+ * surface which rule matched, even when a higher tier ultimately wins.
  */
-export function resolvePromptRules(ctx: OverrideContext, rules: LoadedPromptRule[]): string | null {
-  const matched: Array<{ prompt: string; key: number[] }> = [];
+export function resolvePromptRules(ctx: OverrideContext, rules: LoadedPromptRule[]): LoadedPromptRule | null {
+  const matched: Array<{ loaded: LoadedPromptRule; key: number[] }> = [];
 
   for (let i = 0; i < rules.length; i++) {
-    const { rule, scope } = rules[i];
+    const loaded = rules[i];
+    const { rule, scope } = loaded;
     // PromptRule is NESTED (like a config `overrides[]` entry): a `when` clause plus
     // the `prompt` name. An absent `when` is a catch-all. Normalize the rule's `team`
     // to a canonical id so an alias and the raw `team_*` id compare equal.
@@ -270,7 +273,7 @@ export function resolvePromptRules(ctx: OverrideContext, rules: LoadedPromptRule
       continue;
     }
     const scopeRank = scope === 'project' ? 1 : 0;
-    matched.push({ prompt: rule.prompt, key: [scopeRank, ...result.score] });
+    matched.push({ loaded, key: [scopeRank, ...result.score] });
   }
 
   if (matched.length === 0) {
@@ -279,7 +282,7 @@ export function resolvePromptRules(ctx: OverrideContext, rules: LoadedPromptRule
   // Stable sort weakest → strongest; the last element is the winner (ties → the
   // later/declared-last and project-scope rule, since global rules precede project).
   matched.sort((a, b) => compareKeys(a.key, b.key));
-  return matched[matched.length - 1].prompt;
+  return matched[matched.length - 1].loaded;
 }
 
 /** Load the named body and wrap it as a successful resolution at the given tier. */
@@ -362,7 +365,7 @@ export function resolvePrompt(
       return null;
     }
     const overrideCtx = buildPromptOverrideContext(contextDir, resolvedTeam);
-    return resolvePromptRules(overrideCtx, loadPromptRules());
+    return resolvePromptRules(overrideCtx, loadPromptRules())?.rule.prompt ?? null;
   };
 
   // 1.5. Forced team (team-first): scoped to an EXPLICIT `--team`. A matching

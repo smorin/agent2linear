@@ -13,6 +13,41 @@
 
 ---
 
+## [x] Milestone M30: Configurable Prompt Templates for AI Issue Creation — M1 read-side (v0.30.0)
+**Goal**: Let an agent (or human) ask `a2l` for the **right markdown prompt to follow before creating a Linear issue**, selected by context. `defaultPrompt` becomes a first-class config default wired exactly like `defaultMilestoneTemplate` (general + path/repo/branch via the *existing* `overrides[]`); a small **team layer** is applied on top via `promptRules` in a committable `prompts.json`. M1 is read-side only — prompts are hand-authored JSON/`.md`. Fully additive: a config with no prompts behaves exactly as today, and `apiKey`/workspace selection is never affected.
+
+### Requirements
+- `prompt get [name]` prints the applicable prompt as **raw markdown** (or a `--json` `{ name, source, selection, body, context }` envelope); `[name]` is an exact, highest-precedence lookup (unknown → exit 1).
+- Selection precedence: explicit name → specific location override (`path`/`repo`/`owner`/`host`) → team (`promptRules`) → general `defaultPrompt` (top-level OR branch-only/catch-all override) → error. An explicit `--team X` with no matching `promptRule` is a hard error (exit 1); `--force` (scoped to an explicit `--team`) evaluates the team layer first (outranks a location override).
+- `defaultPrompt` is a real config key (a local prompt name): settable/gettable/listed/validated (the name must exist in `prompts.json`) and surfaced by `config explain`/`config list`; resolved through `overrides[]` with zero new matching code.
+- `promptRules` are authored **nested** (`{ "when": { "team": … }, "prompt": … }`, like `overrides[]`); the team-aware `matchWhen` is additive and gated by `allowTeam`, so config-field resolution is byte-identical (a `team` key in config `overrides[]` is still warn-skipped).
+- `prompt list [partial]` (names-only default, `--descriptions`, `--format json|tsv` complete records, case-insensitive name filter across formats); `prompt explain [dir]` (mirrors `config explain` + the team layer, never exits 1); `issue prompt [name]` aliases `prompt get`.
+
+### Out of Scope (deferred to M2)
+- Prompt CRUD (`prompt add/edit/remove`) and an Ink `prompt edit` / `config edit` wizard entry for `defaultPrompt` (M1 authoring is hand-edit JSON, consistent with `defaultMilestoneTemplate`).
+- Variable interpolation / templating of prompt bodies.
+- Team-**name** globbing in `promptRules` (M1 compares resolved team ids; needs a reverse `getAliasesForId('team', id)` lookup).
+
+### Tasks
+- [x] [M30-T01] Phase 1: general prompt skeleton — `defaultPrompt` config key, `prompts.json` body store (`src/lib/prompts.ts`), `prompt get`/`prompt list`
+- [x] [M30-T02] Phase 2: location-aware `defaultPrompt` via the existing `overrides[]` (`OverridableConfig`/`OVERRIDABLE_FIELDS`/`EXPLAIN_FIELDS`), zero new matching code
+- [x] [M30-T03] Phase 3: team layer + precedence — team-aware `matchWhen` (gated `allowTeam`), nested `promptRules`, `whenIsLocationSpecific` tiering, the `resolvePrompt` ladder + `--team`/`--force`
+- [x] [M30-T04] Phase 4: `prompt explain` (decision trace + team layer), `issue prompt` alias, `prompt list` refinement (`[partial]` + `--descriptions`), docs (README, CLAUDE.md), version bump 0.29.0 → 0.30.0
+- [x] [M30-TS01] Vitest: `prompts.xdg`/`prompts` (resolver precedence matrix), `overrides` (team-aware `matchWhen` + `whenIsLocationSpecific`), `config.xdg`/`config explain` (`defaultPrompt` override), `prompt/explain` (four selection tiers, text + `--json`)
+- [x] [M30-TS02] Offline shell: `tests/scripts/test-prompt.sh` + `tests/scripts/test-prompt-team.sh` (skeleton, location override, team layer, `--force`, `prompt explain`, `issue prompt` parity, `list [partial]`/`--descriptions`), registered in `run-all-tests.sh`
+
+### Automated Verification
+- `npm run build`, `npm run typecheck`, `npm run lint`, `npm test` pass
+- `bash tests/scripts/test-prompt.sh` and `bash tests/scripts/test-prompt-team.sh` (offline) pass
+- `a2l --version` reports `0.30.0`
+
+### Manual Verification
+- Hand-author a global `prompts.json` (one inline `body`, one `bodyFile`); `prompt get <name>` for each emits the expected markdown and nothing else
+- With a `defaultTeam` + a `when.team` rule: `prompt get` returns the team prompt; `--team <other>` (no rule) exits 1; a path override flips selection back to the location prompt; `--force` + `--team` beats the location override
+- `prompt explain -C <dir>` (and `--json`) reads correctly across general/location/team; `issue prompt` returns the same body as `prompt get`
+
+---
+
 ## [x] Milestone M29: Context-Aware Config Overrides (`overrides[]` with `when` matching) (v0.29.0)
 **Goal**: Add an optional `overrides[]` array to `config.json` (global + repo scope) so `getConfig()` resolves its *defaults* (`defaultTeam`, `defaultInitiative`, `defaultProject`, templates, `defaultAutoAssignLead`, and per-rule `aliases`) **by context** — filesystem location, repo identity (host/owner/name across all remotes), and current branch — instead of one flat value per scope. A global `-C, --cwd` lever targets a directory other than `process.cwd()`, and `config explain` makes routing debuggable. Additive and backward-compatible: configs without `overrides` behave exactly as today, and `apiKey`/workspace selection is never affected.
 

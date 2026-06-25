@@ -276,6 +276,55 @@
     threaded via getConfig(contextDir?) in src/lib/config.ts. The per-rule alias overlay is
     stashed in the invocation context and applied at highest precedence by loadAliases().
 
+  Prompt Templates (M30)
+
+  Ask `a2l` for the right markdown prompt to follow before creating a Linear issue,
+  selected by context. M1 (this release) is read-side only — prompts are hand-authored
+  JSON/`.md`; CRUD/interpolation are M2. Fully additive: a config with no prompts behaves
+  exactly as today, and apiKey/workspace selection is never affected.
+  - Storage (prompts.json, committable):
+    - Global:  $XDG_CONFIG_HOME/agent2linear/prompts.json (default: ~/.config/agent2linear/prompts.json)
+    - Project: .agent2linear/prompts.json (nearest, walking up from the current directory)
+    - Project overwrites global by name (same merge as milestone-templates).
+  - Store shape: { "prompts": { "<name>": { description?, body? | bodyFile? } }, "promptRules"?: [...] }.
+    Each prompt sets EXACTLY ONE of inline `body` or `bodyFile`. A relative `bodyFile` is
+    anchored to the directory of the prompts.json that DECLARES it (not the invocation cwd),
+    so a committed project prompts.json resolves portably; absolute / `~` paths are used as-is.
+  - `defaultPrompt` is a first-class config key (a local prompt NAME): settable/gettable/
+    listed/validated (the name must exist in prompts.json) and shown in `config explain` /
+    `config list`. It is wired into the M29 `overrides[]` engine, so a path/repo/branch rule
+    may set `defaultPrompt` (location-aware general default) with zero new matching code.
+  - Team layer (`promptRules`, NESTED like config overrides[]): each rule is
+    { "when": { "team": "<id|alias>", …location matchers }, "prompt": "<name>" }. The resolved
+    team = `--team` ?? config.defaultTeam, normalized via resolveAlias('team', …) on BOTH sides
+    so an alias and the raw team_* id compare equal. (M1 compares resolved ids; team-name
+    globbing is M2.) A `team` key in config `overrides[]` is still warn-skipped (config-field
+    resolution is byte-identical) — `team` is honored ONLY on the prompt path.
+  - Selection precedence: explicit name → specific location override (path/repo/owner/host) →
+    team (promptRules) → general defaultPrompt (top-level OR a branch-only/catch-all override)
+    → error. An explicit `--team X` with no matching promptRule is a hard error (exit 1); a
+    DERIVED defaultTeam with no rule falls through to general. A branch-only override is
+    general-tier (team outranks branch).
+  - `--force` (on `prompt get` / `issue prompt`, scoped to an explicit `--team`): evaluate the
+    team layer FIRST — a matching promptRule outranks any location override; no match is a hard
+    error (exit 1) even when a location override or general default would otherwise resolve.
+    `--force` without an explicit `--team` is a no-op.
+  - Commands:
+    - `prompt get [name]` — print the applicable prompt as raw markdown (or `--json` envelope
+      { name, source, selection, body, context }). Flags: `--team <id|alias>`, `--force`, `--json`.
+    - `prompt list [partial]` — names grouped by source. Default human output is NAMES ONLY;
+      `--descriptions` adds descriptions; `--format json|tsv` emits the complete record
+      (name, description, source). `[partial]` filters by name substring (case-insensitive),
+      applied to every format.
+    - `prompt explain [dir]` — mirrors `config explain` plus the team layer: context, resolved
+      defaultPrompt + provenance, team (input/resolved id), the matched promptRule (shown even
+      when a location override outranks it), and the final selection + tier. `--json` for the
+      structured trace; unlike `prompt get`, it never exits 1 (an unresolved selection is reported).
+    - `issue prompt [name]` — thin alias for `prompt get` (same `--team`/`--force`/`--json` flags).
+  - Implementation: src/lib/prompts.ts (store load/merge, body resolution, promptRules, the
+    `resolvePrompt` ladder), src/lib/overrides.ts (team-aware `matchWhen` gated by `allowTeam`;
+    `whenIsLocationSpecific` for tiering), src/commands/prompt/{get,list,explain,register}.ts.
+
   Multi-Workspace & Profiles (M28)
 
   Three-tier defaults hierarchy `global < profile < repo`. The single-key "simple

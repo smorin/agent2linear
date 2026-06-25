@@ -245,6 +245,29 @@ if should_run 11; then
   assert_eq "$?" "1" "forced unmatched team exit code (location override bypassed)"
 fi
 
+# Test 12: the `issue prompt` alias honors --team identically to `prompt get`
+# (full flag parity, M30 Phase 4) — selects the team prompt for an explicit team.
+if should_run 12; then
+  run_test 12 "issue prompt --team <matching> == prompt get --team (team flag parity)"
+  A="$(cli -C "$PROJ" prompt get --team team_pay 2>/dev/null)"
+  B="$(cli -C "$PROJ" issue prompt --team team_pay 2>/dev/null)"
+  if [ "$A" = "$B" ] && printf '%s' "$B" | grep -qF "## Payments Issue"; then pass_test; else
+    fail_test "issue prompt --team body differs from prompt get (A='$A' B='$B')"
+  fi
+fi
+
+# Test 13: the `issue prompt` alias honors --force --team beating a location
+# override, identical to `prompt get` (proves --force is wired through the alias).
+if should_run 13; then
+  run_test 13 "issue prompt --team --force beats an in-scope location override (--force parity)"
+  JSON="$(cli -C "$PROJ/apps/mobile" issue prompt --team team_pay --force --json 2>/dev/null)"
+  SEL="$(printf '%s' "$JSON" | jq -r '.selection')"
+  NAME="$(printf '%s' "$JSON" | jq -r '.name')"
+  if [ "$SEL" = "team" ] && [ "$NAME" = "pay-issue" ]; then pass_test; else
+    fail_test "issue prompt --force envelope: selection=$SEL name=$NAME (expected team/pay-issue)"
+  fi
+fi
+
 # --- summary ------------------------------------------------------------------
 echo ""
 echo "=================================================="

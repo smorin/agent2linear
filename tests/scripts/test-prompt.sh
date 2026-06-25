@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# End-to-end smoke test for M30 configurable prompt templates (Phases 1-2).
+# End-to-end smoke test for M30 configurable prompt templates (Phases 1-2 + 4).
 #
 # Exercises the REAL built CLI (dist/index.js) to confirm the general prompt
 # skeleton: `config set defaultPrompt` (valid + unknown-name rejection),
@@ -11,6 +11,11 @@
 # Phase 2 (tests 14-17): location-aware selection — `defaultPrompt` resolved by
 # an `overrides[]` path rule, so `prompt get -C <subdir>` returns the location
 # prompt, `-C <repo-root>` the general one, and `config explain` shows it.
+#
+# Phase 4 (tests 18-29): `prompt explain [dir] --json` decision-trace shape; the
+# `issue prompt <name>` alias parity with `prompt get <name>`; and the refined
+# `prompt list` (names-only default, `--descriptions`, and the `[partial]` name
+# substring filter that applies to every output format).
 #
 # Hermeticity: overrides HOME + XDG dirs to fresh temp directories and cleans
 # them up via `trap ... EXIT`. It never touches the real ~/.config and does NOT
@@ -93,7 +98,7 @@ assert_eq() { # actual expected msg
 }
 
 echo "=================================================="
-echo "  M30 PROMPT TEMPLATES — Phases 1-2 (offline smoke)"
+echo "  M30 PROMPT TEMPLATES — Phases 1-2 + 4 (offline smoke)"
 echo "=================================================="
 echo ""
 
@@ -267,6 +272,131 @@ if should_run 17; then
     pass_test
   else
     fail_test "explain defaultPrompt: value=$VAL source=$SRC"
+  fi
+fi
+
+# ==============================================================================
+#  Phase 4 — prompt explain + issue prompt alias + list refinements
+# ==============================================================================
+
+# Test 18: prompt explain -C <subdir> --json reports the location selection + shape.
+if should_run 18; then
+  run_test 18 "prompt explain -C <subdir> --json shape (location tier)"
+  JSON="$(cli -C "$PROJ/apps/mobile" prompt explain --json 2>/dev/null)"
+  SEL="$(printf '%s' "$JSON" | jq -r '.selection')"
+  NAME="$(printf '%s' "$JSON" | jq -r '.selectedName')"
+  DPSRC="$(printf '%s' "$JSON" | jq -r '.defaultPrompt.source')"
+  HASCTX="$(printf '%s' "$JSON" | jq -r 'has("contextDir") and has("team") and has("matchedRule")')"
+  if [ "$SEL" = "location" ] && [ "$NAME" = "mobile-issue" ] && [ "$DPSRC" = "override" ] && [ "$HASCTX" = "true" ]; then
+    pass_test
+  else
+    fail_test "explain: selection=$SEL name=$NAME defaultPrompt.source=$DPSRC hasCtx=$HASCTX"
+  fi
+fi
+
+# Test 19: prompt explain -C <repo-root> --json reports the general selection.
+if should_run 19; then
+  run_test 19 "prompt explain -C <repo-root> --json (general tier)"
+  JSON="$(cli -C "$PROJ" prompt explain --json 2>/dev/null)"
+  SEL="$(printf '%s' "$JSON" | jq -r '.selection')"
+  NAME="$(printf '%s' "$JSON" | jq -r '.selectedName')"
+  if [ "$SEL" = "general" ] && [ "$NAME" = "general" ]; then pass_test; else
+    fail_test "explain: selection=$SEL name=$NAME (expected general/general)"
+  fi
+fi
+
+# Test 20: prompt explain [dir] positional (no -C) matches the -C form.
+if should_run 20; then
+  run_test 20 "prompt explain [dir] positional agrees with -C"
+  # cwd is the repo root (via -C), [dir]=apps/mobile resolves the override; the body
+  # is discovered by walk-up from cwd, which is in-project.
+  JSON="$(cli -C "$PROJ" prompt explain apps/mobile --json 2>/dev/null)"
+  SEL="$(printf '%s' "$JSON" | jq -r '.selection')"
+  assert_eq "$SEL" "location" "positional [dir] selection"
+fi
+
+# Test 21: issue prompt <name> parity with prompt get <name> (same body).
+if should_run 21; then
+  run_test 21 "issue prompt <name> == prompt get <name> (parity)"
+  A="$(cli prompt get payments-issue 2>/dev/null)"
+  B="$(cli issue prompt payments-issue 2>/dev/null)"
+  if [ "$A" = "$B" ] && printf '%s' "$B" | grep -qF "Follow the payments convention."; then
+    pass_test
+  else
+    fail_test "issue prompt body differs from prompt get (A='$A' B='$B')"
+  fi
+fi
+
+# Test 22: issue prompt --json parity with prompt get --json (same envelope).
+if should_run 22; then
+  run_test 22 "issue prompt <name> --json == prompt get <name> --json (parity)"
+  A="$(cli prompt get payments-issue --json 2>/dev/null)"
+  B="$(cli issue prompt payments-issue --json 2>/dev/null)"
+  assert_eq "$B" "$A" "issue prompt --json envelope parity"
+fi
+
+# Test 23: issue prompt <unknown> exits 1 (parity with prompt get error path).
+if should_run 23; then
+  run_test 23 "issue prompt <unknown> exits 1"
+  cli issue prompt does-not-exist >/dev/null 2>&1
+  assert_eq "$?" "1" "issue prompt unknown exit code"
+fi
+
+# Test 24: prompt list [partial] filters by NAME substring (case-insensitive).
+if should_run 24; then
+  run_test 24 "prompt list <partial> filters by name substring"
+  OUT="$(cli prompt list pay 2>/dev/null)"
+  if printf '%s' "$OUT" | grep -qF "payments-issue" && ! printf '%s' "$OUT" | grep -qF "general"; then
+    pass_test
+  else
+    fail_test "expected only 'payments-issue' (not 'general'), got: $OUT"
+  fi
+fi
+
+# Test 25: prompt list <partial> is case-insensitive.
+if should_run 25; then
+  run_test 25 "prompt list <PARTIAL> is case-insensitive"
+  OUT="$(cli prompt list PAY 2>/dev/null)"
+  assert_contains "$OUT" "payments-issue" "case-insensitive name filter"
+fi
+
+# Test 26: default human list output is NAMES ONLY (no inline descriptions).
+if should_run 26; then
+  run_test 26 "prompt list default output is names only (no descriptions)"
+  OUT="$(cli prompt list 2>/dev/null)"
+  if printf '%s' "$OUT" | grep -qF "general" && ! printf '%s' "$OUT" | grep -qF "Default issue prompt"; then
+    pass_test
+  else
+    fail_test "expected names without the 'Default issue prompt' description, got: $OUT"
+  fi
+fi
+
+# Test 27: --descriptions includes each prompt's description in human output.
+if should_run 27; then
+  run_test 27 "prompt list --descriptions includes descriptions"
+  OUT="$(cli prompt list --descriptions 2>/dev/null)"
+  assert_contains "$OUT" "Default issue prompt" "--descriptions shows the description"
+fi
+
+# Test 28: --format json stays COMPLETE (name+description+source) regardless of flags.
+if should_run 28; then
+  run_test 28 "prompt list --format json is complete (name+description+source)"
+  JSON="$(cli prompt list --format json 2>/dev/null)"
+  DESC="$(printf '%s' "$JSON" | jq -r '.[] | select(.name=="general") | .description')"
+  SRC="$(printf '%s' "$JSON" | jq -r '.[] | select(.name=="general") | .source')"
+  if [ "$DESC" = "Default issue prompt" ] && [ "$SRC" = "global" ]; then pass_test; else
+    fail_test "json record: description=$DESC source=$SRC"
+  fi
+fi
+
+# Test 29: the [partial] filter applies to --format json too.
+if should_run 29; then
+  run_test 29 "prompt list <partial> --format json filters json output"
+  JSON="$(cli prompt list pay --format json 2>/dev/null)"
+  COUNT="$(printf '%s' "$JSON" | jq 'length')"
+  NAME="$(printf '%s' "$JSON" | jq -r '.[0].name')"
+  if [ "$COUNT" = "1" ] && [ "$NAME" = "payments-issue" ]; then pass_test; else
+    fail_test "json filter: count=$COUNT firstName=$NAME"
   fi
 fi
 

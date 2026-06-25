@@ -3,18 +3,42 @@ import { getGlobalPromptsPath, getProjectPromptsPath, loadPrompts } from '../../
 
 interface ListOptions {
   format?: 'tsv' | 'json';
+  /** Include each prompt's description in the human output (no effect on json/tsv). */
+  descriptions?: boolean;
+  /** Filter to prompts whose NAME contains this substring (case-insensitive). */
+  partial?: string;
 }
 
 /**
- * `prompt list` — list available prompt names grouped by source (global +
- * project, project overwrites by name). `--format json|tsv` for machine output.
+ * `prompt list [partial]` — list available prompt names grouped by source (global +
+ * project, project overwrites by name). Default human output is NAMES ONLY; pass
+ * `--descriptions` to include each prompt's description. `--format json|tsv` always
+ * emits the complete record (name, description, source). An optional `[partial]`
+ * filters to prompt names that contain the substring (case-insensitive); the filter
+ * applies to every format.
  */
 export async function listPrompts(options: ListOptions = {}): Promise<void> {
   try {
     const prompts = loadPrompts();
-    const names = Object.keys(prompts).sort();
+    const partial = options.partial?.toLowerCase();
+    const names = Object.keys(prompts)
+      .filter(name => (partial ? name.toLowerCase().includes(partial) : true))
+      .sort();
 
     if (names.length === 0) {
+      if (options.format === 'json') {
+        console.log(formatListJSON([]));
+        return;
+      }
+      if (options.format === 'tsv') {
+        console.log('name\tdescription\tsource');
+        return;
+      }
+      if (options.partial) {
+        console.log(`No prompts match "${options.partial}".`);
+        console.log('');
+        return;
+      }
       console.log('No prompts found.');
       console.log('');
       console.log('Author prompts at:');
@@ -48,11 +72,18 @@ export async function listPrompts(options: ListOptions = {}): Promise<void> {
       const globalNames = names.filter(name => prompts[name].source === 'global');
       const projectNames = names.filter(name => prompts[name].source === 'project');
 
+      const renderName = (name: string): string => {
+        if (!options.descriptions) {
+          return `  ${name}`;
+        }
+        const description = prompts[name].entry.description || '';
+        return `  ${name.padEnd(20)}${description ? ' - ' + description : ''}`;
+      };
+
       if (globalNames.length > 0) {
         console.log(`Global Prompts (${globalNames.length}):`);
         for (const name of globalNames) {
-          const description = prompts[name].entry.description || '';
-          console.log(`  ${name.padEnd(20)}${description ? ' - ' + description : ''}`);
+          console.log(renderName(name));
         }
         console.log('');
       }
@@ -60,8 +91,7 @@ export async function listPrompts(options: ListOptions = {}): Promise<void> {
       if (projectNames.length > 0) {
         console.log(`Project Prompts (${projectNames.length}):`);
         for (const name of projectNames) {
-          const description = prompts[name].entry.description || '';
-          console.log(`  ${name.padEnd(20)}${description ? ' - ' + description : ''}`);
+          console.log(renderName(name));
         }
         console.log('');
       }
