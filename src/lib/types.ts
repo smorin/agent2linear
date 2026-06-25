@@ -268,11 +268,34 @@ export interface PromptEntry {
   bodyFile?: string;
 }
 
+/**
+ * A prompt-store `when` clause (M30 Phase 3): the config `WhenClause` grammar
+ * (path/repo/owner/host/branch/composites) plus an additional `team` matcher,
+ * which exists ONLY here — config's `WhenClause`/`WhenLeaf` must never gain
+ * `team` (a `team` key in a config `overrides[]` is an unsupported key by design,
+ * since team is an OUTPUT of config resolution, not a matcher inside it). In M1
+ * `team` compares resolved team ids; team-name globbing is M2.
+ */
+export type PromptWhen = WhenClause & { team?: string };
+
+/**
+ * A single team-layer rule in `prompts.json`: a nested `when` clause (a
+ * `PromptWhen` — the config `WhenClause` grammar plus the prompt-only `team`
+ * matcher) plus the `prompt` name it selects. Authored exactly like a config
+ * `overrides[]` entry, for grammar consistency. An absent `when` is a catch-all.
+ */
+export interface PromptRule {
+  when?: PromptWhen;
+  prompt: string;
+}
+
 export interface Prompts {
   prompts: {
     [name: string]: PromptEntry;
   };
-  // promptRules?: PromptRule[]; — Phase 3 (team layer)
+  // M30 Phase 3: the team layer. Evaluated after the single getConfig pass with
+  // ctx.team = --team ?? config.defaultTeam, using a team-aware matchWhen.
+  promptRules?: PromptRule[];
 }
 
 /**

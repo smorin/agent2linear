@@ -140,6 +140,40 @@ else
 fi
 
 # ============================================================
+# PROMPT TEMPLATES — TEAM LAYER (M30 Phase 3 — offline/hermetic)
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] PROMPT TEMPLATES — TEAM LAYER${NC}"
+echo ""
+
+PROMPT_TEAM_OUTPUT_FILE="/tmp/test-prompt-team-output-$$.log"
+
+if ./test-prompt-team.sh 2>&1 | tee "$PROMPT_TEAM_OUTPUT_FILE"; then
+    PROMPT_TEAM_EXIT=0
+else
+    PROMPT_TEAM_EXIT=$?
+fi
+
+read PROMPT_TEAM_PASSED PROMPT_TEAM_FAILED PROMPT_TEAM_TOTAL <<< $(extract_results "$(cat "$PROMPT_TEAM_OUTPUT_FILE")")
+
+TOTAL_PASSED=$((TOTAL_PASSED + PROMPT_TEAM_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + PROMPT_TEAM_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + PROMPT_TEAM_TOTAL))
+
+echo ""
+echo -e "${BLUE}Prompt Templates — Team Layer Results:${NC}"
+echo -e "  Passed: ${GREEN}$PROMPT_TEAM_PASSED${NC}"
+echo -e "  Failed: ${RED}$PROMPT_TEAM_FAILED${NC}"
+echo -e "  Total:  $PROMPT_TEAM_TOTAL"
+
+if [ $PROMPT_TEAM_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
 # PROJECT TESTS
 # ============================================================
 

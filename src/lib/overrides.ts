@@ -24,6 +24,15 @@ export interface OverrideContext {
   repoRoot: string | null;
   branch?: string;
   remotes: Record<string, RemoteIdentity>;
+  // M30 Phase 3: the resolved team id for the prompt team layer. Only consulted
+  // when matchWhen is called with `{ allowTeam: true }` (the prompt path); the
+  // config-field path never sets `allowTeam`, so this is ignored there.
+  team?: string;
+}
+
+/** Options for `matchWhen`. `allowTeam` gates the prompt-store-only `team` matcher. */
+export interface MatchWhenOptions {
+  allowTeam?: boolean;
 }
 
 export interface OverrideLayer {
@@ -96,6 +105,36 @@ function whenNeedsContext(node: unknown): boolean {
   return node.not !== undefined && whenNeedsContext(node.not);
 }
 
+/** Identity/path leaf keys that make a `when` clause "location-specific" (M30 Phase 3). */
+const LOCATION_MATCHER_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host'];
+
+/**
+ * Whether a `when` clause is "location-specific" (M30 Phase 3): a `path`/`repo`/
+ * `owner`/`host` matcher present anywhere (recursing `allOf`/`anyOf`/`not`). A
+ * branch-only clause, a catch-all `{}`, and `undefined` are NOT location-specific.
+ *
+ * Load-bearing for the prompt tiering (location override > team > general): a
+ * `defaultPrompt` set by a location-specific override outranks the team layer,
+ * while a branch-only or catch-all override is general-tier. Purely structural
+ * (not match-dependent) and malformed-safe (mirrors `whenNeedsContext`): never
+ * throws on a bad shape — that is simply "not location-specific" here.
+ */
+export function whenIsLocationSpecific(node: unknown): boolean {
+  if (!isWhenObject(node)) {
+    return false;
+  }
+  if (LOCATION_MATCHER_KEYS.some((key) => key in node)) {
+    return true;
+  }
+  if (Array.isArray(node.allOf) && node.allOf.some(whenIsLocationSpecific)) {
+    return true;
+  }
+  if (Array.isArray(node.anyOf) && node.anyOf.some(whenIsLocationSpecific)) {
+    return true;
+  }
+  return node.not !== undefined && whenIsLocationSpecific(node.not);
+}
+
 /**
  * Whether a string carries a glob metacharacter picomatch honors (`* ? [ ] { } ( )`,
  * the last covering extglobs like `@(a|b)`). Specificity scoring (§5.6) uses this so a
@@ -153,7 +192,7 @@ function maxSpec(a: Spec, b: Spec): Spec {
 }
 
 /** Lexicographic compare of two equal-length numeric keys. */
-function compareKeys(a: number[], b: number[]): number {
+export function compareKeys(a: number[], b: number[]): number {
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) {
       return a[i] - b[i];
@@ -199,7 +238,11 @@ function identitySatisfies(node: WhenClause, id: RemoteIdentity): boolean {
  * caller turns that into a warn-and-skip (§9). Graceful: a missing remote / detached
  * HEAD makes a criterion fail rather than throw.
  */
-function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; score: Spec } {
+export function matchWhen(
+  node: WhenClause,
+  ctx: OverrideContext,
+  opts?: MatchWhenOptions
+): { matched: boolean; score: Spec } {
   const fail = { matched: false, score: zeroSpec() };
   // Reject malformed composite shapes up front so the caller's try/catch turns them
   // into a clear warn-and-skip (§9) instead of an opaque "not iterable"/"in null".
@@ -215,7 +258,11 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
   if (node.not !== undefined && !isWhenObject(node.not)) {
     throw new Error('invalid `when.not`: expected an object');
   }
-  const unsupported = Object.keys(node).filter((k) => !KNOWN_WHEN_KEYS.includes(k));
+  // `team` is recognized ONLY when `allowTeam` is set (the prompt path). The config
+  // path passes no opts, so a `team` key in a config `overrides[]` is unsupported and
+  // hits the warn-and-skip below — config-field resolution stays byte-identical.
+  const allowedKeys = opts?.allowTeam ? [...KNOWN_WHEN_KEYS, 'team'] : KNOWN_WHEN_KEYS;
+  const unsupported = Object.keys(node).filter((k) => !allowedKeys.includes(k));
   if (unsupported.length > 0) {
     throw new Error(`unsupported \`when\` key(s): ${unsupported.join(', ')}`);
   }
@@ -273,9 +320,20 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
     score[6] = 1;
   }
 
+  // M30 Phase 3: prompt-store-only `team` matcher (gated by `allowTeam`). Compares
+  // like `branch` — graceful-fail (no throw) when `ctx.team` is undefined. The key is
+  // already validated as supported above only when `allowTeam` is set.
+  const teamPattern = (node as { team?: string }).team;
+  if (teamPattern !== undefined) {
+    if (ctx.team === undefined || !matchGlob(teamPattern, ctx.team)) {
+      return fail;
+    }
+    score[6] = 1;
+  }
+
   if (node.allOf !== undefined) {
     for (const child of node.allOf) {
-      const result = matchWhen(child, ctx);
+      const result = matchWhen(child, ctx, opts);
       if (!result.matched) {
         return fail;
       }
@@ -290,7 +348,7 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
     }
     let best: Spec | null = null;
     for (const child of node.anyOf) {
-      const result = matchWhen(child, ctx);
+      const result = matchWhen(child, ctx, opts);
       if (result.matched) {
         best = best === null ? result.score : maxSpec(best, result.score);
       }
@@ -302,7 +360,7 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
   }
 
   if (node.not !== undefined) {
-    if (matchWhen(node.not, ctx).matched) {
+    if (matchWhen(node.not, ctx, opts).matched) {
       return fail;
     }
     score[7] += 1;

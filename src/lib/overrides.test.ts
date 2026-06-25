@@ -2,8 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { RemoteIdentity } from './git-context.js';
 import { logger } from './logger.js';
-import { needsGitContext, type OverrideContext, type OverrideLayer, resolveOverrides } from './overrides.js';
-import type { ConfigOverride } from './types.js';
+import {
+  matchWhen,
+  needsGitContext,
+  type OverrideContext,
+  type OverrideLayer,
+  resolveOverrides,
+  whenIsLocationSpecific,
+} from './overrides.js';
+import type { ConfigOverride, WhenClause } from './types.js';
 
 const REPO = '/work/acme/web';
 const ORIGIN: RemoteIdentity = { host: 'github.com', owner: 'acme', name: 'web' };
@@ -445,5 +452,92 @@ describe('resolveOverrides — composite specificity (§5.6)', () => {
       ]),
     ]);
     expect(r.values.defaultTeam).toBe('owner');
+  });
+});
+
+// ============================================================================
+//  M30 Phase 3 — team-aware matchWhen (additive + gated) + whenIsLocationSpecific
+// ============================================================================
+
+describe('matchWhen — team-aware, additive and gated (M30 Phase 3)', () => {
+  const teamCtx = (team?: string): OverrideContext => ({
+    contextDir: REPO,
+    repoRoot: REPO,
+    remotes: {},
+    team,
+  });
+
+  it('matches `{ team }` only when allowTeam is set and ctx.team matches', () => {
+    expect(matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_pay'), { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_other'), { allowTeam: true }).matched).toBe(false);
+  });
+
+  it('graceful-fails (no throw, no match) when ctx.team is undefined', () => {
+    const r = matchWhen({ team: 'team_pay' } as WhenClause, teamCtx(undefined), { allowTeam: true });
+    expect(r.matched).toBe(false);
+  });
+
+  it('supports a team glob (compares resolved ids in M1)', () => {
+    expect(matchWhen({ team: 'team_*' } as WhenClause, teamCtx('team_pay'), { allowTeam: true }).matched).toBe(true);
+  });
+
+  it('recognizes `team` nested in composites under allowTeam', () => {
+    const ctx = teamCtx('team_pay');
+    const w = (node: object): WhenClause => node as unknown as WhenClause;
+    expect(matchWhen(w({ allOf: [{ team: 'team_pay' }] }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ anyOf: [{ team: 'team_nope' }, { team: 'team_pay' }] }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ not: { team: 'team_other' } }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ not: { team: 'team_pay' } }), ctx, { allowTeam: true }).matched).toBe(false);
+  });
+
+  it('treats `team` as an UNSUPPORTED key WITHOUT allowTeam (config path)', () => {
+    expect(() => matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_pay'))).toThrow(/unsupported/);
+    // Nested in a composite without allowTeam → still unsupported.
+    expect(() => matchWhen({ anyOf: [{ team: 'team_pay' }] } as unknown as WhenClause, teamCtx('team_pay'))).toThrow(/unsupported/);
+  });
+});
+
+describe('config overrides[] still warn-and-skip a when:{team} rule (config byte-identical)', () => {
+  it('a `when: { team }` rule in a config layer is warn-skipped, leaving defaultPrompt unresolved', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    // resolveOverrides is the config path: it calls matchWhen WITHOUT allowTeam.
+    const r = resolveOverrides(ctx(REPO, REPO, { remotes: { origin: ORIGIN } }), [
+      layer('project', [{ when: { team: 'team_pay' } as never, defaultPrompt: 'p' }]),
+    ]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/unsupported/);
+    expect(r.values.defaultPrompt).toBeUndefined();
+  });
+});
+
+describe('whenIsLocationSpecific (M30 Phase 3 — load-bearing for tiering)', () => {
+  it('is true for path/repo/owner/host leaves', () => {
+    expect(whenIsLocationSpecific({ path: 'apps/**' })).toBe(true);
+    expect(whenIsLocationSpecific({ repo: 'acme/web' })).toBe(true);
+    expect(whenIsLocationSpecific({ owner: 'acme' })).toBe(true);
+    expect(whenIsLocationSpecific({ host: 'github.com' })).toBe(true);
+  });
+
+  it('is false for branch-only, catch-all, and undefined', () => {
+    expect(whenIsLocationSpecific({ branch: 'release/*' })).toBe(false);
+    expect(whenIsLocationSpecific({})).toBe(false);
+    expect(whenIsLocationSpecific(undefined)).toBe(false);
+  });
+
+  it('recurses composites: true if a location leaf appears anywhere', () => {
+    expect(whenIsLocationSpecific({ allOf: [{ branch: 'main' }, { path: 'cli/**' }] })).toBe(true);
+    expect(whenIsLocationSpecific({ anyOf: [{ branch: 'main' }, { repo: 'acme/web' }] })).toBe(true);
+    expect(whenIsLocationSpecific({ not: { owner: 'acme' } })).toBe(true);
+  });
+
+  it('is false for a composite of only branch leaves', () => {
+    expect(whenIsLocationSpecific({ anyOf: [{ branch: 'main' }, { branch: 'release/*' }] })).toBe(false);
+    expect(whenIsLocationSpecific({ not: { branch: 'main' } })).toBe(false);
+  });
+
+  it('does not throw on malformed shapes (not iterable / null)', () => {
+    expect(() => whenIsLocationSpecific({ allOf: {} as never })).not.toThrow();
+    expect(() => whenIsLocationSpecific({ not: null as never })).not.toThrow();
+    expect(whenIsLocationSpecific({ allOf: {} as never })).toBe(false);
   });
 });

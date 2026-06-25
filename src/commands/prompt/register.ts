@@ -24,15 +24,24 @@ via the global -C/--cwd lever.
     .command('get')
     .addArgument(new Argument('[name]', 'Exact prompt name to fetch (highest precedence)'))
     .description('Print the applicable prompt as raw markdown (or --json envelope)')
+    .option('--team <id|alias>', 'Select the team layer (a promptRule for this team must exist)')
+    .option('--force', 'With an explicit --team, take the team prompt first (outranks a location override); error if no rule matches')
     .option('--json', 'Output a machine-readable { name, source, selection, body, context } envelope')
     .addHelpText('after', `
+Selection precedence: explicit name → specific location override (path/repo/owner/host)
+→ team (promptRules) → general defaultPrompt → error. An explicit --team with no
+matching promptRule is a hard error. With --force and an explicit --team, the team
+prompt is evaluated first and outranks a location override (no rule ⇒ hard error).
+
 Examples:
-  $ agent2linear prompt get                     # the general defaultPrompt for the current dir
-  $ agent2linear prompt get payments-issue       # an exact prompt by unique name
-  $ agent2linear prompt get --json               # structured envelope (for agents)
-  $ agent2linear -C apps/mobile prompt get        # resolve as if launched in apps/mobile
+  $ agent2linear prompt get                       # the general defaultPrompt for the current dir
+  $ agent2linear prompt get payments-issue        # an exact prompt by unique name
+  $ agent2linear prompt get --team payments        # the team-layer prompt for the payments team
+  $ agent2linear prompt get --team payments --force # force the payments team prompt (beats location)
+  $ agent2linear prompt get --json                # structured envelope (for agents)
+  $ agent2linear -C apps/mobile prompt get         # resolve as if launched in apps/mobile
 `)
-    .action(async (name: string | undefined, options: { json?: boolean }) => {
+    .action(async (name: string | undefined, options: { json?: boolean; team?: string; force?: boolean }) => {
       await runPromptGet(name, options);
     });
 
