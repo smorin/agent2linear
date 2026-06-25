@@ -400,6 +400,21 @@ if should_run 29; then
   fi
 fi
 
+# Test 30: `skill` is an alias for `prompt` — `skill get` matches `prompt get`.
+if should_run 30; then
+  run_test 30 "skill get <name> equals prompt get <name> (alias)"
+  SKILL_OUT="$(cli skill get general 2>/dev/null)"
+  PROMPT_OUT="$(cli prompt get general 2>/dev/null)"
+  assert_eq "$SKILL_OUT" "$PROMPT_OUT" "skill get parity with prompt get"
+fi
+
+# Test 31: `skill list` works via the alias.
+if should_run 31; then
+  run_test 31 "skill list works via the alias"
+  OUT="$(cli skill list 2>/dev/null)"
+  assert_contains "$OUT" "general" "skill list shows prompt names"
+fi
+
 # --- summary ------------------------------------------------------------------
 echo ""
 echo "=================================================="

@@ -266,6 +266,8 @@ a2l config get defaultTeam apps/web                   # one override-resolved fi
 
 Ask `a2l` for the **right markdown prompt to follow before creating a Linear issue**, selected by context. This is read-side only today: prompts are **hand-authored** in a committable `prompts.json` (CRUD and interpolation are planned). It is fully additive — a config with no prompts behaves exactly as before, and `apiKey`/workspace selection is never affected.
 
+The `prompt` command is also aliased as **`skill`**: `a2l skill get` returns the right **skill** (prompt) to call — the context-appropriate guidance an agent should follow before creating an issue. `skill` and `prompt` are interchangeable everywhere (`skill get`/`skill list`/`skill explain` = `prompt get`/`prompt list`/`prompt explain`).
+
 ### Authoring prompts (`prompts.json`)
 
 Prompts live in a `prompts.json` next to your config:
@@ -296,6 +298,7 @@ a2l prompt get                       # the prompt that applies for the current d
 a2l prompt get payments-issue        # an exact prompt by unique name (highest precedence)
 a2l prompt get --team payments       # the team-layer prompt for the payments team
 a2l prompt get --json                # a { name, source, selection, body, context } envelope (for agents)
+a2l skill get                        # `skill` is an alias for `prompt` — the right skill to call here
 a2l issue prompt                     # alias for `prompt get` (same flags) — handy before `issue create`
 ```
 

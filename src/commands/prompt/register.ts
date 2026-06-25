@@ -7,8 +7,13 @@ import { listPrompts } from './list.js';
 export function registerPromptCommands(cli: Command): void {
   const prompt = cli
     .command('prompt')
+    .alias('skill')
     .description('Get the markdown prompt to follow before creating a Linear issue')
     .addHelpText('before', `
+Aliased as \`skill\`: \`a2l skill get\` returns the right skill (prompt) to call —
+the context-appropriate guidance an agent should follow before creating an issue.
+\`skill\` and \`prompt\` are interchangeable (\`skill get\` = \`prompt get\`, etc.).
+
 Prompts are hand-authored markdown stored in a committable prompts.json:
 - Global:  $XDG_CONFIG_HOME/agent2linear/prompts.json (default: ~/.config/agent2linear/prompts.json)
 - Project: .agent2linear/prompts.json (nearest, searching up from the current directory)

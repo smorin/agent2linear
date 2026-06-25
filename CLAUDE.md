@@ -309,7 +309,9 @@
     team layer FIRST — a matching promptRule outranks any location override; no match is a hard
     error (exit 1) even when a location override or general default would otherwise resolve.
     `--force` without an explicit `--team` is a no-op.
-  - Commands:
+  - Commands (the `prompt` group is aliased as `skill` — `a2l skill <sub>` = `a2l prompt <sub>`;
+    `a2l skill get` returns "the right skill to call," i.e. the context-appropriate prompt an
+    agent should follow before creating an issue):
     - `prompt get [name]` — print the applicable prompt as raw markdown (or `--json` envelope
       { name, source, selection, body, context }). Flags: `--team <id|alias>`, `--force`, `--json`.
     - `prompt list [partial]` — names grouped by source. Default human output is NAMES ONLY;
