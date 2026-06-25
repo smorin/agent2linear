@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 #
-# End-to-end smoke test for M30 configurable prompt templates (Phase 1).
+# End-to-end smoke test for M30 configurable prompt templates (Phases 1-2).
 #
 # Exercises the REAL built CLI (dist/index.js) to confirm the general prompt
 # skeleton: `config set defaultPrompt` (valid + unknown-name rejection),
 # `prompt get` (raw + --json), `prompt get <name>` exact lookup, the
 # unknown-name / no-prompt-configured errors (exit 1), and that
 # `config get/list` surface `defaultPrompt`.
+#
+# Phase 2 (tests 14-17): location-aware selection — `defaultPrompt` resolved by
+# an `overrides[]` path rule, so `prompt get -C <subdir>` returns the location
+# prompt, `-C <repo-root>` the general one, and `config explain` shows it.
 #
 # Hermeticity: overrides HOME + XDG dirs to fresh temp directories and cleans
 # them up via `trap ... EXIT`. It never touches the real ~/.config and does NOT
@@ -89,7 +93,7 @@ assert_eq() { # actual expected msg
 }
 
 echo "=================================================="
-echo "  M30 PROMPT TEMPLATES — Phase 1 (offline smoke)"
+echo "  M30 PROMPT TEMPLATES — Phases 1-2 (offline smoke)"
 echo "=================================================="
 echo ""
 
@@ -198,6 +202,71 @@ if should_run 13; then
     pass_test
   else
     fail_test "expected empty stdout + exit 1, got stdout='$STDOUT' exit=$CODE"
+  fi
+fi
+
+# ==============================================================================
+#  Phase 2 — location-aware selection (defaultPrompt via overrides[])
+# ==============================================================================
+# A project repo whose .agent2linear/config.json sets a general defaultPrompt
+# plus a path-scoped override. The project prompts.json provides both bodies.
+# `prompt get -C <subdir>` must return the location prompt; `-C <repo-root>`
+# the general one; and `config explain <subdir>` must surface the override.
+PROJ="$SANDBOX/proj"
+mkdir -p "$PROJ/.agent2linear" "$PROJ/apps/mobile"
+cat > "$PROJ/.agent2linear/config.json" <<'EOF'
+{
+  "defaultPrompt": "general",
+  "overrides": [
+    { "when": { "path": "apps/mobile/**" }, "defaultPrompt": "mobile-issue" }
+  ]
+}
+EOF
+cat > "$PROJ/.agent2linear/prompts.json" <<'EOF'
+{
+  "prompts": {
+    "general": { "body": "## General Issue\nWrite a clear title.\n" },
+    "mobile-issue": { "body": "## Mobile Issue\nDescribe device + OS version.\n" }
+  }
+}
+EOF
+
+# Test 14: prompt get -C <subdir> returns the path-override (location) prompt.
+if should_run 14; then
+  run_test 14 "prompt get -C <subdir> returns the location prompt"
+  OUT="$(cli -C "$PROJ/apps/mobile" prompt get 2>/dev/null)"
+  assert_contains "$OUT" "## Mobile Issue" "location prompt body"
+fi
+
+# Test 15: prompt get -C <repo-root> returns the general prompt.
+if should_run 15; then
+  run_test 15 "prompt get -C <repo-root> returns the general prompt"
+  OUT="$(cli -C "$PROJ" prompt get 2>/dev/null)"
+  if printf '%s' "$OUT" | grep -qF "## General Issue" && ! printf '%s' "$OUT" | grep -qF "## Mobile Issue"; then
+    pass_test
+  else
+    fail_test "expected general (not mobile) body, got: $OUT"
+  fi
+fi
+
+# Test 16: --json at the subdir reports name=mobile-issue (override-resolved).
+if should_run 16; then
+  run_test 16 "prompt get -C <subdir> --json resolves the override name"
+  JSON="$(cli -C "$PROJ/apps/mobile" prompt get --json 2>/dev/null)"
+  NAME="$(printf '%s' "$JSON" | jq -r '.name')"
+  assert_eq "$NAME" "mobile-issue" "override-resolved prompt name"
+fi
+
+# Test 17: config explain <subdir> shows defaultPrompt resolved by the override.
+if should_run 17; then
+  run_test 17 "config explain <subdir> shows the defaultPrompt override"
+  JSON="$(cli config explain "$PROJ/apps/mobile" --json 2>/dev/null)"
+  VAL="$(printf '%s' "$JSON" | jq -r '.resolved.defaultPrompt.value')"
+  SRC="$(printf '%s' "$JSON" | jq -r '.resolved.defaultPrompt.source')"
+  if [ "$VAL" = "mobile-issue" ] && [ "$SRC" = "override" ]; then
+    pass_test
+  else
+    fail_test "explain defaultPrompt: value=$VAL source=$SRC"
   fi
 fi
 

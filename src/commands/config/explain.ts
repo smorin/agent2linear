@@ -17,6 +17,7 @@ const EXPLAIN_FIELDS = [
   'defaultIssueTemplate',
   'defaultProjectTemplate',
   'defaultMilestoneTemplate',
+  'defaultPrompt',
   'defaultAutoAssignLead',
 ] as const;
 

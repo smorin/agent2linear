@@ -76,6 +76,7 @@ export type OverridableConfig = Pick<
   | 'defaultIssueTemplate'
   | 'defaultProjectTemplate'
   | 'defaultMilestoneTemplate'
+  | 'defaultPrompt'
   | 'defaultAutoAssignLead'
 > & {
   aliases?: Partial<Aliases>;

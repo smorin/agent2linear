@@ -49,6 +49,7 @@ const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
   'defaultIssueTemplate',
   'defaultProjectTemplate',
   'defaultMilestoneTemplate',
+  'defaultPrompt',
   'defaultAutoAssignLead',
 ];
 

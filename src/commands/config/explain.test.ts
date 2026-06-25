@@ -168,6 +168,29 @@ describe('buildExplainData / explainConfig — query path', () => {
     expect(data.repoRoot).not.toBeNull();
   });
 
+  it('shows defaultPrompt with override provenance when a rule wins (M30)', () => {
+    mkdirSync(join(repoRoot, '.agent2linear'), { recursive: true });
+    writeFileSync(
+      join(repoRoot, '.agent2linear', 'config.json'),
+      JSON.stringify({
+        defaultPrompt: 'general',
+        overrides: [{ when: { path: 'mobile/**' }, defaultPrompt: 'mobile-issue' }],
+      })
+    );
+    const mobile = join(repoRoot, 'mobile');
+    mkdirSync(mobile, { recursive: true });
+
+    const data = buildExplainData(mobile);
+    const prompt = data.fields.find((f) => f.key === 'defaultPrompt');
+    expect(prompt?.value).toBe('mobile-issue');
+    expect(prompt?.location).toMatchObject({ type: 'override', scope: 'project' });
+    expect(prompt?.location.when).toEqual({ path: 'mobile/**' });
+
+    // It also surfaces in the JSON shape with override metadata.
+    const resolved = buildExplainJson(data).resolved as Record<string, unknown>;
+    expect(resolved.defaultPrompt).toMatchObject({ value: 'mobile-issue', source: 'override' });
+  });
+
   it('falls back to the invocation context dir when no positional dir is given', () => {
     const cli = writeRepoOverride();
     setInvocationContext({ contextDir: cli });
@@ -177,7 +200,7 @@ describe('buildExplainData / explainConfig — query path', () => {
 
   it('falls back to process.cwd() when neither positional nor context dir is set', () => {
     const data = buildExplainData();
-    expect(data.fields).toHaveLength(7);
+    expect(data.fields).toHaveLength(8);
   });
 
   it('yields no override for a missing/repo-less dir without crashing (§9 query)', () => {
