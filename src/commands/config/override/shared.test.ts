@@ -125,6 +125,24 @@ describe('buildWhenFromFlags', () => {
     });
   });
 
+  it('preserves a single remote qualifier on every identity OR branch', () => {
+    expect(buildWhenFromFlags({ whenRemote: 'upstream', whenRepo: 'acme/web,acme/api' })).toEqual({
+      anyOf: [
+        { repo: 'acme/web', remote: 'upstream' },
+        { repo: 'acme/api', remote: 'upstream' },
+      ],
+    });
+  });
+
+  it('preserves identity constraints on every remote OR branch', () => {
+    expect(buildWhenFromFlags({ whenRepo: 'acme/web', whenRemote: 'origin,upstream' })).toEqual({
+      anyOf: [
+        { repo: 'acme/web', remote: 'origin' },
+        { repo: 'acme/web', remote: 'upstream' },
+      ],
+    });
+  });
+
   it('collapses a single exclusion to not: { <facet> }', () => {
     expect(buildWhenFromFlags({ whenRepo: 'acme/web', whenNotBranch: 'wip' })).toEqual({
       repo: 'acme/web',
@@ -273,6 +291,11 @@ describe('resolveSelector', () => {
     expect(resolveSelector(rules, '#9')).toBeUndefined();
     expect(resolveSelector(rules, '#-1')).toBeUndefined();
     expect(resolveSelector(rules, '#x')).toBeUndefined();
+  });
+
+  it('returns undefined for malformed numeric #index selectors', () => {
+    expect(resolveSelector(rules, '#1abc')).toBeUndefined();
+    expect(resolveSelector(rules, '#1.5')).toBeUndefined();
   });
 });
 

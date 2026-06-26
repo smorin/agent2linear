@@ -160,6 +160,18 @@ export interface WhenFlagOptions {
 type WhenFacet = 'repo' | 'owner' | 'host' | 'path' | 'branch' | 'remote';
 const WHEN_FACETS: readonly WhenFacet[] = ['repo', 'owner', 'host', 'path', 'branch', 'remote'];
 
+function isIdentityFacet(facet: WhenFacet): boolean {
+  return facet === 'repo' || facet === 'owner' || facet === 'host';
+}
+
+function isIdentityOrRemoteFacet(facet: WhenFacet): boolean {
+  return facet === 'remote' || isIdentityFacet(facet);
+}
+
+function assignFacet(target: WhenClause, facet: WhenFacet, value: string): void {
+  (target as Record<string, unknown>)[facet] = value;
+}
+
 /**
  * Normalize a repeatable, comma-aware flag value into a flat list of trimmed,
  * non-empty segments. `--when-repo a,b --when-repo c` arrives as `['a,b','c']` and
@@ -233,12 +245,37 @@ export function buildWhenFromFlags(opts: WhenFlagOptions): WhenClause {
   }
 
   const when: WhenClause = {};
-  for (const { facet, values } of positive) {
-    if (values.length === 1) {
-      (when as Record<string, unknown>)[facet] = values[0];
-    } else {
-      // The at-most-one OR-list facet becomes an `anyOf` on the same node.
-      when.anyOf = values.map((v) => leaf(facet, v));
+  const multiValueFacet = multiValueFacets[0];
+  const hasRemoteFacet = positive.some((p) => p.facet === 'remote');
+  const hasIdentityFacet = positive.some((p) => isIdentityFacet(p.facet));
+  const shouldInlineRemoteQualifiedIdentity =
+    multiValueFacet !== undefined &&
+    hasRemoteFacet &&
+    hasIdentityFacet &&
+    isIdentityOrRemoteFacet(multiValueFacet.facet);
+
+  if (shouldInlineRemoteQualifiedIdentity) {
+    for (const { facet, values } of positive) {
+      if (!isIdentityOrRemoteFacet(facet)) {
+        assignFacet(when, facet, values[0]);
+      }
+    }
+    const identityBranches = positive.filter((p) => isIdentityOrRemoteFacet(p.facet));
+    when.anyOf = multiValueFacet.values.map((value) => {
+      const child: WhenClause = {};
+      for (const { facet, values } of identityBranches) {
+        assignFacet(child, facet, facet === multiValueFacet.facet ? value : values[0]);
+      }
+      return child;
+    });
+  } else {
+    for (const { facet, values } of positive) {
+      if (values.length === 1) {
+        assignFacet(when, facet, values[0]);
+      } else {
+        // The at-most-one OR-list facet becomes an `anyOf` on the same node.
+        when.anyOf = values.map((v) => leaf(facet, v));
+      }
     }
   }
 
@@ -345,7 +382,11 @@ export function resolveSelector(
   selector: string
 ): { rule: ConfigOverride; index: number } | undefined {
   if (selector.startsWith('#')) {
-    const index = Number.parseInt(selector.slice(1), 10);
+    const rawIndex = selector.slice(1);
+    if (!/^\d+$/.test(rawIndex)) {
+      return undefined;
+    }
+    const index = Number.parseInt(rawIndex, 10);
     if (!Number.isInteger(index) || index < 0 || index >= rules.length) {
       return undefined;
     }
