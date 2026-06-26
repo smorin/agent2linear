@@ -51,7 +51,7 @@ export interface ResolvedOverrides {
  * whitelist — never the rule's own keys — is what structurally guarantees
  * `apiKey`/`when`/`aliases` can never leak into a scalar config field (§5.1/§10).
  */
-const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
+export const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
   'defaultTeam',
   'defaultInitiative',
   'defaultProject',
@@ -63,7 +63,7 @@ const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
 ];
 
 /** `when` keys Phase 3 understands. Anything else ⇒ warn + skip (§9). */
-const KNOWN_WHEN_KEYS: readonly string[] = [
+export const KNOWN_WHEN_KEYS: readonly string[] = [
   'path',
   'repo',
   'owner',

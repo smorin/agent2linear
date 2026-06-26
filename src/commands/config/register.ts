@@ -5,6 +5,7 @@ import { editConfig } from './edit.js';
 import { explainConfig } from './explain.js';
 import { getConfigValue } from './get.js';
 import { listConfig } from './list.js';
+import { registerOverrideCommands } from './override/register.js';
 import { setConfig } from './set.js';
 import { unsetConfig } from './unset.js';
 
@@ -156,4 +157,6 @@ Examples:
     .action(async (options) => {
       await editConfig(options);
     });
+
+  registerOverrideCommands(config);
 }

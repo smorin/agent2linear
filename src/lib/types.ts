@@ -84,6 +84,10 @@ export type OverridableConfig = Pick<
 
 /** A single context-aware override: a `when` clause plus the values it supplies. */
 export interface ConfigOverride extends OverridableConfig {
+  // M31: optional, human-chosen addressable label (unique per scope). The M29
+  // resolver only reads `OVERRIDABLE_FIELDS` + `aliases` + `when`, so a top-level
+  // `id` is ignored by resolution — existing hand-written configs are unchanged.
+  id?: string;
   when: WhenClause;
 }
 
