@@ -64,6 +64,9 @@ export XDG_CONFIG_HOME="$SANDBOX/xdgcfg"
 export XDG_CACHE_HOME="$SANDBOX/xdgcache"
 unset AGENT2LINEAR_WORKSPACE 2>/dev/null || true
 unset LINEAR_API_KEY 2>/dev/null || true
+# AGENT2LINEAR_CWD overrides the CLI's resolution context (see src/cli.ts); unset it
+# so a value in the developer/CI environment can't make these tests non-deterministic.
+unset AGENT2LINEAR_CWD 2>/dev/null || true
 
 cli() { node "$CLI_JS" "$@"; }
 

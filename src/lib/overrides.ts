@@ -105,34 +105,17 @@ function whenNeedsContext(node: unknown): boolean {
   return node.not !== undefined && whenNeedsContext(node.not);
 }
 
-/** Identity/path leaf keys that make a `when` clause "location-specific" (M30 Phase 3). */
-const LOCATION_MATCHER_KEYS: readonly string[] = ['path', 'repo', 'owner', 'host'];
-
 /**
- * Whether a `when` clause is "location-specific" (M30 Phase 3): a `path`/`repo`/
- * `owner`/`host` matcher present anywhere (recursing `allOf`/`anyOf`/`not`). A
- * branch-only clause, a catch-all `{}`, and `undefined` are NOT location-specific.
- *
- * Load-bearing for the prompt tiering (location override > team > general): a
- * `defaultPrompt` set by a location-specific override outranks the team layer,
- * while a branch-only or catch-all override is general-tier. Purely structural
- * (not match-dependent) and malformed-safe (mirrors `whenNeedsContext`): never
- * throws on a bad shape — that is simply "not location-specific" here.
+ * Whether a winning match's `score` was carried by a LOCATION/identity matcher —
+ * the `exactRepo`/`idValue`/`idPresence`/`pathPresent` slots (indices 0-3 of the
+ * Spec) — rather than only `branch`/`team` (slot 6) or a `not` (slot 7). M30 Phase
+ * 3 prompt tiering reads this off the actual winning match (including the specific
+ * `anyOf` arm `maxSpec` chose), so a branch-only match in a mixed `anyOf` override
+ * is general-tier even though the clause also *contains* a path arm that didn't fire.
+ * (Slot indices are documented on `Spec` above; kept private to this module.)
  */
-export function whenIsLocationSpecific(node: unknown): boolean {
-  if (!isWhenObject(node)) {
-    return false;
-  }
-  if (LOCATION_MATCHER_KEYS.some((key) => key in node)) {
-    return true;
-  }
-  if (Array.isArray(node.allOf) && node.allOf.some(whenIsLocationSpecific)) {
-    return true;
-  }
-  if (Array.isArray(node.anyOf) && node.anyOf.some(whenIsLocationSpecific)) {
-    return true;
-  }
-  return node.not !== undefined && whenIsLocationSpecific(node.not);
+function scoreIsLocationCarried(score: Spec): boolean {
+  return score[0] > 0 || score[1] > 0 || score[2] > 0 || score[3] > 0;
 }
 
 /**
@@ -317,18 +300,23 @@ export function matchWhen(
     if (ctx.branch === undefined || !matchGlob(node.branch, ctx.branch)) {
       return fail;
     }
-    score[6] = 1;
+    score[6] += 1;
   }
 
   // M30 Phase 3: prompt-store-only `team` matcher (gated by `allowTeam`). Compares
   // like `branch` — graceful-fail (no throw) when `ctx.team` is undefined. The key is
-  // already validated as supported above only when `allowTeam` is set.
+  // already validated as supported above only when `allowTeam` is set. `score[6]` is
+  // ADDITIVE (not `= 1`) so a flat `{ team, branch }` rule (both leaves in one
+  // matchWhen call) scores 2 and outranks a `{ team }`- or `{ branch }`-only rule —
+  // matching the `allOf` composite form, which already sums per-child scores. The
+  // additive form is identical to `= 1` for the config path (branch is the lone
+  // writer there, and score starts at 0).
   const teamPattern = (node as { team?: string }).team;
   if (teamPattern !== undefined) {
     if (ctx.team === undefined || !matchGlob(teamPattern, ctx.team)) {
       return fail;
     }
-    score[6] = 1;
+    score[6] += 1;
   }
 
   if (node.allOf !== undefined) {
@@ -398,6 +386,7 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
     ruleIndex: number;
     rule: ConfigOverride;
     when: WhenClause;
+    locationCarried: boolean;
     key: number[];
   }> = [];
 
@@ -418,7 +407,14 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
         continue;
       }
       // Scope is the primary sort key (repo-local beats global, §5.6).
-      matched.push({ scope: layer.scope, ruleIndex, rule, when, key: [scopeRank, ...result.score] });
+      matched.push({
+        scope: layer.scope,
+        ruleIndex,
+        rule,
+        when,
+        locationCarried: scoreIsLocationCarried(result.score),
+        key: [scopeRank, ...result.score],
+      });
     }
   }
 
@@ -436,6 +432,7 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
       scope: m.scope,
       ruleIndex: m.ruleIndex,
       when: m.when,
+      locationCarried: m.locationCarried,
     };
     for (const field of OVERRIDABLE_FIELDS) {
       const value = m.rule[field];

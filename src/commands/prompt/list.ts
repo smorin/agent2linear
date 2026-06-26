@@ -62,11 +62,15 @@ export async function listPrompts(options: ListOptions = {}): Promise<void> {
       });
       console.log(formatListJSON(jsonData));
     } else if (options.format === 'tsv') {
+      // Collapse control whitespace (tab/newline/CR) to a single space so a prompt
+      // description containing one can't spill into extra columns or rows and break
+      // a `--format tsv` consumer (each record stays a single well-formed line).
+      const tsvCell = (s: string): string => s.replace(/[\t\r\n]+/g, ' ');
       console.log('name\tdescription\tsource');
       for (const name of names) {
         const { entry, source } = prompts[name];
         const description = entry.description || '';
-        console.log(`${name}\t${description}\t${source}`);
+        console.log(`${tsvCell(name)}\t${tsvCell(description)}\t${tsvCell(source)}`);
       }
     } else {
       const globalNames = names.filter(name => prompts[name].source === 'global');

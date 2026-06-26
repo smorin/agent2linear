@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetGitContextCache } from './git-context.js';
 import { resetInvocationContext } from './invocation-context.js';
-import { resolvePrompt } from './prompts.js';
+import type { OverrideContext } from './overrides.js';
+import { type LoadedPromptRule,resolvePrompt, resolvePromptRules } from './prompts.js';
 
 /**
  * M30 Phase 3 — `resolvePrompt` precedence matrix (explicit > location > team >
@@ -273,5 +274,82 @@ describe('resolvePrompt — --force team-first (scoped to explicit --team)', () 
       expect(r.prompt.selection).toBe('location');
       expect(r.prompt.name).toBe('mobile-issue');
     }
+  });
+});
+
+/**
+ * M30 fix A — a flat `{ team, branch }` promptRule must outrank a `{ team }`-only
+ * rule (both leaves are scored additively in one matchWhen pass). Tested at the
+ * resolvePromptRules level because these temp dirs are not git repos, so a branch
+ * can't reach the team layer through resolvePrompt.
+ */
+describe('resolvePromptRules — flat { team, branch } outranks { team } (fix A)', () => {
+  const ctx: OverrideContext = {
+    contextDir: '/x',
+    repoRoot: '/x',
+    remotes: {},
+    branch: 'release/1.0',
+    team: 'team_pay',
+  };
+  const rule = (when: object, prompt: string): LoadedPromptRule => ({
+    rule: { when: when as never, prompt },
+    scope: 'global',
+  });
+
+  it('the more specific rule wins even when the broader rule is declared LAST', () => {
+    const winner = resolvePromptRules(ctx, [
+      rule({ team: 'team_pay', branch: 'release/*' }, 'specific'), // declared first
+      rule({ team: 'team_pay' }, 'broad'), // declared last — would win a score tie
+    ]);
+    // Pre-fix both scored 1 (collision) → 'broad' won by declaration order.
+    expect(winner?.rule.prompt).toBe('specific');
+  });
+
+  it('order-independent: the flat rule still wins when declared first', () => {
+    const winner = resolvePromptRules(ctx, [
+      rule({ team: 'team_pay' }, 'broad'),
+      rule({ team: 'team_pay', branch: 'release/*' }, 'specific'),
+    ]);
+    expect(winner?.rule.prompt).toBe('specific');
+  });
+});
+
+/**
+ * M30 fix B — a `team` ALIAS nested in allOf/anyOf/not must resolve to the canonical
+ * id before matching (matchWhen compares against the already-resolved ctx.team).
+ */
+describe('resolvePromptRules — nested team aliases normalize (fix B)', () => {
+  const ctxFor = (team: string): OverrideContext => ({
+    contextDir: repoRoot,
+    repoRoot,
+    remotes: {},
+    team,
+  });
+  const rule = (when: object, prompt: string): LoadedPromptRule => ({
+    rule: { when: when as never, prompt },
+    scope: 'global',
+  });
+
+  it('an alias nested in allOf matches the resolved team id', () => {
+    writeGlobalAliases({ teams: { payments: 'team_pay' } });
+    process.chdir(repoRoot); // hermetic: discover the stubbed global aliases, not the real repo's
+    const winner = resolvePromptRules(ctxFor('team_pay'), [
+      rule({ allOf: [{ team: 'payments' }] }, 'pay-issue'),
+    ]);
+    // Pre-fix: nested 'payments' compared raw against 'team_pay' → no match → null.
+    expect(winner?.rule.prompt).toBe('pay-issue');
+  });
+
+  it('an alias nested in anyOf and not also normalizes', () => {
+    writeGlobalAliases({ teams: { payments: 'team_pay' } });
+    process.chdir(repoRoot);
+    expect(
+      resolvePromptRules(ctxFor('team_pay'), [rule({ anyOf: [{ team: 'payments' }] }, 'a')])?.rule.prompt
+    ).toBe('a');
+    // not{ payments→team_pay } excludes team_pay, matches a different team.
+    expect(resolvePromptRules(ctxFor('team_pay'), [rule({ not: { team: 'payments' } }, 'n')])).toBeNull();
+    expect(
+      resolvePromptRules(ctxFor('team_other'), [rule({ not: { team: 'payments' } }, 'n')])?.rule.prompt
+    ).toBe('n');
   });
 });

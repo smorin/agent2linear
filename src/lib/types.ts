@@ -94,6 +94,12 @@ export interface ConfigLocation {
   scope?: 'global' | 'project';
   ruleIndex?: number;
   when?: WhenClause;
+  // Set only when type === 'override' (M30): whether the winning match was carried
+  // by a LOCATION/identity matcher (path/repo/owner/host) rather than only
+  // branch/team/not — i.e. the actual matching `anyOf` arm, not the clause shape.
+  // Drives the prompt location-vs-general tier, so a branch-only match in a mixed
+  // `anyOf` override stays general-tier (team outranks branch).
+  locationCarried?: boolean;
 }
 
 /**

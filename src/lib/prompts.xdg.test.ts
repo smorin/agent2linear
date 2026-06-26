@@ -135,3 +135,24 @@ describe('validatePrompt (exactly one of body | bodyFile)', () => {
     expect(result.error).toMatch(/not both/);
   });
 });
+
+describe('contextDir scopes PROJECT prompt discovery (fix E — -C / explain [dir])', () => {
+  it('resolvePromptBody(name, dir) reads the target dir project, not cwd', () => {
+    // Two sibling project roots, each with its own .agent2linear/prompts.json
+    // defining a same-named prompt with a different body.
+    const repoA = join(home, 'a');
+    const repoB = join(home, 'b');
+    for (const [root, body] of [[repoA, 'FROM A'], [repoB, 'FROM B']] as const) {
+      const dir = join(root, '.agent2linear');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'prompts.json'), JSON.stringify({ prompts: { p: { body } } }), 'utf-8');
+    }
+    process.chdir(repoA);
+
+    // No dir → cwd (repoA): unchanged behavior.
+    expect(resolvePromptBody('p')?.body).toBe('FROM A');
+    // Explicit dir → repoB's project store (the -C / `explain <dir>` path), even
+    // though cwd is still repoA.
+    expect(resolvePromptBody('p', repoB)?.body).toBe('FROM B');
+  });
+});

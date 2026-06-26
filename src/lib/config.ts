@@ -486,6 +486,28 @@ export function isValidConfigKey(key: string): key is ConfigKey {
 }
 
 /**
+ * The user-settable config keys exposed by the `config get/set/unset` CLI — the
+ * curated subset of {@link VALID_CONFIG_KEYS} (which also holds internal cache
+ * toggles). Single source of truth for the three `.choices(...)` arrays in the
+ * config command registration and the "valid keys" hint in `config set`, so the
+ * parser-level allow-list and the error message can never drift apart.
+ */
+export const CONFIG_KEY_CHOICES = [
+  'apiKey',
+  'defaultInitiative',
+  'defaultTeam',
+  'defaultProject',
+  'defaultIssueTemplate',
+  'defaultProjectTemplate',
+  'defaultMilestoneTemplate',
+  'defaultPrompt',
+  'projectCacheMinTTL',
+  'defaultProfile',
+  'noMatchPolicy',
+  'confirmAutoDetectedWrites',
+] as const;
+
+/**
  * Set a configuration value
  */
 export function setConfigValue(

@@ -60,6 +60,8 @@ export interface PromptExplainData {
   selectedName: string | null;
   /** A resolution error message, when nothing resolved (explain still exits 0). */
   error?: string;
+  /** A remediation hint from prompt resolution, surfaced with `error` (parity with `prompt get`). */
+  hint?: string;
 }
 
 /**
@@ -88,7 +90,7 @@ export function buildPromptExplainData(
   let matchedRule: PromptExplainMatchedRule | null = null;
   if (resolvedTeam) {
     const overrideCtx = buildPromptOverrideContext(contextDir, resolvedTeam);
-    const winner = resolvePromptRules(overrideCtx, loadPromptRules());
+    const winner = resolvePromptRules(overrideCtx, loadPromptRules(contextDir));
     if (winner) {
       matchedRule = {
         scope: winner.scope,
@@ -113,6 +115,7 @@ export function buildPromptExplainData(
     selection: result.ok ? result.prompt.selection : null,
     selectedName: result.ok ? result.prompt.name : null,
     error: result.ok ? undefined : result.error,
+    hint: result.ok ? undefined : result.hint,
   };
 }
 
@@ -159,6 +162,9 @@ export function renderPromptExplainText(data: PromptExplainData): string {
     lines.push(`  ${(data.selectedName ?? '').padEnd(24)} ← ${data.selection}`);
   } else {
     lines.push(`  (unresolved)  ${data.error ?? ''}`.trimEnd());
+    if (data.hint) {
+      lines.push(`  hint          ${data.hint}`);
+    }
   }
   return lines.join('\n');
 }
@@ -187,6 +193,7 @@ export function buildPromptExplainJson(data: PromptExplainData): Record<string, 
     selection: data.selection,
     selectedName: data.selectedName,
     error: data.error ?? null,
+    hint: data.hint ?? null,
   };
 }
 

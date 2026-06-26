@@ -8,7 +8,6 @@ import {
   type OverrideContext,
   type OverrideLayer,
   resolveOverrides,
-  whenIsLocationSpecific,
 } from './overrides.js';
 import type { ConfigOverride, WhenClause } from './types.js';
 
@@ -510,34 +509,44 @@ describe('config overrides[] still warn-and-skip a when:{team} rule (config byte
   });
 });
 
-describe('whenIsLocationSpecific (M30 Phase 3 — load-bearing for tiering)', () => {
-  it('is true for path/repo/owner/host leaves', () => {
-    expect(whenIsLocationSpecific({ path: 'apps/**' })).toBe(true);
-    expect(whenIsLocationSpecific({ repo: 'acme/web' })).toBe(true);
-    expect(whenIsLocationSpecific({ owner: 'acme' })).toBe(true);
-    expect(whenIsLocationSpecific({ host: 'github.com' })).toBe(true);
+describe('resolveOverrides — locationCarried tracks the matching arm (M30 fix F)', () => {
+  // A mixed anyOf: one LOCATION arm (path) + one non-location arm (branch).
+  const mixed: ConfigOverride = {
+    when: { anyOf: [{ path: 'apps/mobile/**' }, { branch: 'main' }] },
+    defaultPrompt: 'x',
+  };
+
+  it('a branch-only match in a mixed anyOf is NOT location-carried (→ general tier)', () => {
+    // Non-mobile dir on `main`: only the branch arm fires.
+    const r = resolveOverrides(ctx(`${REPO}/services/api`, REPO, { branch: 'main' }), [
+      layer('project', [mixed]),
+    ]);
+    expect(r.values.defaultPrompt).toBe('x');
+    expect(r.locations.defaultPrompt.locationCarried).toBe(false);
   });
 
-  it('is false for branch-only, catch-all, and undefined', () => {
-    expect(whenIsLocationSpecific({ branch: 'release/*' })).toBe(false);
-    expect(whenIsLocationSpecific({})).toBe(false);
-    expect(whenIsLocationSpecific(undefined)).toBe(false);
+  it('a path match in the same mixed anyOf IS location-carried (→ location tier)', () => {
+    const r = resolveOverrides(ctx(`${REPO}/apps/mobile/x`, REPO, { branch: 'feature' }), [
+      layer('project', [mixed]),
+    ]);
+    expect(r.values.defaultPrompt).toBe('x');
+    expect(r.locations.defaultPrompt.locationCarried).toBe(true);
   });
 
-  it('recurses composites: true if a location leaf appears anywhere', () => {
-    expect(whenIsLocationSpecific({ allOf: [{ branch: 'main' }, { path: 'cli/**' }] })).toBe(true);
-    expect(whenIsLocationSpecific({ anyOf: [{ branch: 'main' }, { repo: 'acme/web' }] })).toBe(true);
-    expect(whenIsLocationSpecific({ not: { owner: 'acme' } })).toBe(true);
-  });
+  it('a plain path rule is location-carried; a branch-only rule and a catch-all are not', () => {
+    const pathRule = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ when: { path: 'cli/**' }, defaultPrompt: 'p' }]),
+    ]);
+    expect(pathRule.locations.defaultPrompt.locationCarried).toBe(true);
 
-  it('is false for a composite of only branch leaves', () => {
-    expect(whenIsLocationSpecific({ anyOf: [{ branch: 'main' }, { branch: 'release/*' }] })).toBe(false);
-    expect(whenIsLocationSpecific({ not: { branch: 'main' } })).toBe(false);
-  });
+    const branchRule = resolveOverrides(ctx(REPO, REPO, { branch: 'main' }), [
+      layer('project', [{ when: { branch: 'main' }, defaultPrompt: 'b' }]),
+    ]);
+    expect(branchRule.locations.defaultPrompt.locationCarried).toBe(false);
 
-  it('does not throw on malformed shapes (not iterable / null)', () => {
-    expect(() => whenIsLocationSpecific({ allOf: {} as never })).not.toThrow();
-    expect(() => whenIsLocationSpecific({ not: null as never })).not.toThrow();
-    expect(whenIsLocationSpecific({ allOf: {} as never })).toBe(false);
+    const catchAll = resolveOverrides(ctx(REPO), [
+      layer('project', [{ when: {}, defaultPrompt: 'c' }]),
+    ]);
+    expect(catchAll.locations.defaultPrompt.locationCarried).toBe(false);
   });
 });

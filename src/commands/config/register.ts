@@ -1,6 +1,6 @@
 import { Argument,Command } from 'commander';
 
-import type { ConfigKey } from '../../lib/config.js';
+import { CONFIG_KEY_CHOICES, type ConfigKey } from '../../lib/config.js';
 import { editConfig } from './edit.js';
 import { explainConfig } from './explain.js';
 import { getConfigValue } from './get.js';
@@ -60,7 +60,7 @@ Examples:
     .command('get')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices([...CONFIG_KEY_CHOICES])
     )
     .addArgument(new Argument('[dir]', 'Resolution-context directory to override-resolve for (positional sugar for the global -C/--cwd)'))
     .description('Get a single configuration value')
@@ -81,7 +81,7 @@ Examples:
     .command('set')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices([...CONFIG_KEY_CHOICES])
     )
     .addArgument(new Argument('<value>', 'Configuration value'))
     .description('Set a configuration value')
@@ -104,7 +104,7 @@ Examples:
     .command('unset')
     .addArgument(
       new Argument('<key>', 'Configuration key')
-        .choices(['apiKey', 'defaultInitiative', 'defaultTeam', 'defaultProject', 'defaultIssueTemplate', 'defaultProjectTemplate', 'defaultMilestoneTemplate', 'defaultPrompt', 'projectCacheMinTTL', 'defaultProfile', 'noMatchPolicy', 'confirmAutoDetectedWrites'])
+        .choices([...CONFIG_KEY_CHOICES])
     )
     .description('Remove a configuration value')
     .option('-g, --global', 'Remove from global config (default)')

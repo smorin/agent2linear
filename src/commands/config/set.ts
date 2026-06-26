@@ -1,4 +1,4 @@
-import { type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
+import { CONFIG_KEY_CHOICES, type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
 import {
   getTemplateById,
   validateApiKey,
@@ -44,7 +44,7 @@ export async function setConfig(key: string, value: string, options: SetConfigOp
   if (!isValidConfigKey(key)) {
     showError(
       `Invalid configuration key: ${key}`,
-      'Valid keys are: apiKey, defaultInitiative, defaultTeam, defaultProject, defaultIssueTemplate, defaultProjectTemplate'
+      `Valid keys are: ${CONFIG_KEY_CHOICES.join(', ')}`
     );
     process.exit(1);
   }
