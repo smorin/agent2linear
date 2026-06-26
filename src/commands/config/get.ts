@@ -19,7 +19,12 @@ export async function getConfigValue(key: ConfigKey, dir?: string) {
     if (location.type === 'env') {
       locationStr = ' (from environment)';
     } else if (location.type === 'override') {
-      locationStr = ` (from ${location.scope === 'project' ? 'repo' : 'global'} override)`;
+      // M31: name the winning rule by its label (`ruleId`), else `#<ruleIndex>`.
+      const selector = location.ruleId ?? (location.ruleIndex !== undefined ? `#${location.ruleIndex}` : undefined);
+      const scopeWord = location.scope === 'project' ? 'repo' : 'global';
+      locationStr = selector
+        ? ` (from ${scopeWord} override ${selector})`
+        : ` (from ${scopeWord} override)`;
     } else if (location.type === 'project') {
       locationStr = ' (from project config)';
     } else if (location.type === 'profile') {

@@ -417,6 +417,10 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
       ruleIndex: m.ruleIndex,
       when: m.when,
       locationCarried: m.locationCarried,
+      // M31: surface the rule's label as PROVENANCE only — `id` is never read into a
+      // resolved value (the loop below iterates the fixed OVERRIDABLE_FIELDS whitelist,
+      // which excludes `id`), so this cannot leak into a config field.
+      ...(m.rule.id !== undefined ? { ruleId: m.rule.id } : {}),
     };
     for (const field of OVERRIDABLE_FIELDS) {
       const value = m.rule[field];

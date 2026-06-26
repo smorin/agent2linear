@@ -21,9 +21,14 @@ function sourceLabelFor(source: ConfigLocation, profileName: string | undefined)
   switch (source.type) {
     case 'env':
       return 'environment variable';
-    case 'override':
-      // M29: which override rule supplied the value (scope + the `when` clause).
-      return `${source.scope === 'project' ? 'repo' : 'global'} override (when ${JSON.stringify(source.when)})`;
+    case 'override': {
+      // M29: which override rule supplied the value (scope + the `when` clause). M31:
+      // also name the winning rule by its label (`ruleId`), else `#<ruleIndex>`.
+      const selector = source.ruleId ?? (source.ruleIndex !== undefined ? `#${source.ruleIndex}` : undefined);
+      const scopeWord = source.scope === 'project' ? 'repo' : 'global';
+      const selectorPart = selector ? ` ${selector}` : '';
+      return `${scopeWord} override${selectorPart} (when ${JSON.stringify(source.when)})`;
+    }
     case 'project':
       return 'project config';
     case 'profile':

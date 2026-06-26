@@ -47,4 +47,28 @@ describe('config get [dir] — override resolution (M29)', () => {
     expect(log.mock.calls[0][0]).toContain('platform');
     expect(log.mock.calls[0][0]).toContain('project config');
   });
+
+  it('M31: names the winning override rule by its label (else #<index>)', () => {
+    mkdirSync(join(repo, '.agent2linear'), { recursive: true });
+    writeFileSync(
+      join(repo, '.agent2linear', 'config.json'),
+      JSON.stringify({
+        defaultTeam: 'platform',
+        overrides: [
+          { id: 'cli-team', when: { path: 'cli/**' }, defaultTeam: 'cli-team' },
+          { when: { path: 'mobile/**' }, defaultTeam: 'mobile-team' },
+        ],
+      })
+    );
+    mkdirSync(join(repo, 'cli'), { recursive: true });
+    mkdirSync(join(repo, 'mobile'), { recursive: true });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    void getConfigValue('defaultTeam', join(repo, 'cli'));
+    expect(log.mock.calls[0][0]).toContain('repo override cli-team');
+
+    log.mockClear();
+    void getConfigValue('defaultTeam', join(repo, 'mobile')); // unlabeled rule at index 1
+    expect(log.mock.calls[0][0]).toContain('repo override #1');
+  });
 });

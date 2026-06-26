@@ -134,6 +134,27 @@ describe('resolveOverrides — field-level resolution (U2)', () => {
   });
 });
 
+describe('resolveOverrides — `id` is provenance-only (M31 invariant)', () => {
+  it("surfaces a rule's `id` as `ruleId` provenance, never as a resolved value", () => {
+    const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ id: 'cli-team', when: { path: 'cli/**' }, defaultTeam: 'cli-team' }]),
+    ]);
+    // `id` is carried on the location only.
+    expect(r.locations.defaultTeam.ruleId).toBe('cli-team');
+    // …and never leaks into the resolved values map (only the overridable field).
+    expect('id' in r.values).toBe(false);
+    expect(r.values).toEqual({ defaultTeam: 'cli-team' });
+  });
+
+  it('omits `ruleId` for a legacy unlabeled rule (byte-identical provenance)', () => {
+    const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ when: { path: 'cli/**' }, defaultTeam: 'cli-team' }]),
+    ]);
+    expect(r.locations.defaultTeam.ruleId).toBeUndefined();
+    expect('ruleId' in r.locations.defaultTeam).toBe(false);
+  });
+});
+
 describe('resolveOverrides — alias overlay', () => {
   it('merges alias maps per entity type and key, strongest rule winning', () => {
     const r = resolveOverrides(ctx(`${REPO}/cli/x`), [

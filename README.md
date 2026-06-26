@@ -247,6 +247,29 @@ Add an optional `overrides` array to any `config.json` (global or repo) to resol
 
 **Precedence (most → least):** repo scope beats global regardless of specificity; within a scope, most-specific wins (exact `repo` > `repo` glob/`owner`/`host` > `path` > `branch` > catch-all); ties break by declaration order. Configs without `overrides` behave exactly as before.
 
+**Authoring rules from the CLI — `config override` (alias `config ov`):** the full lifecycle without hand-editing JSON. Every rule is addressable by a stable, human-chosen **label** (`<label>`); legacy unlabeled rules are addressable by `#<index>`. Each command takes `-g/--global` (default) or `-p/--project`, and supports `--json` (and `--dry-run` for `add`/`edit`).
+
+```bash
+# add — one or more `when` criteria + one or more values, named <label>
+a2l config ov add cli-team --when-path 'cli/**' --set defaultTeam=frontend --project
+a2l config ov add release  --when-branch 'release/*,main' --set defaultTeam=ship --global   # comma/repeat = OR within a facet
+a2l config ov add web-alias --when-repo acme/web --alias team.default=team_cli123 --project  # per-rule alias remap
+a2l config ov add nested   --when-json '{"anyOf":[{"path":"cli/**"},{"branch":"main"}]}' --set defaultTeam=cli --global
+a2l config ov add fallback --when-json '{}' --set defaultTeam=platform --global              # explicit catch-all
+
+# list / get — context-independent inventory; each row carries a static specificity tag
+a2l config ov list                    # both scopes (project + global)
+a2l config ov get cli-team --project  # one rule in full (by label or #<index>)
+
+# edit / remove / move — manage an existing rule by selector
+a2l config ov edit cli-team --set defaultInitiative=q3 --unset defaultProject --project  # field-by-field value merge
+a2l config ov edit '#2' --id release --project                                           # label a legacy #<index> rule
+a2l config ov move release --before cli-team --project                                   # reorder (controls equal-specificity tie-break)
+a2l config ov remove release --project                                                   # alias: rm
+```
+
+`--set` accepts only the overridable defaults (`defaultTeam`, `defaultInitiative`, `defaultProject`, the templates, `defaultPrompt`, `defaultAutoAssignLead`) — `apiKey` can never be set via an override. Flag-sugar (`--when-*`) and the `--when-json` escape hatch are mutually exclusive; comma-lists or repeated `--when-<facet>` express OR **within** a facet, and `--when-json` is the escape hatch for arbitrary nested trees. Globs and label uniqueness are validated **before** writing, so a malformed or never-matching rule is rejected up front.
+
 **Targeting another directory — `-C, --cwd`:** a global, git-style flag makes *any* command resolve as if launched in `<dir>` (config discovery, override matching, and relative path args). Falls back to `$AGENT2LINEAR_CWD`, then the current directory.
 
 ```bash
@@ -254,12 +277,12 @@ a2l -C ~/work/acme/web/apps/mobile issue create --title "Bug"   # resolves defau
 AGENT2LINEAR_CWD=~/work/acme/web a2l issue create --title "Bug" # same, via env
 ```
 
-**Debugging routing — `config explain`:** prints the resolved context (contextDir, repoRoot, remotes, branch) and the winning rule per field. `config get <key> [dir]` returns a single override-resolved field for scripting.
+**Debugging routing — `config explain`:** prints the resolved context (contextDir, repoRoot, remotes, branch) and the winning rule per field — named by its **label** (`config ov` selector), so you can jump straight to `config ov edit <label>`. A `rules:` section then annotates **every** rule (both scopes) with ✓/✗ for this context (the ✓/✗ comes from the same matcher that drives resolution, so the audit can never disagree) and echoes each rule's `when`. `config get <key> [dir]` returns a single override-resolved field for scripting.
 
 ```bash
 a2l config explain ~/work/acme/web/apps/mobile        # positional dir = sugar for -C
-a2l config explain --json                             # machine-readable, for agents
-a2l config get defaultTeam apps/web                   # one override-resolved field
+a2l config explain --json                             # machine-readable (resolved map + a rules[] audit array), for agents
+a2l config get defaultTeam apps/web                   # one override-resolved field (names the winning rule's label)
 ```
 
 ## Prompt Templates
