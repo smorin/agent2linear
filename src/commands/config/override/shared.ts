@@ -7,13 +7,14 @@
  * `id` can never be set via `--set` — the same structural guarantee M29 relies on.
  *
  * This module grows across phases. Phase 1 owns the complete VALUE side
- * (`--set` + `--alias`) and a deliberately minimal `when` side (a single
- * `--when-<facet>` leaf); composites, `--when-json`, and eager glob validation
- * arrive in Phase 2.
+ * (`--set` + `--alias`). Phase 2 owns the complete WHEN side: flag-sugar
+ * composites (OR-within-a-facet via `anyOf`, negation via a single De-Morgan
+ * `not`), the `--when-json` escape hatch for arbitrary nested trees, and eager
+ * glob validation so a never-matching rule is rejected before it is written.
  */
 
 import { getAliasesKey } from '../../../lib/aliases.js';
-import { OVERRIDABLE_FIELDS } from '../../../lib/overrides.js';
+import { KNOWN_WHEN_KEYS, OVERRIDABLE_FIELDS } from '../../../lib/overrides.js';
 import type {
   AliasEntityType,
   Aliases,
@@ -131,47 +132,204 @@ export function parseAlias(pairs: string[]): Partial<Aliases> {
   return aliases;
 }
 
-/** The single-facet `when` flags this phase understands. */
+/**
+ * The `when` flags Phase 2 understands. Each facet is repeatable and comma-aware
+ * (so the value arrives as `string | string[]` and is normalized below). The
+ * positive facets become AND'd leaves (or one `anyOf` for the at-most-one OR-list);
+ * the `whenNot*` facets all collapse into a single De-Morgan `not`.
+ */
 export interface WhenFlagOptions {
-  whenRepo?: string;
-  whenOwner?: string;
-  whenHost?: string;
-  whenPath?: string;
-  whenBranch?: string;
-  whenRemote?: string;
+  whenRepo?: string | string[];
+  whenOwner?: string | string[];
+  whenHost?: string | string[];
+  whenPath?: string | string[];
+  whenBranch?: string | string[];
+  whenRemote?: string | string[];
+  whenNotRepo?: string | string[];
+  whenNotOwner?: string | string[];
+  whenNotHost?: string | string[];
+  whenNotPath?: string | string[];
+  whenNotBranch?: string | string[];
+  whenNotRemote?: string | string[];
+}
+
+/** The leaf facets flag-sugar can express, in `specificityTag` precedence order. */
+type WhenFacet = 'repo' | 'owner' | 'host' | 'path' | 'branch' | 'remote';
+const WHEN_FACETS: readonly WhenFacet[] = ['repo', 'owner', 'host', 'path', 'branch', 'remote'];
+
+/**
+ * Normalize a repeatable, comma-aware flag value into a flat list of trimmed,
+ * non-empty segments. `--when-repo a,b --when-repo c` arrives as `['a,b','c']` and
+ * flattens to `['a','b','c']`. A segment that is empty/blank after trimming is an
+ * invalid glob and is rejected here (eager validation — none of the resolver's
+ * identity/branch matchers throw on a blank pattern, so the CLI must).
+ */
+function normalizeFacetValues(facet: string, raw: string | string[] | undefined): string[] {
+  if (raw === undefined) {
+    return [];
+  }
+  const inputs = Array.isArray(raw) ? raw : [raw];
+  const segments: string[] = [];
+  for (const input of inputs) {
+    for (const part of input.split(',')) {
+      const trimmed = part.trim();
+      if (!trimmed) {
+        throw new Error(`--when-${facet} cannot be empty`);
+      }
+      segments.push(trimmed);
+    }
+  }
+  return segments;
+}
+
+/** A single facet leaf, e.g. `{ repo: 'acme/web' }`. */
+function leaf(facet: WhenFacet, value: string): WhenClause {
+  return { [facet]: value } as WhenClause;
 }
 
 /**
- * Build a `when` clause from the single-leaf flag options (Phase 1). Exactly one
- * facet may be supplied; supplying more than one is rejected here (cross-facet AND
- * and composites arrive in Phase 2). The value side enforces "≥1 criterion" at the
- * `add` layer, so a flag-less call returns an empty clause for that check to reject.
+ * Build a `when` clause from the Phase-2 flag-sugar options. The contract (design
+ * Q3/Q4) compiles to exactly ONE top-level `when` object — flag-sugar NEVER emits a
+ * top-level `allOf`:
+ *   - single-value positive facets → direct AND'd leaf keys on the node;
+ *   - the AT-MOST-ONE multi-value positive facet → an `anyOf` key on the same node;
+ *   - 2+ multi-value positive facets ⇒ hard error pointing at `--when-json`;
+ *   - all `--when-not-*` flags → one `not` key (`not: { anyOf: [...] }`, or
+ *     `not: { <facet>: v }` for a single negative leaf total — De Morgan).
+ * Nesting only ever happens inside `not`. A flag-less call returns `{}` so the
+ * `add`/`edit` layer can apply the "≥1 criterion" check (this builder never does).
  */
 export function buildWhenFromFlags(opts: WhenFlagOptions): WhenClause {
-  const leaves: Array<[keyof WhenClause, string]> = [];
-  if (opts.whenRepo !== undefined) leaves.push(['repo', opts.whenRepo]);
-  if (opts.whenOwner !== undefined) leaves.push(['owner', opts.whenOwner]);
-  if (opts.whenHost !== undefined) leaves.push(['host', opts.whenHost]);
-  if (opts.whenPath !== undefined) leaves.push(['path', opts.whenPath]);
-  if (opts.whenBranch !== undefined) leaves.push(['branch', opts.whenBranch]);
-  if (opts.whenRemote !== undefined) leaves.push(['remote', opts.whenRemote]);
+  const positive: Array<{ facet: WhenFacet; values: string[] }> = [];
+  for (const facet of WHEN_FACETS) {
+    const key = `when${facet[0].toUpperCase()}${facet.slice(1)}` as keyof WhenFlagOptions;
+    const values = normalizeFacetValues(facet, opts[key]);
+    if (values.length > 0) {
+      positive.push({ facet, values });
+    }
+  }
 
-  if (leaves.length > 1) {
+  const negative: WhenClause[] = [];
+  for (const facet of WHEN_FACETS) {
+    const key = `whenNot${facet[0].toUpperCase()}${facet.slice(1)}` as keyof WhenFlagOptions;
+    for (const value of normalizeFacetValues(`not-${facet}`, opts[key])) {
+      negative.push(leaf(facet, value));
+    }
+  }
+
+  const multiValueFacets = positive.filter((p) => p.values.length > 1);
+  if (multiValueFacets.length >= 2) {
+    const suggestion = JSON.stringify({
+      allOf: multiValueFacets.map((p) => ({ anyOf: p.values.map((v) => leaf(p.facet, v)) })),
+    });
     throw new Error(
-      `only one --when-<facet> flag is supported in this release (got: ${leaves
-        .map(([k]) => k)
-        .join(', ')})`
+      `cannot express ${multiValueFacets.length} OR-lists ` +
+        `(${multiValueFacets.map((p) => p.facet).join(', ')}) with flag-sugar; ` +
+        `use --when-json '${suggestion}'`
     );
   }
 
   const when: WhenClause = {};
-  for (const [facet, value] of leaves) {
-    if (!value.trim()) {
-      throw new Error(`--when-${facet} cannot be empty`);
+  for (const { facet, values } of positive) {
+    if (values.length === 1) {
+      (when as Record<string, unknown>)[facet] = values[0];
+    } else {
+      // The at-most-one OR-list facet becomes an `anyOf` on the same node.
+      when.anyOf = values.map((v) => leaf(facet, v));
     }
-    (when as Record<string, string>)[facet] = value;
   }
+
+  if (negative.length === 1) {
+    when.not = negative[0];
+  } else if (negative.length > 1) {
+    when.not = { anyOf: negative };
+  }
+
   return when;
+}
+
+/**
+ * Validate a `--when-json` object before writing: it must be a plain object whose
+ * keys are all in `KNOWN_WHEN_KEYS` (recursively, through `allOf`/`anyOf`/`not`),
+ * and every leaf glob must be non-empty. `{}` (the intentional catch-all) passes.
+ * Rejecting unknown keys here keeps the prompt-only `team` matcher out of config
+ * overrides (it is not in `KNOWN_WHEN_KEYS`). Returns the validated clause.
+ */
+export function validateWhenJson(value: unknown): WhenClause {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('--when-json must be a JSON object');
+  }
+  const node = value as Record<string, unknown>;
+  for (const [key, child] of Object.entries(node)) {
+    if (!KNOWN_WHEN_KEYS.includes(key)) {
+      throw new Error(
+        `unsupported \`when\` key "${key}" (allowed: ${KNOWN_WHEN_KEYS.join(', ')})`
+      );
+    }
+    if (key === 'allOf' || key === 'anyOf') {
+      if (!Array.isArray(child)) {
+        throw new Error(`\`when.${key}\` must be an array`);
+      }
+      // `anyOf: []` is an OR of nothing — it can never match (the resolver warn-skips
+      // it). Reject the never-matching shape eagerly. (`allOf: []` is a meaningful
+      // vacuous-true catch-all, like `{}`, so it is allowed.)
+      if (key === 'anyOf' && child.length === 0) {
+        throw new Error('`when.anyOf` cannot be empty (it would never match)');
+      }
+      for (const item of child) {
+        validateWhenJson(item);
+      }
+    } else if (key === 'not') {
+      const negated = validateWhenJson(child);
+      // `not: {}` negates the always-true catch-all, so it can never match.
+      if (Object.keys(negated).length === 0) {
+        throw new Error('`when.not` cannot be empty (it would never match)');
+      }
+    } else if (key === 'remote') {
+      // `remote` may be a string or a list of strings (or "*").
+      const remotes = Array.isArray(child) ? child : [child];
+      for (const r of remotes) {
+        if (typeof r !== 'string' || r.trim() === '') {
+          throw new Error('`when.remote` must be a non-empty string or list of strings');
+        }
+      }
+    } else {
+      // A leaf glob facet (path/repo/owner/host/branch): must be a non-empty string.
+      if (typeof child !== 'string' || child.trim() === '') {
+        throw new Error(`\`when.${key}\` must be a non-empty glob string`);
+      }
+    }
+  }
+  return node as WhenClause;
+}
+
+/** Parse + validate a raw `--when-json` argument string. */
+export function parseWhenJson(raw: string): WhenClause {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`invalid --when-json: ${error instanceof Error ? error.message : 'parse error'}`);
+  }
+  return validateWhenJson(parsed);
+}
+
+/** Whether any flag-sugar facet (positive or negative) was supplied. */
+export function hasWhenFlags(opts: WhenFlagOptions): boolean {
+  return [
+    opts.whenRepo,
+    opts.whenOwner,
+    opts.whenHost,
+    opts.whenPath,
+    opts.whenBranch,
+    opts.whenRemote,
+    opts.whenNotRepo,
+    opts.whenNotOwner,
+    opts.whenNotHost,
+    opts.whenNotPath,
+    opts.whenNotBranch,
+    opts.whenNotRemote,
+  ].some((v) => v !== undefined && (Array.isArray(v) ? v.length > 0 : true));
 }
 
 /**
@@ -194,19 +352,47 @@ export function resolveSelector(
   return index === -1 ? undefined : { rule: rules[index], index };
 }
 
+/** The positive leaf facets in `list`-tag precedence order (most → least specific). */
+const TAG_PRECEDENCE: ReadonlyArray<[WhenFacet, string]> = [
+  ['repo', 'exact-repo'],
+  ['owner', 'owner'],
+  ['host', 'host'],
+  ['path', 'path'],
+  ['branch', 'branch'],
+  ['remote', 'remote'],
+];
+
 /**
  * Static specificity TAG for `list` display (design Q6) — an at-a-glance hint of
- * how specific a rule's `when` is, NOT a sort key. Classifies a Phase-1 single-leaf
- * clause; later phases extend this to composite shapes.
+ * how specific a rule's `when` is, NOT a sort key. The classification is the most
+ * specific POSITIVE leaf facet appearing anywhere in the tree (recursing into
+ * `allOf`/`anyOf`, but NOT into `not` — a negation is an exclusion, not what the
+ * rule is "about"), via the same `repo > owner > host > path > branch > remote`
+ * precedence; a clause with no positive leaf (e.g. `{}` or a `not`-only rule) tags
+ * `catch-all`.
  */
 export function specificityTag(when: WhenClause): string {
-  if (when.repo !== undefined) return 'exact-repo';
-  if (when.owner !== undefined) return 'owner';
-  if (when.host !== undefined) return 'host';
-  if (when.path !== undefined) return 'path';
-  if (when.branch !== undefined) return 'branch';
-  if (when.remote !== undefined) return 'remote';
+  const present = new Set<WhenFacet>();
+  collectPositiveFacets(when, present);
+  for (const [facet, tag] of TAG_PRECEDENCE) {
+    if (present.has(facet)) return tag;
+  }
   return 'catch-all';
+}
+
+/** Gather every positive leaf facet in a `when` tree (skipping `not` subtrees). */
+function collectPositiveFacets(node: WhenClause, into: Set<WhenFacet>): void {
+  for (const facet of WHEN_FACETS) {
+    if ((node as Record<string, unknown>)[facet] !== undefined) {
+      into.add(facet);
+    }
+  }
+  for (const child of node.allOf ?? []) {
+    collectPositiveFacets(child, into);
+  }
+  for (const child of node.anyOf ?? []) {
+    collectPositiveFacets(child, into);
+  }
 }
 
 /**

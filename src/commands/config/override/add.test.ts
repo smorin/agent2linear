@@ -3,7 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readConfigForScope } from '../../../lib/config.js';
+import { getConfig, readConfigForScope } from '../../../lib/config.js';
 import { __resetGitContextCache } from '../../../lib/git-context.js';
 import { resetInvocationContext } from '../../../lib/invocation-context.js';
 import { runOverrideAdd } from './add.js';
@@ -17,6 +17,7 @@ beforeEach(() => {
   workdir = mkdtempSync(join(tmpdir(), 'a2l-ovadd-cwd-'));
   vi.stubEnv('XDG_CONFIG_HOME', xdgConfig);
   vi.stubEnv('LINEAR_API_KEY', '');
+  vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
   process.chdir(workdir);
   resetInvocationContext();
   __resetGitContextCache();
@@ -140,5 +141,115 @@ describe('runOverrideAdd', () => {
     runOverrideAdd('t1', { whenRepo: 'acme/web', set: ['defaultTeam=frontend'], global: true });
     const raw = readFileSync(join(xdgConfig, 'agent2linear', 'config.json'), 'utf-8');
     expect(raw).toContain('\n  "overrides"');
+  });
+
+  it('writes a composite when from flag-sugar (comma-list anyOf + De Morgan not)', () => {
+    runOverrideAdd('rel', {
+      whenBranch: 'release/*,main',
+      whenNotPath: 'wip/**',
+      set: ['defaultTeam=ship'],
+      global: true,
+    });
+    const rules = readConfigForScope('global').overrides ?? [];
+    expect(rules).toEqual([
+      {
+        id: 'rel',
+        when: {
+          anyOf: [{ branch: 'release/*' }, { branch: 'main' }],
+          not: { path: 'wip/**' },
+        },
+        defaultTeam: 'ship',
+      },
+    ]);
+  });
+
+  it('writes a nested when from --when-json', () => {
+    runOverrideAdd('nested', {
+      whenJson: '{"anyOf":[{"path":"cli/**"},{"branch":"main"}]}',
+      set: ['defaultTeam=cli'],
+      global: true,
+    });
+    const rules = readConfigForScope('global').overrides ?? [];
+    expect(rules[0].when).toEqual({ anyOf: [{ path: 'cli/**' }, { branch: 'main' }] });
+  });
+
+  it('writes an explicit {} catch-all via --when-json', () => {
+    runOverrideAdd('fallback', {
+      whenJson: '{}',
+      set: ['defaultTeam=fallback'],
+      global: true,
+    });
+    const rules = readConfigForScope('global').overrides ?? [];
+    expect(rules[0].when).toEqual({});
+  });
+
+  it('rejects --when-json combined with a --when-* flag', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const err = vi.spyOn(console, 'error');
+    runOverrideAdd('x', {
+      whenJson: '{"path":"cli/**"}',
+      whenRepo: 'acme/web',
+      set: ['defaultTeam=frontend'],
+      global: true,
+    });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err.mock.calls.flat().join(' ')).toMatch(/--when-json cannot be combined/);
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+  });
+
+  it('rejects flag-only add with no match criterion but allows --when-json {}', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    runOverrideAdd('x', { set: ['defaultTeam=frontend'], global: true });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+    // --when-json {} is the sanctioned catch-all and is NOT rejected.
+    runOverrideAdd('ca', { whenJson: '{}', set: ['defaultTeam=frontend'], global: true });
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(1);
+  });
+
+  it('rejects an unknown --when-json key before writing', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const err = vi.spyOn(console, 'error');
+    runOverrideAdd('x', { whenJson: '{"team":"eng"}', set: ['defaultTeam=frontend'], global: true });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err.mock.calls.flat().join(' ')).toMatch(/unsupported `when` key "team"/);
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+  });
+
+  it('rejects an empty glob before writing', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    runOverrideAdd('x', { whenPath: '', set: ['defaultTeam=frontend'], global: true });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+  });
+
+  it('rejects two positive OR-lists with a ready-to-paste --when-json', () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const err = vi.spyOn(console, 'error');
+    runOverrideAdd('x', {
+      whenRepo: 'acme/web,acme/api',
+      whenOwner: 'acme,beta',
+      set: ['defaultTeam=frontend'],
+      global: true,
+    });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err.mock.calls.flat().join(' ')).toMatch(/use --when-json/);
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+  });
+
+  it('integration: a --when-json anyOf path rule resolves with source "override"', () => {
+    // Author the rule via the CLI in the project scope (writes to <cwd>/.agent2linear),
+    // then resolve it for a context dir matching the `cli/**` arm — no git needed.
+    runOverrideAdd('cli-or-main', {
+      whenJson: '{"anyOf":[{"path":"cli/**"},{"path":"docs/**"}]}',
+      set: ['defaultTeam=cli-team'],
+      project: true,
+    });
+    const cli = join(workdir, 'cli');
+    mkdirSync(cli, { recursive: true });
+
+    const cfg = getConfig(cli);
+    expect(cfg.defaultTeam).toBe('cli-team');
+    expect(cfg.locations.defaultTeam.type).toBe('override');
   });
 });

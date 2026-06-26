@@ -11,16 +11,19 @@
 import { readConfigForScope, writeConfigForScope } from '../../../lib/config.js';
 import { showError, showInfo, showSuccess } from '../../../lib/output.js';
 import { getScopeInfo } from '../../../lib/scope.js';
-import type { Aliases, ConfigOverride, OverridableConfig } from '../../../lib/types.js';
+import type { Aliases, ConfigOverride, OverridableConfig, WhenClause } from '../../../lib/types.js';
 import {
   buildWhenFromFlags,
+  hasWhenFlags,
   parseAlias,
   parseSet,
+  parseWhenJson,
   serializeRule,
   type WhenFlagOptions,
 } from './shared.js';
 
 interface OverrideAddOptions extends WhenFlagOptions {
+  whenJson?: string;
   set?: string[];
   alias?: string[];
   global?: boolean;
@@ -41,13 +44,27 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
 
     const { scope, label: scopeLabel } = getScopeInfo(options);
 
-    const when = buildWhenFromFlags(options);
+    // The `when` side: flag-sugar and `--when-json` are mutually exclusive. The
+    // "≥1 criterion" check applies ONLY to the flag path — an intentional catch-all
+    // must be written `--when-json '{}'` (which is allowed).
+    let when: WhenClause;
+    if (options.whenJson !== undefined) {
+      if (hasWhenFlags(options)) {
+        throw new Error('--when-json cannot be combined with --when-* flags');
+      }
+      when = parseWhenJson(options.whenJson);
+    } else {
+      when = buildWhenFromFlags(options);
+      if (Object.keys(when).length === 0) {
+        throw new Error(
+          'at least one match criterion is required (e.g. --when-repo, --when-branch, or --when-json)'
+        );
+      }
+    }
+
     const values: Partial<OverridableConfig> = parseSet(options.set ?? []);
     const aliases: Partial<Aliases> = parseAlias(options.alias ?? []);
 
-    if (Object.keys(when).length === 0) {
-      throw new Error('at least one match criterion is required (e.g. --when-repo, --when-branch)');
-    }
     if (Object.keys(values).length === 0 && Object.keys(aliases).length === 0) {
       throw new Error('at least one value is required (--set <key>=<value> or --alias <entity>.<name>=<id>)');
     }
