@@ -2,8 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { RemoteIdentity } from './git-context.js';
 import { logger } from './logger.js';
-import { needsGitContext, type OverrideContext, type OverrideLayer, resolveOverrides } from './overrides.js';
-import type { ConfigOverride } from './types.js';
+import {
+  matchWhen,
+  needsGitContext,
+  type OverrideContext,
+  type OverrideLayer,
+  resolveOverrides,
+} from './overrides.js';
+import type { ConfigOverride, WhenClause } from './types.js';
 
 const REPO = '/work/acme/web';
 const ORIGIN: RemoteIdentity = { host: 'github.com', owner: 'acme', name: 'web' };
@@ -445,5 +451,102 @@ describe('resolveOverrides — composite specificity (§5.6)', () => {
       ]),
     ]);
     expect(r.values.defaultTeam).toBe('owner');
+  });
+});
+
+// ============================================================================
+//  M30 Phase 3 — team-aware matchWhen (additive + gated) + whenIsLocationSpecific
+// ============================================================================
+
+describe('matchWhen — team-aware, additive and gated (M30 Phase 3)', () => {
+  const teamCtx = (team?: string): OverrideContext => ({
+    contextDir: REPO,
+    repoRoot: REPO,
+    remotes: {},
+    team,
+  });
+
+  it('matches `{ team }` only when allowTeam is set and ctx.team matches', () => {
+    expect(matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_pay'), { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_other'), { allowTeam: true }).matched).toBe(false);
+  });
+
+  it('graceful-fails (no throw, no match) when ctx.team is undefined', () => {
+    const r = matchWhen({ team: 'team_pay' } as WhenClause, teamCtx(undefined), { allowTeam: true });
+    expect(r.matched).toBe(false);
+  });
+
+  it('supports a team glob (compares resolved ids in M1)', () => {
+    expect(matchWhen({ team: 'team_*' } as WhenClause, teamCtx('team_pay'), { allowTeam: true }).matched).toBe(true);
+  });
+
+  it('recognizes `team` nested in composites under allowTeam', () => {
+    const ctx = teamCtx('team_pay');
+    const w = (node: object): WhenClause => node as unknown as WhenClause;
+    expect(matchWhen(w({ allOf: [{ team: 'team_pay' }] }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ anyOf: [{ team: 'team_nope' }, { team: 'team_pay' }] }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ not: { team: 'team_other' } }), ctx, { allowTeam: true }).matched).toBe(true);
+    expect(matchWhen(w({ not: { team: 'team_pay' } }), ctx, { allowTeam: true }).matched).toBe(false);
+  });
+
+  it('treats `team` as an UNSUPPORTED key WITHOUT allowTeam (config path)', () => {
+    expect(() => matchWhen({ team: 'team_pay' } as WhenClause, teamCtx('team_pay'))).toThrow(/unsupported/);
+    // Nested in a composite without allowTeam → still unsupported.
+    expect(() => matchWhen({ anyOf: [{ team: 'team_pay' }] } as unknown as WhenClause, teamCtx('team_pay'))).toThrow(/unsupported/);
+  });
+});
+
+describe('config overrides[] still warn-and-skip a when:{team} rule (config byte-identical)', () => {
+  it('a `when: { team }` rule in a config layer is warn-skipped, leaving defaultPrompt unresolved', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    // resolveOverrides is the config path: it calls matchWhen WITHOUT allowTeam.
+    const r = resolveOverrides(ctx(REPO, REPO, { remotes: { origin: ORIGIN } }), [
+      layer('project', [{ when: { team: 'team_pay' } as never, defaultPrompt: 'p' }]),
+    ]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/unsupported/);
+    expect(r.values.defaultPrompt).toBeUndefined();
+  });
+});
+
+describe('resolveOverrides — locationCarried tracks the matching arm (M30 fix F)', () => {
+  // A mixed anyOf: one LOCATION arm (path) + one non-location arm (branch).
+  const mixed: ConfigOverride = {
+    when: { anyOf: [{ path: 'apps/mobile/**' }, { branch: 'main' }] },
+    defaultPrompt: 'x',
+  };
+
+  it('a branch-only match in a mixed anyOf is NOT location-carried (→ general tier)', () => {
+    // Non-mobile dir on `main`: only the branch arm fires.
+    const r = resolveOverrides(ctx(`${REPO}/services/api`, REPO, { branch: 'main' }), [
+      layer('project', [mixed]),
+    ]);
+    expect(r.values.defaultPrompt).toBe('x');
+    expect(r.locations.defaultPrompt.locationCarried).toBe(false);
+  });
+
+  it('a path match in the same mixed anyOf IS location-carried (→ location tier)', () => {
+    const r = resolveOverrides(ctx(`${REPO}/apps/mobile/x`, REPO, { branch: 'feature' }), [
+      layer('project', [mixed]),
+    ]);
+    expect(r.values.defaultPrompt).toBe('x');
+    expect(r.locations.defaultPrompt.locationCarried).toBe(true);
+  });
+
+  it('a plain path rule is location-carried; a branch-only rule and a catch-all are not', () => {
+    const pathRule = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ when: { path: 'cli/**' }, defaultPrompt: 'p' }]),
+    ]);
+    expect(pathRule.locations.defaultPrompt.locationCarried).toBe(true);
+
+    const branchRule = resolveOverrides(ctx(REPO, REPO, { branch: 'main' }), [
+      layer('project', [{ when: { branch: 'main' }, defaultPrompt: 'b' }]),
+    ]);
+    expect(branchRule.locations.defaultPrompt.locationCarried).toBe(false);
+
+    const catchAll = resolveOverrides(ctx(REPO), [
+      layer('project', [{ when: {}, defaultPrompt: 'c' }]),
+    ]);
+    expect(catchAll.locations.defaultPrompt.locationCarried).toBe(false);
   });
 });

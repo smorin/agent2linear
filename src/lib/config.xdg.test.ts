@@ -182,6 +182,42 @@ describe('getConfig() — context-aware overrides (M29)', () => {
     expect(cfg.locations.defaultTeam.type).toBe('project');
   });
 
+  it('resolves defaultPrompt by a path override and falls back to the top-level value (M30)', () => {
+    writeRepo({
+      defaultPrompt: 'general',
+      overrides: [{ when: { path: 'apps/mobile/**' }, defaultPrompt: 'mobile-issue' }],
+    });
+    const mobile = mkSub('apps/mobile');
+
+    // Matching context dir → the override wins, tagged with `override` provenance.
+    const cfgMobile = getConfig(mobile);
+    expect(cfgMobile.defaultPrompt).toBe('mobile-issue');
+    expect(cfgMobile.locations.defaultPrompt).toMatchObject({ type: 'override', scope: 'project', ruleIndex: 0 });
+    expect(cfgMobile.locations.defaultPrompt.when).toEqual({ path: 'apps/mobile/**' });
+
+    // Outside the override subtree → the top-level (general) value.
+    const cfgRoot = getConfig(repoRoot);
+    expect(cfgRoot.defaultPrompt).toBe('general');
+    expect(cfgRoot.locations.defaultPrompt.type).toBe('project');
+  });
+
+  it('resolves defaultPrompt independently of other fields in the same context (M30)', () => {
+    // A rule that sets ONLY defaultPrompt must leave defaultTeam to fall back.
+    writeRepo({
+      defaultTeam: 'platform',
+      defaultPrompt: 'general',
+      overrides: [{ when: { path: 'apps/mobile/**' }, defaultPrompt: 'mobile-issue' }],
+    });
+    const mobile = mkSub('apps/mobile');
+
+    const cfg = getConfig(mobile);
+    expect(cfg.defaultPrompt).toBe('mobile-issue');
+    expect(cfg.locations.defaultPrompt.type).toBe('override');
+    // defaultTeam is untouched by the prompt-only override → still the top-level value.
+    expect(cfg.defaultTeam).toBe('platform');
+    expect(cfg.locations.defaultTeam.type).toBe('project');
+  });
+
   it('concatenates global + repo overrides, resolving each field independently', () => {
     writeGlobal({ overrides: [{ when: { path: 'cli/**' }, defaultInitiative: 'global-init' }] });
     writeRepo({ overrides: [{ when: { path: 'cli/**' }, defaultTeam: 'repo-cli-team' }] });

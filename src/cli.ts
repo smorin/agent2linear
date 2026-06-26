@@ -18,6 +18,7 @@ import { registerProfileCommands } from './commands/profile/register.js';
 import { registerProjectCommands } from './commands/project/register.js';
 import { registerProjectLabelsCommands } from './commands/project-labels/register.js';
 import { registerProjectStatusCommands } from './commands/project-status/register.js';
+import { registerPromptCommands } from './commands/prompt/register.js';
 import { setup } from './commands/setup.js';
 import { registerTeamsCommands } from './commands/teams/register.js';
 import { registerTemplatesCommands } from './commands/templates/register.js';
@@ -34,7 +35,7 @@ const cli = new Command();
 cli
   .name('agent2linear')
   .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
-  .version('0.29.0')
+  .version('0.30.0')
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
   .option('--no-color', 'Disable emojis and colored output')
@@ -107,6 +108,7 @@ registerIssueCommands(cli);
 registerCyclesCommands(cli);
 registerWorkspaceCommands(cli);
 registerProfileCommands(cli);
+registerPromptCommands(cli);
 
 // Stub command groups (future releases)
 const issues = cli

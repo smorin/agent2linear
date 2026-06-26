@@ -1,4 +1,4 @@
-import { type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
+import { CONFIG_KEY_CHOICES, type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
 import {
   getTemplateById,
   validateApiKey,
@@ -7,6 +7,7 @@ import {
 } from '../../lib/linear-client.js';
 import { getMilestoneTemplate } from '../../lib/milestone-templates.js';
 import { showError,showSuccess, showValidated } from '../../lib/output.js';
+import { getPrompt } from '../../lib/prompts.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
 interface SetConfigOptions {
@@ -24,6 +25,7 @@ const KEY_LABELS: Record<ConfigKey, string> = {
   defaultIssueTemplate: 'Default Issue Template',
   defaultProjectTemplate: 'Default Project Template',
   defaultMilestoneTemplate: 'Default Milestone Template',
+  defaultPrompt: 'Default Prompt',
   projectCacheMinTTL: 'Project Cache Min TTL',
   defaultAutoAssignLead: 'Default Auto-Assign Lead',
   entityCacheMinTTL: 'Entity Cache Min TTL',
@@ -42,7 +44,7 @@ export async function setConfig(key: string, value: string, options: SetConfigOp
   if (!isValidConfigKey(key)) {
     showError(
       `Invalid configuration key: ${key}`,
-      'Valid keys are: apiKey, defaultInitiative, defaultTeam, defaultProject, defaultIssueTemplate, defaultProjectTemplate'
+      `Valid keys are: ${CONFIG_KEY_CHOICES.join(', ')}`
     );
     process.exit(1);
   }
@@ -128,6 +130,18 @@ export async function setConfig(key: string, value: string, options: SetConfigOp
       }
 
       console.log(`   ✓ Milestone template found: ${result.template.name || value} (${result.source})`);
+    } else if (key === 'defaultPrompt') {
+      // Validate prompt exists in local prompts store (M30)
+      const result = getPrompt(value);
+      if (!result) {
+        showError(
+          `Prompt not found: ${value}`,
+          'Use "agent2linear prompt list" to see available prompts'
+        );
+        process.exit(1);
+      }
+
+      console.log(`   ✓ Prompt found: ${value} (${result.source})`);
     }
 
     // Save configuration

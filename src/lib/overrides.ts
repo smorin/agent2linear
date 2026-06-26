@@ -24,6 +24,15 @@ export interface OverrideContext {
   repoRoot: string | null;
   branch?: string;
   remotes: Record<string, RemoteIdentity>;
+  // M30 Phase 3: the resolved team id for the prompt team layer. Only consulted
+  // when matchWhen is called with `{ allowTeam: true }` (the prompt path); the
+  // config-field path never sets `allowTeam`, so this is ignored there.
+  team?: string;
+}
+
+/** Options for `matchWhen`. `allowTeam` gates the prompt-store-only `team` matcher. */
+export interface MatchWhenOptions {
+  allowTeam?: boolean;
 }
 
 export interface OverrideLayer {
@@ -49,6 +58,7 @@ const OVERRIDABLE_FIELDS: readonly (keyof OverridableConfig)[] = [
   'defaultIssueTemplate',
   'defaultProjectTemplate',
   'defaultMilestoneTemplate',
+  'defaultPrompt',
   'defaultAutoAssignLead',
 ];
 
@@ -93,6 +103,19 @@ function whenNeedsContext(node: unknown): boolean {
     return true;
   }
   return node.not !== undefined && whenNeedsContext(node.not);
+}
+
+/**
+ * Whether a winning match's `score` was carried by a LOCATION/identity matcher —
+ * the `exactRepo`/`idValue`/`idPresence`/`pathPresent` slots (indices 0-3 of the
+ * Spec) — rather than only `branch`/`team` (slot 6) or a `not` (slot 7). M30 Phase
+ * 3 prompt tiering reads this off the actual winning match (including the specific
+ * `anyOf` arm `maxSpec` chose), so a branch-only match in a mixed `anyOf` override
+ * is general-tier even though the clause also *contains* a path arm that didn't fire.
+ * (Slot indices are documented on `Spec` above; kept private to this module.)
+ */
+function scoreIsLocationCarried(score: Spec): boolean {
+  return score[0] > 0 || score[1] > 0 || score[2] > 0 || score[3] > 0;
 }
 
 /**
@@ -152,7 +175,7 @@ function maxSpec(a: Spec, b: Spec): Spec {
 }
 
 /** Lexicographic compare of two equal-length numeric keys. */
-function compareKeys(a: number[], b: number[]): number {
+export function compareKeys(a: number[], b: number[]): number {
   for (let i = 0; i < a.length; i++) {
     if (a[i] !== b[i]) {
       return a[i] - b[i];
@@ -198,7 +221,11 @@ function identitySatisfies(node: WhenClause, id: RemoteIdentity): boolean {
  * caller turns that into a warn-and-skip (§9). Graceful: a missing remote / detached
  * HEAD makes a criterion fail rather than throw.
  */
-function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; score: Spec } {
+export function matchWhen(
+  node: WhenClause,
+  ctx: OverrideContext,
+  opts?: MatchWhenOptions
+): { matched: boolean; score: Spec } {
   const fail = { matched: false, score: zeroSpec() };
   // Reject malformed composite shapes up front so the caller's try/catch turns them
   // into a clear warn-and-skip (§9) instead of an opaque "not iterable"/"in null".
@@ -214,7 +241,11 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
   if (node.not !== undefined && !isWhenObject(node.not)) {
     throw new Error('invalid `when.not`: expected an object');
   }
-  const unsupported = Object.keys(node).filter((k) => !KNOWN_WHEN_KEYS.includes(k));
+  // `team` is recognized ONLY when `allowTeam` is set (the prompt path). The config
+  // path passes no opts, so a `team` key in a config `overrides[]` is unsupported and
+  // hits the warn-and-skip below — config-field resolution stays byte-identical.
+  const allowedKeys = opts?.allowTeam ? [...KNOWN_WHEN_KEYS, 'team'] : KNOWN_WHEN_KEYS;
+  const unsupported = Object.keys(node).filter((k) => !allowedKeys.includes(k));
   if (unsupported.length > 0) {
     throw new Error(`unsupported \`when\` key(s): ${unsupported.join(', ')}`);
   }
@@ -269,12 +300,28 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
     if (ctx.branch === undefined || !matchGlob(node.branch, ctx.branch)) {
       return fail;
     }
-    score[6] = 1;
+    score[6] += 1;
+  }
+
+  // M30 Phase 3: prompt-store-only `team` matcher (gated by `allowTeam`). Compares
+  // like `branch` — graceful-fail (no throw) when `ctx.team` is undefined. The key is
+  // already validated as supported above only when `allowTeam` is set. `score[6]` is
+  // ADDITIVE (not `= 1`) so a flat `{ team, branch }` rule (both leaves in one
+  // matchWhen call) scores 2 and outranks a `{ team }`- or `{ branch }`-only rule —
+  // matching the `allOf` composite form, which already sums per-child scores. The
+  // additive form is identical to `= 1` for the config path (branch is the lone
+  // writer there, and score starts at 0).
+  const teamPattern = (node as { team?: string }).team;
+  if (teamPattern !== undefined) {
+    if (ctx.team === undefined || !matchGlob(teamPattern, ctx.team)) {
+      return fail;
+    }
+    score[6] += 1;
   }
 
   if (node.allOf !== undefined) {
     for (const child of node.allOf) {
-      const result = matchWhen(child, ctx);
+      const result = matchWhen(child, ctx, opts);
       if (!result.matched) {
         return fail;
       }
@@ -289,7 +336,7 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
     }
     let best: Spec | null = null;
     for (const child of node.anyOf) {
-      const result = matchWhen(child, ctx);
+      const result = matchWhen(child, ctx, opts);
       if (result.matched) {
         best = best === null ? result.score : maxSpec(best, result.score);
       }
@@ -301,7 +348,7 @@ function matchWhen(node: WhenClause, ctx: OverrideContext): { matched: boolean; 
   }
 
   if (node.not !== undefined) {
-    if (matchWhen(node.not, ctx).matched) {
+    if (matchWhen(node.not, ctx, opts).matched) {
       return fail;
     }
     score[7] += 1;
@@ -339,6 +386,7 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
     ruleIndex: number;
     rule: ConfigOverride;
     when: WhenClause;
+    locationCarried: boolean;
     key: number[];
   }> = [];
 
@@ -359,7 +407,14 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
         continue;
       }
       // Scope is the primary sort key (repo-local beats global, §5.6).
-      matched.push({ scope: layer.scope, ruleIndex, rule, when, key: [scopeRank, ...result.score] });
+      matched.push({
+        scope: layer.scope,
+        ruleIndex,
+        rule,
+        when,
+        locationCarried: scoreIsLocationCarried(result.score),
+        key: [scopeRank, ...result.score],
+      });
     }
   }
 
@@ -377,6 +432,7 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
       scope: m.scope,
       ruleIndex: m.ruleIndex,
       when: m.when,
+      locationCarried: m.locationCarried,
     };
     for (const field of OVERRIDABLE_FIELDS) {
       const value = m.rule[field];

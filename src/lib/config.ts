@@ -145,6 +145,7 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     defaultIssueTemplate: { type: 'none' },
     defaultProjectTemplate: { type: 'none' },
     defaultMilestoneTemplate: { type: 'none' },
+    defaultPrompt: { type: 'none' },
     projectCacheMinTTL: { type: 'none' },
     defaultAutoAssignLead: { type: 'none' },
     entityCacheMinTTL: { type: 'none' },
@@ -226,6 +227,13 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     locations.defaultMilestoneTemplate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultMilestoneTemplate) {
     locations.defaultMilestoneTemplate = { type: 'global', path: globalConfigFile() };
+  }
+
+  // Default Prompt location (M30)
+  if (projectConfig.defaultPrompt) {
+    locations.defaultPrompt = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
+  } else if (globalConfig.defaultPrompt) {
+    locations.defaultPrompt = { type: 'global', path: globalConfigFile() };
   }
 
   // Project Cache Min TTL location
@@ -455,6 +463,7 @@ const VALID_CONFIG_KEYS = [
   'defaultIssueTemplate',
   'defaultProjectTemplate',
   'defaultMilestoneTemplate',
+  'defaultPrompt', // M30: local prompt name
   'projectCacheMinTTL',
   'defaultAutoAssignLead',
   'entityCacheMinTTL',
@@ -475,6 +484,28 @@ export type ConfigKey = (typeof VALID_CONFIG_KEYS)[number];
 export function isValidConfigKey(key: string): key is ConfigKey {
   return VALID_CONFIG_KEYS.includes(key as ConfigKey);
 }
+
+/**
+ * The user-settable config keys exposed by the `config get/set/unset` CLI — the
+ * curated subset of {@link VALID_CONFIG_KEYS} (which also holds internal cache
+ * toggles). Single source of truth for the three `.choices(...)` arrays in the
+ * config command registration and the "valid keys" hint in `config set`, so the
+ * parser-level allow-list and the error message can never drift apart.
+ */
+export const CONFIG_KEY_CHOICES = [
+  'apiKey',
+  'defaultInitiative',
+  'defaultTeam',
+  'defaultProject',
+  'defaultIssueTemplate',
+  'defaultProjectTemplate',
+  'defaultMilestoneTemplate',
+  'defaultPrompt',
+  'projectCacheMinTTL',
+  'defaultProfile',
+  'noMatchPolicy',
+  'confirmAutoDetectedWrites',
+] as const;
 
 /**
  * Set a configuration value

@@ -262,6 +262,89 @@ a2l config explain --json                             # machine-readable, for ag
 a2l config get defaultTeam apps/web                   # one override-resolved field
 ```
 
+## Prompt Templates
+
+Ask `a2l` for the **right markdown prompt to follow before creating a Linear issue**, selected by context. This is read-side only today: prompts are **hand-authored** in a committable `prompts.json` (CRUD and interpolation are planned). It is fully additive — a config with no prompts behaves exactly as before, and `apiKey`/workspace selection is never affected.
+
+The `prompt` command is also aliased as **`skill`**: `a2l skill get` returns the right **skill** (prompt) to call — the context-appropriate guidance an agent should follow before creating an issue. `skill` and `prompt` are interchangeable everywhere (`skill get`/`skill list`/`skill explain` = `prompt get`/`prompt list`/`prompt explain`).
+
+### Authoring prompts (`prompts.json`)
+
+Prompts live in a `prompts.json` next to your config:
+
+- **Global:** `$XDG_CONFIG_HOME/agent2linear/prompts.json` (default: `~/.config/agent2linear/prompts.json`)
+- **Project:** `.agent2linear/prompts.json` (nearest, walking up from the current directory)
+
+A project prompt **overwrites** a global one of the same name. Each prompt sets **exactly one** of an inline `body` or a `bodyFile`:
+
+```jsonc
+{
+  "prompts": {
+    "general":         { "description": "Default issue prompt", "body": "## Title\nWrite a clear, scoped title.\n" },
+    "payments-issue":  { "description": "Payments convention",  "bodyFile": "prompts/payments.md" }
+  },
+  "promptRules": [
+    { "when": { "team": "payments" }, "prompt": "payments-issue" }   // team layer (see below)
+  ]
+}
+```
+
+A **relative** `bodyFile` is anchored to the directory of the `prompts.json` that declares it (not your current directory), so a committed project `prompts.json` referencing `prompts/payments.md` resolves portably regardless of where you run `a2l`. Absolute and `~/`-prefixed paths are used as-is.
+
+### Selecting a prompt
+
+```bash
+a2l prompt get                       # the prompt that applies for the current directory (raw markdown)
+a2l prompt get payments-issue        # an exact prompt by unique name (highest precedence)
+a2l prompt get --team payments       # the team-layer prompt for the payments team
+a2l prompt get --json                # a { name, source, selection, body, context } envelope (for agents)
+a2l skill get                        # `skill` is an alias for `prompt` — the right skill to call here
+a2l issue prompt                     # alias for `prompt get` (same flags) — handy before `issue create`
+```
+
+`defaultPrompt` is a first-class config key — a local prompt **name**. Set it like any other default, and it is **wired into `overrides[]`** so it can be resolved by `path`/`repo`/`branch`:
+
+```jsonc
+{
+  "defaultPrompt": "general",                                      // general default (a name in prompts.json)
+  "overrides": [
+    { "when": { "path": "apps/mobile/**" }, "defaultPrompt": "mobile-issue" }  // location-specific prompt
+  ]
+}
+```
+
+```bash
+a2l config set defaultPrompt general                   # validated: the name must exist in prompts.json
+a2l -C apps/mobile prompt get                          # → the location prompt (path override)
+```
+
+**Team layer (`promptRules`).** Authored **nested**, exactly like `overrides[]`: `{ "when": { "team": "<id|alias>", …location matchers }, "prompt": "<name>" }`. The resolved team is `--team` (if given) or your `defaultTeam`; both the rule's `team` and your team are normalized through team aliases, so `payments` matches whether expressed as the alias or the raw `team_*` id. (A `team` key is honored **only** here — it is ignored inside config `overrides[]`.)
+
+**Selection precedence:** explicit name → specific location override (`path`/`repo`/`owner`/`host`) → team (`promptRules`) → general `defaultPrompt` (top-level, or a branch-only / catch-all override) → error. An explicit `--team X` with no matching `promptRule` is a **hard error** (exit 1); a *derived* `defaultTeam` with no rule simply falls through to the general prompt. A branch-only override is general-tier (team outranks branch).
+
+**`--force` (team-first).** Scoped to an explicit `--team`: evaluate the team layer **first**, so a matching `promptRule` outranks any location override; if no rule matches it is a hard error even when a location override or general default would otherwise resolve. `--force` without `--team` is a no-op.
+
+```bash
+a2l prompt get --team payments --force                 # force the payments team prompt (beats a location override)
+```
+
+### Listing and explaining
+
+```bash
+a2l prompt list                      # available prompt names, grouped by source (names only)
+a2l prompt list --descriptions       # include each prompt's description
+a2l prompt list pay                  # filter to names containing "pay" (case-insensitive)
+a2l prompt list --format json        # complete records (name, description, source); the filter still applies
+```
+
+`prompt explain` mirrors `config explain` and adds the team layer (which `config explain` alone can't show): the context, the resolved `defaultPrompt` + provenance, the team (input/resolved id), the **matched `promptRule`** (shown even when a location override outranks it), and the final selection + tier. Unlike `prompt get`, it never exits 1 — an unresolved selection is reported in the trace.
+
+```bash
+a2l prompt explain                   # what would be selected here, and why
+a2l prompt explain apps/mobile       # explain as if in apps/mobile (positional dir = sugar for -C)
+a2l prompt explain --team payments --json   # machine-readable decision trace
+```
+
 ## Multi-Workspace & Profiles
 
 If you work across **multiple Linear workspaces** (e.g. personal + several companies), agent2linear can hold several keys at once and automatically target the right workspace per repository — without naming the workspace in every command.

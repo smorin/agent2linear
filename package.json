@@ -1,6 +1,6 @@
 {
   "name": "agent2linear",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "description": "Command-line tool for creating Linear issues and projects",
   "main": "dist/index.js",
   "bin": {

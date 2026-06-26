@@ -12,6 +12,7 @@ import {
   validateTeamExists,
 } from '../../lib/linear-client.js';
 import { getMilestoneTemplate } from '../../lib/milestone-templates.js';
+import { getPrompt } from '../../lib/prompts.js';
 import type { ConfigLocation } from '../../lib/types.js';
 import { resolveActiveProfile } from '../../lib/workspace-resolver.js';
 
@@ -212,6 +213,31 @@ export async function listConfig() {
   } else {
     console.log('  Not set');
     console.log('  💡 Use "agent2linear milestone-templates list" to browse');
+  }
+  console.log();
+
+  // Show Default Prompt (M30) — a local prompt name; no API call needed.
+  console.log('Default Prompt:');
+  if (config.defaultPrompt) {
+    const source = config.locations.defaultPrompt;
+    const sourceLabel = sourceLabelFor(source, activeProfile);
+
+    let displayValue = config.defaultPrompt;
+    try {
+      const result = getPrompt(config.defaultPrompt);
+      if (result) {
+        displayValue = `${config.defaultPrompt} (${result.source})`;
+      } else {
+        displayValue = `${config.defaultPrompt} (not found)`;
+      }
+    } catch (error) {
+      displayValue = `${config.defaultPrompt} (invalid prompt)`;
+    }
+
+    console.log(`  ${displayValue} (from ${sourceLabel})`);
+  } else {
+    console.log('  Not set');
+    console.log('  💡 Use "agent2linear prompt list" to browse');
   }
   console.log();
 }

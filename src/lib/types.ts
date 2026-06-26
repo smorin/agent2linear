@@ -6,6 +6,7 @@ export interface Config {
   defaultIssueTemplate?: string;
   defaultProjectTemplate?: string;
   defaultMilestoneTemplate?: string;
+  defaultPrompt?: string; // M30: local prompt name (mirrors defaultMilestoneTemplate)
   projectCacheMinTTL?: number; // Cache TTL in minutes (default: 60)
   defaultAutoAssignLead?: boolean; // Auto-assign project lead to creator (default: true)
 
@@ -75,6 +76,7 @@ export type OverridableConfig = Pick<
   | 'defaultIssueTemplate'
   | 'defaultProjectTemplate'
   | 'defaultMilestoneTemplate'
+  | 'defaultPrompt'
   | 'defaultAutoAssignLead'
 > & {
   aliases?: Partial<Aliases>;
@@ -92,6 +94,12 @@ export interface ConfigLocation {
   scope?: 'global' | 'project';
   ruleIndex?: number;
   when?: WhenClause;
+  // Set only when type === 'override' (M30): whether the winning match was carried
+  // by a LOCATION/identity matcher (path/repo/owner/host) rather than only
+  // branch/team/not — i.e. the actual matching `anyOf` arm, not the clause shape.
+  // Drives the prompt location-vs-general tier, so a branch-only match in a mixed
+  // `anyOf` override stays general-tier (team outranks branch).
+  locationCarried?: boolean;
 }
 
 /**
@@ -173,6 +181,7 @@ export interface ResolvedConfig extends Config {
     defaultIssueTemplate: ConfigLocation;
     defaultProjectTemplate: ConfigLocation;
     defaultMilestoneTemplate: ConfigLocation;
+    defaultPrompt: ConfigLocation;
     projectCacheMinTTL: ConfigLocation;
     defaultAutoAssignLead: ConfigLocation;
     entityCacheMinTTL: ConfigLocation;
@@ -251,6 +260,48 @@ export interface MilestoneTemplates {
   templates: {
     [templateName: string]: MilestoneTemplate;
   };
+}
+
+/**
+ * Prompt store data structures (M30). A named prompt body is either inline
+ * (`body`) or a file reference (`bodyFile`) — exactly one. Stored in a committable
+ * `prompts.json` (global + project), modeled on milestone-templates. The
+ * `promptRules` team layer lands in Phase 3.
+ */
+export interface PromptEntry {
+  description?: string;
+  body?: string;
+  bodyFile?: string;
+}
+
+/**
+ * A prompt-store `when` clause (M30 Phase 3): the config `WhenClause` grammar
+ * (path/repo/owner/host/branch/composites) plus an additional `team` matcher,
+ * which exists ONLY here — config's `WhenClause`/`WhenLeaf` must never gain
+ * `team` (a `team` key in a config `overrides[]` is an unsupported key by design,
+ * since team is an OUTPUT of config resolution, not a matcher inside it). In M1
+ * `team` compares resolved team ids; team-name globbing is M2.
+ */
+export type PromptWhen = WhenClause & { team?: string };
+
+/**
+ * A single team-layer rule in `prompts.json`: a nested `when` clause (a
+ * `PromptWhen` — the config `WhenClause` grammar plus the prompt-only `team`
+ * matcher) plus the `prompt` name it selects. Authored exactly like a config
+ * `overrides[]` entry, for grammar consistency. An absent `when` is a catch-all.
+ */
+export interface PromptRule {
+  when?: PromptWhen;
+  prompt: string;
+}
+
+export interface Prompts {
+  prompts: {
+    [name: string]: PromptEntry;
+  };
+  // M30 Phase 3: the team layer. Evaluated after the single getConfig pass with
+  // ctx.team = --team ?? config.defaultTeam, using a team-aware matchWhen.
+  promptRules?: PromptRule[];
 }
 
 /**
