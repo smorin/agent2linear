@@ -1,5 +1,9 @@
 import { readConfigForScope } from '../../../lib/config.js';
-import { normalizeOwnerInput, normalizeRemoteUrl } from '../../../lib/git-context.js';
+import {
+  normalizeHostInput,
+  normalizeOwnerInput,
+  normalizeRepoInput,
+} from '../../../lib/git-context.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { saveProfile } from '../../../lib/profiles.js';
 import { getScopeInfo } from '../../../lib/scope.js';
@@ -63,22 +67,43 @@ export function profileMatchRemoveCommand(name: string, options: MatchRemoveOpti
         process.exit(1);
       }
       removed = removeFromList(rule, 'gitRemoteOwner', owner, name, 'Owner');
+      deleteRemoteIfNoIdentityFields(rule);
     } else if (options.gitRemoteHost !== undefined) {
-      const host = normalizeRemoteUrl(options.gitRemoteHost)?.host ?? options.gitRemoteHost.trim();
+      const host = normalizeHostInput(options.gitRemoteHost);
+      if (!host) {
+        showError(
+          `Invalid git remote host: "${options.gitRemoteHost}"`,
+          'Pass a host glob (e.g. "github.com" or "*.gitlab.example.com") or a full repo URL to extract it from.'
+        );
+        process.exit(1);
+      }
       removed = removeFromList(rule, 'gitRemoteHost', host, name, 'Host');
+      deleteRemoteIfNoIdentityFields(rule);
     } else if (options.gitRemoteRepo !== undefined) {
-      const id = normalizeRemoteUrl(options.gitRemoteRepo);
-      const repo = id ? `${id.owner}/${id.name}` : options.gitRemoteRepo.trim();
+      const repo = normalizeRepoInput(options.gitRemoteRepo);
+      if (!repo) {
+        showError(
+          `Invalid git remote repo: "${options.gitRemoteRepo}"`,
+          'Pass an owner/name glob (e.g. "acme/secret-*") or a full repo URL to extract it from.'
+        );
+        process.exit(1);
+      }
       removed = removeFromList(rule, 'gitRemoteRepo', repo, name, 'Repo');
+      deleteRemoteIfNoIdentityFields(rule);
     } else {
       const value = (options.remote as string).trim();
+      if (!value) {
+        showError('Invalid remote selector: value cannot be empty', 'Pass a remote name or "*".');
+        process.exit(1);
+      }
       const current =
         rule.remote === undefined ? [] : Array.isArray(rule.remote) ? rule.remote : [rule.remote];
-      if (!current.some((r) => r.toLowerCase() === value.toLowerCase())) {
+      const same = valueComparer(rule);
+      if (!current.some((r) => same(r, value))) {
         showError(`Remote "${value}" is not a match rule on profile "${name}"`);
         process.exit(1);
       }
-      const survivors = current.filter((r) => r.toLowerCase() !== value.toLowerCase());
+      const survivors = current.filter((r) => !same(r, value));
       if (survivors.length === 0) {
         delete rule.remote;
       } else {
@@ -102,8 +127,9 @@ export function profileMatchRemoveCommand(name: string, options: MatchRemoveOpti
 }
 
 /**
- * Remove one value (case-insensitively) from an identity list on the rule, erroring
- * (exit 1) when it isn't present. Deletes the key when the list becomes empty.
+ * Remove one value from an identity list on the rule, erroring (exit 1) when it
+ * isn't present. Case-insensitive by default, exact when the rule is case-sensitive.
+ * Deletes the key when the list becomes empty.
  */
 function removeFromList(
   rule: MatchRule,
@@ -113,16 +139,33 @@ function removeFromList(
   label: string
 ): string {
   const list = rule[field] ?? [];
-  const target = value.toLowerCase();
-  if (!list.some((v) => v.toLowerCase() === target)) {
+  const same = valueComparer(rule);
+  if (!list.some((v) => same(v, value))) {
     showError(`${label} "${value}" is not a match rule on profile "${profileName}"`);
     process.exit(1);
   }
-  const survivors = list.filter((v) => v.toLowerCase() !== target);
+  const survivors = list.filter((v) => !same(v, value));
   if (survivors.length === 0) {
     delete rule[field];
   } else {
     rule[field] = survivors;
   }
   return value;
+}
+
+function valueComparer(rule: MatchRule): (left: string, right: string) => boolean {
+  if (rule.caseSensitive) {
+    return (left, right) => left === right;
+  }
+  return (left, right) => left.toLowerCase() === right.toLowerCase();
+}
+
+function deleteRemoteIfNoIdentityFields(rule: MatchRule): void {
+  const hasIdentity =
+    (rule.gitRemoteHost?.length ?? 0) > 0 ||
+    (rule.gitRemoteOwner?.length ?? 0) > 0 ||
+    (rule.gitRemoteRepo?.length ?? 0) > 0;
+  if (!hasIdentity) {
+    delete rule.remote;
+  }
 }

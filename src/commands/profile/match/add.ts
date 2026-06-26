@@ -1,5 +1,9 @@
 import { readConfigForScope } from '../../../lib/config.js';
-import { normalizeOwnerInput, normalizeRemoteUrl } from '../../../lib/git-context.js';
+import {
+  normalizeHostInput,
+  normalizeOwnerInput,
+  normalizeRepoInput,
+} from '../../../lib/git-context.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { saveProfile } from '../../../lib/profiles.js';
 import { getScopeInfo } from '../../../lib/scope.js';
@@ -21,7 +25,15 @@ interface MatchAddOptions {
  * "*.gitlab.example.com" — neither parses as a URL, so they pass through).
  */
 function normalizeHost(raw: string): string {
-  return normalizeRemoteUrl(raw)?.host ?? raw.trim();
+  const host = normalizeHostInput(raw);
+  if (!host) {
+    showError(
+      `Invalid git remote host: "${raw}"`,
+      'Pass a host glob (e.g. "github.com" or "*.gitlab.example.com") or a full repo URL to extract it from.'
+    );
+    process.exit(1);
+  }
+  return host;
 }
 
 /**
@@ -31,8 +43,15 @@ function normalizeHost(raw: string): string {
  * verbatim storage is safe (O2).
  */
 function normalizeRepo(raw: string): string {
-  const id = normalizeRemoteUrl(raw);
-  return id ? `${id.owner}/${id.name}` : raw.trim();
+  const repo = normalizeRepoInput(raw);
+  if (!repo) {
+    showError(
+      `Invalid git remote repo: "${raw}"`,
+      'Pass an owner/name glob (e.g. "acme/secret-*") or a full repo URL to extract it from.'
+    );
+    process.exit(1);
+  }
+  return repo;
 }
 
 /** Merge new values into an existing field, deduping (order-preserving). */
@@ -90,6 +109,15 @@ export function profileMatchAddCommand(name: string, options: MatchAddOptions = 
     }
     const normalizedHosts = hosts.map(normalizeHost);
     const normalizedRepos = repos.map(normalizeRepo);
+    const normalizedRemotes: string[] = [];
+    for (const raw of remotes) {
+      const remote = raw.trim();
+      if (!remote) {
+        showError('Invalid remote selector: value cannot be empty', 'Pass a remote name or "*".');
+        process.exit(1);
+      }
+      normalizedRemotes.push(remote);
+    }
 
     const rule: MatchRule = { ...profile.match };
     if (normalizedHosts.length > 0) {
@@ -101,16 +129,16 @@ export function profileMatchAddCommand(name: string, options: MatchAddOptions = 
     if (normalizedRepos.length > 0) {
       rule.gitRemoteRepo = mergeField(rule.gitRemoteRepo, normalizedRepos);
     }
-    if (remotes.length > 0) {
+    if (normalizedRemotes.length > 0) {
       // Mirror M29's `remote` shape: a single selector collapses to a string,
-      // multiple to a deduped array. Stored verbatim (a plain remote name or "*").
+      // multiple to a deduped array, and any wildcard collapses to scalar "*".
       const merged = Array.from(
         new Set([
           ...(rule.remote === undefined ? [] : Array.isArray(rule.remote) ? rule.remote : [rule.remote]),
-          ...remotes.map((r) => r.trim()),
+          ...normalizedRemotes,
         ])
       );
-      rule.remote = merged.length === 1 ? merged[0] : merged;
+      rule.remote = merged.includes('*') ? '*' : merged.length === 1 ? merged[0] : merged;
     }
     if (options.caseSensitive) {
       rule.caseSensitive = true;

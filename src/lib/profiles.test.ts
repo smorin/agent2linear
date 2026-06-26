@@ -259,6 +259,13 @@ describe('detectProfile - remote selection + fork predicate (M31 Phase 3)', () =
     expect(detectProfile(profiles, () => fork)).toEqual({ name: 'p', exclude: false });
   });
 
+  it('remote: ["*"] matches if ANY remote satisfies', () => {
+    const profiles: Record<string, Profile> = {
+      p: { workspace: 'p', match: { remote: ['*'], gitRemoteOwner: ['acme'] } },
+    };
+    expect(detectProfile(profiles, () => fork)).toEqual({ name: 'p', exclude: false });
+  });
+
   it('BARE remote: "upstream" matches a repo that HAS an upstream regardless of owner', () => {
     const profiles: Record<string, Profile> = {
       isFork: { workspace: 'isFork', match: { remote: 'upstream' } },

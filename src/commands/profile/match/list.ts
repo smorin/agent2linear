@@ -6,8 +6,9 @@ import {
 
 /**
  * List a profile's git-remote match rules (host/owner/repo/remote/case) + exclusion
- * state (offline). When >1 profile POSITIVELY matches the current repo, append the
- * shared informational ambiguity warning (same count `doctor` uses).
+ * state. When >1 profile POSITIVELY matches the current repo, this may consult git
+ * remotes to append the shared informational ambiguity warning (same count `doctor`
+ * uses).
  */
 export function profileMatchListCommand(name: string): void {
   const profiles = loadProfiles();

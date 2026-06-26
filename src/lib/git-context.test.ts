@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process';
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -9,8 +9,11 @@ import {
   buildGitContext,
   defaultGitRun,
   type GitRun,
+  normalizeHostInput,
   normalizeOwnerInput,
   normalizeRemoteUrl,
+  normalizeRepoInput,
+  selectRemotes,
 } from './git-context.js';
 
 beforeEach(() => __resetGitContextCache());
@@ -76,6 +79,8 @@ describe('normalizeOwnerInput - accepts a bare owner OR a full repo URL', () => 
     expect(normalizeOwnerInput('group/sub')).toBe('group/sub'); // nested group (all-but-last)
     expect(normalizeOwnerInput('group/*')).toBe('group/*'); // the D2 migration glob
     expect(normalizeOwnerInput('my-org/secret-*')).toBe('my-org/secret-*');
+    expect(normalizeOwnerInput('+(my-org|acme)')).toBe('+(my-org|acme)');
+    expect(normalizeOwnerInput('@(my-org|acme)')).toBe('@(my-org|acme)');
   });
 
   it('rejects genuinely malformed input (empty, whitespace, or URL/host separators)', () => {
@@ -83,6 +88,49 @@ describe('normalizeOwnerInput - accepts a bare owner OR a full repo URL', () => 
     expect(normalizeOwnerInput('git@github.com:owner')).toBeNull(); // host:single-segment, no repo
     expect(normalizeOwnerInput('owner with spaces')).toBeNull();
     expect(normalizeOwnerInput('')).toBeNull();
+  });
+});
+
+describe('normalizeHostInput / normalizeRepoInput', () => {
+  it('normalizes pasted full repo URLs by field', () => {
+    expect(normalizeHostInput('git@github.com:acme/widgets.git')).toBe('github.com');
+    expect(normalizeRepoInput('https://github.com/acme/widgets.git')).toBe('acme/widgets');
+  });
+
+  it('accepts valid literal globs and rejects malformed URL-like inputs', () => {
+    expect(normalizeHostInput('*.gitlab.example.com')).toBe('*.gitlab.example.com');
+    expect(normalizeHostInput('@(github|gitlab).com')).toBe('@(github|gitlab).com');
+    expect(normalizeRepoInput('my-org/secret-*')).toBe('my-org/secret-*');
+    expect(normalizeRepoInput('group/**/repo')).toBe('group/**/repo');
+
+    expect(normalizeHostInput('https://github.com')).toBeNull();
+    expect(normalizeHostInput('git@github.com')).toBeNull();
+    expect(normalizeHostInput('git hub.com')).toBeNull();
+    expect(normalizeRepoInput('github.com')).toBeNull();
+    expect(normalizeRepoInput('https://github.com')).toBeNull();
+    expect(normalizeRepoInput('owner with spaces/repo')).toBeNull();
+  });
+});
+
+describe('selectRemotes', () => {
+  const remotes = {
+    origin: { host: 'github.com', owner: 'alice', name: 'widgets' },
+    upstream: { host: 'github.com', owner: 'acme', name: 'widgets' },
+  };
+
+  const names = (spec: '*' | string | string[] | undefined): string[] =>
+    selectRemotes(spec, remotes)
+      .map((r) => r.name)
+      .sort();
+
+  it('treats "*" inside a remote list as all remotes', () => {
+    expect(names(['*'])).toEqual(['origin', 'upstream']);
+    expect(names(['origin', '*'])).toEqual(['origin', 'upstream']);
+  });
+
+  it('keeps named remote lists as an OR over those names', () => {
+    expect(names(['origin'])).toEqual(['origin']);
+    expect(names(['origin', 'missing'])).toEqual(['origin']);
   });
 });
 
@@ -101,7 +149,7 @@ describe('buildGitContext (injected run)', () => {
     const { run } = fakeRun({
       'rev-parse --show-toplevel': '/work/acme/web',
       'rev-parse --abbrev-ref HEAD': 'main',
-      'config --get-regexp ^remote\\..*\\.url$':
+      'config --local --get-regexp ^remote\\..*\\.url$':
         'remote.origin.url https://github.com/myuser/web.git\nremote.upstream.url git@github.com:acme/web.git',
     });
     const ctx = buildGitContext('/work/acme/web', run);
@@ -127,11 +175,51 @@ describe('buildGitContext (injected run)', () => {
     expect(ctx.remotes).toEqual({});
   });
 
+  it('does not expose remotes when no repo root is found, even if git config reports remote URLs', () => {
+    const { run, calls } = fakeRun({
+      'rev-parse --show-toplevel': null,
+      'rev-parse --abbrev-ref HEAD': null,
+      'config --get-regexp ^remote\\..*\\.url$': 'remote.upstream.url git@github.com:acme/web.git',
+      'config --local --get-regexp ^remote\\..*\\.url$': 'remote.upstream.url git@github.com:acme/web.git',
+    });
+
+    const ctx = buildGitContext('/not/a/repo', run);
+
+    expect(ctx.repoRoot).toBeNull();
+    expect(ctx.branch).toBeUndefined();
+    expect(ctx.remotes).toEqual({});
+    expect(calls.map((args) => args.join(' '))).not.toContain('config --get-regexp ^remote\\..*\\.url$');
+    expect(calls.map((args) => args.join(' '))).not.toContain(
+      'config --local --get-regexp ^remote\\..*\\.url$'
+    );
+  });
+
+  it('reads remote URLs from local repo config only', () => {
+    const { run, calls } = fakeRun({
+      'rev-parse --show-toplevel': '/repo',
+      'rev-parse --abbrev-ref HEAD': 'main',
+      'config --local --get-regexp ^remote\\..*\\.url$':
+        'remote.origin.url https://github.com/local/repo.git',
+      'config --get-regexp ^remote\\..*\\.url$':
+        'remote.origin.url https://github.com/local/repo.git\nremote.upstream.url git@github.com:global/leak.git',
+    });
+
+    const ctx = buildGitContext('/repo', run);
+
+    expect(ctx.remotes).toEqual({
+      origin: { host: 'github.com', owner: 'local', name: 'repo' },
+    });
+    expect(calls.map((args) => args.join(' '))).toContain(
+      'config --local --get-regexp ^remote\\..*\\.url$'
+    );
+    expect(calls.map((args) => args.join(' '))).not.toContain('config --get-regexp ^remote\\..*\\.url$');
+  });
+
   it('skips malformed / non-remote / unparseable config lines', () => {
     const { run } = fakeRun({
       'rev-parse --show-toplevel': '/repo',
       'rev-parse --abbrev-ref HEAD': 'main',
-      'config --get-regexp ^remote\\..*\\.url$': [
+      'config --local --get-regexp ^remote\\..*\\.url$': [
         'remote.origin.url https://github.com/acme/web.git',
         'badlinewithnospace',
         'notaremote.key value',
@@ -140,6 +228,23 @@ describe('buildGitContext (injected run)', () => {
     });
     const ctx = buildGitContext('/repo', run);
     expect(Object.keys(ctx.remotes)).toEqual(['origin']);
+  });
+
+  it('preserves the first URL when a remote has multiple configured fetch URLs', () => {
+    const { run } = fakeRun({
+      'rev-parse --show-toplevel': '/repo',
+      'rev-parse --abbrev-ref HEAD': 'main',
+      'config --local --get-regexp ^remote\\..*\\.url$': [
+        'remote.origin.url https://github.com/canonical/repo.git',
+        'remote.origin.url https://github.com/mirror/repo.git',
+      ].join('\n'),
+    });
+
+    expect(buildGitContext('/repo', run).remotes.origin).toEqual({
+      host: 'github.com',
+      owner: 'canonical',
+      name: 'repo',
+    });
   });
 
   it('caches per contextDir (run invoked once across calls)', () => {
@@ -181,6 +286,45 @@ describe('defaultGitRun + buildGitContext (real git)', () => {
     expect(ctx.repoRoot).not.toBeNull();
     expect(ctx.branch).toBe('main');
     expect(ctx.remotes.origin).toEqual({ host: 'github.com', owner: 'smorin', name: 'agent2linear' });
+  });
+
+  it('does not include remote URLs from global git config', () => {
+    const globalConfig = join(
+      tmpdir(),
+      `a2l-global-gitconfig-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL;
+    writeFileSync(globalConfig, '[remote "upstream"]\n\turl = git@github.com:global/leak.git\n');
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+    __resetGitContextCache();
+    try {
+      const ctx = buildGitContext(repo);
+
+      expect(ctx.remotes.origin).toEqual({ host: 'github.com', owner: 'smorin', name: 'agent2linear' });
+      expect(ctx.remotes.upstream).toBeUndefined();
+    } finally {
+      if (previousGlobalConfig === undefined) {
+        delete process.env.GIT_CONFIG_GLOBAL;
+      } else {
+        process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
+      }
+      rmSync(globalConfig, { force: true });
+      __resetGitContextCache();
+    }
+  });
+
+  it('matches git remote get-url by keeping the first URL when origin has multiple URLs', () => {
+    runGit(repo, ['remote', 'set-url', '--add', 'origin', 'https://github.com/mirror/agent2linear.git']);
+    __resetGitContextCache();
+
+    expect(capture(repo, ['remote', 'get-url', 'origin'])).toBe(
+      'https://github.com/smorin/agent2linear.git'
+    );
+    expect(buildGitContext(repo).remotes.origin).toEqual({
+      host: 'github.com',
+      owner: 'smorin',
+      name: 'agent2linear',
+    });
   });
 
   it('enumerates multiple real remotes across URL forms (HTTPS, SSH scp, nested group)', () => {

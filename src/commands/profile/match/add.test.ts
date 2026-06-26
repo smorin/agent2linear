@@ -88,6 +88,18 @@ describe('profileMatchAddCommand - host/repo/remote/case (M31 Phase 4)', () => {
     expect(loadProfiles().p.match?.gitRemoteHost).toEqual(['github.com']);
   });
 
+  it('rejects malformed host inputs instead of storing dead rules', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchAddCommand('p', { gitRemoteHost: ['git@github.com'] })).toThrow(
+      'exit:1'
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match).toBeUndefined();
+  });
+
   it('stores a --git-remote-repo literal glob (owner/name with a wildcard) verbatim', () => {
     profileMatchAddCommand('p', { gitRemoteRepo: ['my-org/secret-*'] });
     expect(loadProfiles().p.match?.gitRemoteRepo).toEqual(['my-org/secret-*']);
@@ -100,6 +112,16 @@ describe('profileMatchAddCommand - host/repo/remote/case (M31 Phase 4)', () => {
     expect(loadProfiles().p.match?.gitRemoteRepo).toEqual(['acme-co/widgets']);
   });
 
+  it('rejects malformed repo inputs instead of storing dead rules', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchAddCommand('p', { gitRemoteRepo: ['github.com'] })).toThrow('exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match).toBeUndefined();
+  });
+
   it('persists a single --remote as a STRING (collapsed, mirrors M29 shape)', () => {
     profileMatchAddCommand('p', { remote: ['upstream'] });
     expect(loadProfiles().p.match?.remote).toEqual('upstream');
@@ -108,6 +130,22 @@ describe('profileMatchAddCommand - host/repo/remote/case (M31 Phase 4)', () => {
   it('persists multiple --remote values as a deduped ARRAY', () => {
     profileMatchAddCommand('p', { remote: ['origin', 'upstream', 'origin'] });
     expect(loadProfiles().p.match?.remote).toEqual(['origin', 'upstream']);
+  });
+
+  it('rejects empty --remote selectors', () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchAddCommand('p', { remote: ['   '] })).toThrow('exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match).toBeUndefined();
+  });
+
+  it('collapses any --remote wildcard set to the scalar wildcard', () => {
+    profileMatchAddCommand('p', { remote: ['upstream'] });
+    profileMatchAddCommand('p', { remote: ['*'] });
+    expect(loadProfiles().p.match?.remote).toEqual('*');
   });
 
   it('persists caseSensitive: true only when --case-sensitive is passed', () => {
@@ -160,10 +198,34 @@ describe('profileMatchRemoveCommand - per-field removal (M31 Phase 4)', () => {
     expect('gitRemoteHost' in (loadProfiles().p.match ?? {})).toBe(false);
   });
 
+  it('rejects malformed host removal inputs before matching stored rules', () => {
+    profileMatchAddCommand('p', { gitRemoteHost: ['github.com'] });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchRemoveCommand('p', { gitRemoteHost: 'git@github.com' })).toThrow(
+      'exit:1'
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match?.gitRemoteHost).toEqual(['github.com']);
+  });
+
   it('removes a repo glob verbatim', () => {
     profileMatchAddCommand('p', { gitRemoteRepo: ['my-org/secret-*', 'my-org/public-*'] });
     profileMatchRemoveCommand('p', { gitRemoteRepo: 'my-org/secret-*' });
     expect(loadProfiles().p.match?.gitRemoteRepo).toEqual(['my-org/public-*']);
+  });
+
+  it('rejects malformed repo removal inputs before matching stored rules', () => {
+    profileMatchAddCommand('p', { gitRemoteRepo: ['my-org/secret-*'] });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchRemoveCommand('p', { gitRemoteRepo: 'github.com' })).toThrow('exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match?.gitRemoteRepo).toEqual(['my-org/secret-*']);
   });
 
   it('removes a remote selector, collapsing the survivor back to a string', () => {
@@ -176,6 +238,37 @@ describe('profileMatchRemoveCommand - per-field removal (M31 Phase 4)', () => {
     profileMatchAddCommand('p', { remote: ['upstream'] });
     profileMatchRemoveCommand('p', { remote: 'upstream' });
     expect('remote' in (loadProfiles().p.match ?? {})).toBe(false);
+  });
+
+  it('rejects empty remote removal inputs', () => {
+    profileMatchAddCommand('p', { remote: ['upstream'] });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+
+    expect(() => profileMatchRemoveCommand('p', { remote: '   ' })).toThrow('exit:1');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(loadProfiles().p.match?.remote).toEqual('upstream');
+  });
+
+  it('respects caseSensitive when removing identity values', () => {
+    profileMatchAddCommand('p', { gitRemoteOwner: ['Foo', 'foo'], caseSensitive: true });
+    profileMatchRemoveCommand('p', { gitRemoteOwner: 'Foo' });
+    expect(loadProfiles().p.match?.gitRemoteOwner).toEqual(['foo']);
+  });
+
+  it('respects caseSensitive when removing remote selectors', () => {
+    profileMatchAddCommand('p', { remote: ['Foo', 'foo'], caseSensitive: true });
+    profileMatchRemoveCommand('p', { remote: 'Foo' });
+    expect(loadProfiles().p.match?.remote).toEqual('foo');
+  });
+
+  it('does not leave a broadened remote-only rule after removing the last identity value', () => {
+    profileMatchAddCommand('p', { remote: ['upstream'], gitRemoteOwner: ['acme'] });
+    profileMatchRemoveCommand('p', { gitRemoteOwner: 'acme' });
+    const match = loadProfiles().p.match ?? {};
+    expect('gitRemoteOwner' in match).toBe(false);
+    expect('remote' in match).toBe(false);
   });
 });
 

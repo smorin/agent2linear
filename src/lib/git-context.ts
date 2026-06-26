@@ -82,6 +82,33 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
   return { host, owner: segments.slice(0, -1).join('/'), name: segments[segments.length - 1] };
 }
 
+const IDENTITY_PATTERN_CHARS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/*?,!{}[]+()|@-';
+
+function isSafeIdentityPattern(
+  trimmed: string,
+  options: { allowSlash: boolean; requireSlash?: boolean }
+): boolean {
+  if (!trimmed || /\s|:/.test(trimmed)) {
+    return false;
+  }
+  if (!options.allowSlash && trimmed.includes('/')) {
+    return false;
+  }
+  if (options.requireSlash && !trimmed.includes('/')) {
+    return false;
+  }
+  if (options.allowSlash && (/^\//.test(trimmed) || /\/$/.test(trimmed) || trimmed.includes('//'))) {
+    return false;
+  }
+  if (![...trimmed].every((ch) => IDENTITY_PATTERN_CHARS.includes(ch))) {
+    return false;
+  }
+  // Allow `@(` as picomatch's extglob operator, but keep rejecting malformed
+  // URL/scp fragments such as `git@github.com`.
+  return !/@(?!\()/.test(trimmed);
+}
+
 /**
  * Normalize a user-supplied `--git-remote-owner` value to an owner glob.
  *
@@ -104,20 +131,50 @@ export function normalizeOwnerInput(input: string): string | null {
     return parsed.owner;
   }
   // Accept owner globs + nested-group owners (`/` and glob metacharacters), but reject
-  // whitespace and URL/host separators (`:` / `@`) so a malformed paste still errors.
-  if (/^[A-Za-z0-9._/*?,!{}[\]-]+$/.test(trimmed)) {
+  // whitespace and URL/host separators so a malformed paste still errors.
+  if (isSafeIdentityPattern(trimmed, { allowSlash: true })) {
     return trimmed;
   }
   return null;
 }
 
 /**
+ * Normalize a user-supplied `--git-remote-host` value to a host glob.
+ */
+export function normalizeHostInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return parsed.host;
+  }
+  return isSafeIdentityPattern(trimmed, { allowSlash: false }) ? trimmed : null;
+}
+
+/**
+ * Normalize a user-supplied `--git-remote-repo` value to an `owner/name` glob.
+ */
+export function normalizeRepoInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return `${parsed.owner}/${parsed.name}`;
+  }
+  return isSafeIdentityPattern(trimmed, { allowSlash: true, requireSlash: true }) ? trimmed : null;
+}
+
+/**
  * Resolve the remote(s) a rule's identity reads (M31 Phase 3): `undefined`→`origin`,
- * a name → that remote, a list → those remotes, `'*'`→all. Shared by the M29/M30
- * override lineage (`overrides.ts`) and the profile lineage (`profiles.ts`) so both
- * use ONE remote-selection primitive. Pure over `Record<string, RemoteIdentity>` —
- * deliberately free of any `types.ts` coupling so neither lineage forms an import
- * cycle through this module.
+ * a name → that remote, a list → those remotes, `'*'` or a list containing `'*'`→all.
+ * Shared by the M29/M30 override lineage (`overrides.ts`) and the profile lineage
+ * (`profiles.ts`) so both use ONE remote-selection primitive. Pure over
+ * `Record<string, RemoteIdentity>` — deliberately free of any `types.ts` coupling so
+ * neither lineage forms an import cycle through this module.
  */
 export function selectRemotes(
   spec: '*' | string | string[] | undefined,
@@ -131,6 +188,9 @@ export function selectRemotes(
     return all;
   }
   const names = Array.isArray(spec) ? spec : [spec];
+  if (names.includes('*')) {
+    return all;
+  }
   return all.filter((r) => names.includes(r.name));
 }
 
@@ -153,20 +213,22 @@ export function buildGitContext(contextDir: string, run: GitRun = defaultGitRun(
   const branch = branchOut && branchOut !== 'HEAD' ? branchOut : undefined;
 
   const remotes: Record<string, RemoteIdentity> = {};
-  const remotesOut = run(['config', '--get-regexp', '^remote\\..*\\.url$']);
-  if (remotesOut) {
-    for (const line of remotesOut.split('\n')) {
-      const sp = line.indexOf(' ');
-      if (sp === -1) {
-        continue;
-      }
-      const nameMatch = /^remote\.(.+)\.url$/.exec(line.slice(0, sp));
-      if (!nameMatch) {
-        continue;
-      }
-      const identity = normalizeRemoteUrl(line.slice(sp + 1));
-      if (identity) {
-        remotes[nameMatch[1]] = identity;
+  if (top) {
+    const remotesOut = run(['config', '--local', '--get-regexp', '^remote\\..*\\.url$']);
+    if (remotesOut) {
+      for (const line of remotesOut.split('\n')) {
+        const sp = line.indexOf(' ');
+        if (sp === -1) {
+          continue;
+        }
+        const nameMatch = /^remote\.(.+)\.url$/.exec(line.slice(0, sp));
+        if (!nameMatch) {
+          continue;
+        }
+        const identity = normalizeRemoteUrl(line.slice(sp + 1));
+        if (identity && remotes[nameMatch[1]] === undefined) {
+          remotes[nameMatch[1]] = identity;
+        }
       }
     }
   }

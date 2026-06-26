@@ -169,7 +169,9 @@ function ruleMatches(rule: MatchRule | undefined, remotes: Record<string, Remote
  * matches. A **negative match wins** (R9a): if a profile whose WHOLE rule matches is
  * excluded (`linear: false` on the profile or its `match`), that exclusion is
  * returned even if another profile positively matches (trap 2 — exclusion keys off
- * the full rule matching, not merely an owner hit).
+ * the full rule matching, not merely an owner hit). Exclusions are intentionally not
+ * specificity-scored: profile order controls the first excluded match just as it
+ * controls the first positive match.
  *
  * Short-circuits to null (without invoking the git provider) when no profile has a
  * MATCHABLE rule (`isMatchable`: any identity field OR an explicit `remote`) — so the

@@ -135,10 +135,10 @@ function resolveDecision(startDir?: string): Decision {
     return namedOrExcluded(project.workspace, 'project', profiles);
   }
 
-  // 4. Profile auto-detection via git-remote owner (negative match wins). Read the
-  //    remotes from `startDir` when querying a context dir other than cwd (M29 J);
-  //    with no `startDir` the default provider (`defaultRemotes`) reads cwd via its
-  //    own `= process.cwd()` default, unchanged.
+  // 4. Profile auto-detection via git remote identity (host/owner/repo + remote;
+  //    negative match wins). Read remotes from `startDir` when querying a context dir
+  //    other than cwd (M29 J); with no `startDir` the default provider
+  //    (`defaultRemotes`) reads cwd via its own `= process.cwd()` default, unchanged.
   const detected = detectProfile(
     profiles,
     startDir === undefined ? defaultRemotes : () => defaultRemotes(startDir)
