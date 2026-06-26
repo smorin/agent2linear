@@ -50,6 +50,9 @@ const ALIAS_ENTITY_TYPES: readonly AliasEntityType[] = [
 
 const ALIAS_ENTITY_SET = new Set<string>(ALIAS_ENTITY_TYPES);
 
+/** The camelCase `Aliases` storage keys, in `AliasEntityType` order. */
+const ALIAS_STORAGE_KEYS = ALIAS_ENTITY_TYPES.map((e) => getAliasesKey(e));
+
 /**
  * Coerce a `--set` boolean exactly like `setConfigValue` (`true|1|yes` /
  * `false|0|no`, else throw). Returns the boolean so `false` is preserved
@@ -406,4 +409,113 @@ export function serializeRule(rule: ConfigOverride, index: number): Record<strin
     index,
     rule,
   };
+}
+
+/**
+ * Overwrite the named overridable fields on a rule from `--set` pairs (`edit`'s
+ * field-by-field merge). Keys are validated through `parseSet`, so the
+ * `apiKey`/`when`/`aliases`/`id` rejection still holds on the edit path; existing
+ * fields not named are preserved. Booleans (incl. `false`) overwrite precisely.
+ */
+export function applySet(rule: ConfigOverride, pairs: string[]): void {
+  const values = parseSet(pairs);
+  const target = rule as unknown as Record<string, unknown>;
+  for (const [key, value] of Object.entries(values)) {
+    target[key] = value;
+  }
+}
+
+/**
+ * Delete one overridable field from a rule (`--unset <key>`). The key must be in
+ * `OVERRIDABLE_FIELDS` — the same whitelist `--set` uses — so `--unset apiKey`
+ * (or `when`/`aliases`/`id`) is rejected rather than silently no-op'd.
+ */
+export function applyUnset(rule: ConfigOverride, key: string): void {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    throw new Error('--unset requires a key');
+  }
+  if (!OVERRIDABLE_FIELD_SET.has(trimmed)) {
+    throw new Error(
+      `cannot unset "${trimmed}" (allowed: ${OVERRIDABLE_FIELDS.join(', ')})`
+    );
+  }
+  delete (rule as unknown as Record<string, unknown>)[trimmed];
+}
+
+/**
+ * Merge `--alias <entity>.<name>=<id>` pairs into a rule's `aliases` map (the
+ * storage-key translation is reused from `parseAlias`). Existing aliases on other
+ * entities/names are preserved; a name colliding within the same entity overwrites.
+ */
+export function applyAlias(rule: ConfigOverride, pairs: string[]): void {
+  const parsed = parseAlias(pairs);
+  if (Object.keys(parsed).length === 0) {
+    return;
+  }
+  const aliases = (rule.aliases ?? {}) as Record<string, Record<string, string>>;
+  for (const [storageKey, names] of Object.entries(parsed as Record<string, Record<string, string>>)) {
+    aliases[storageKey] ??= {};
+    Object.assign(aliases[storageKey], names);
+  }
+  rule.aliases = aliases as Partial<Aliases>;
+}
+
+/**
+ * Remove one `--rm-alias <entity>.<name>` from a rule's `aliases` map. Drops an
+ * emptied entity sub-object (and the whole `aliases` block if it becomes empty),
+ * the `profile match remove` pattern, so the round-tripped rule shape stays clean.
+ * Errors if the entity is unknown or the named alias is not present.
+ */
+export function applyRmAlias(rule: ConfigOverride, spec: string): void {
+  const dot = spec.indexOf('.');
+  if (dot === -1) {
+    throw new Error(`invalid --rm-alias "${spec}": expected <entity>.<name>`);
+  }
+  const entity = spec.slice(0, dot).trim();
+  const name = spec.slice(dot + 1).trim();
+  if (!entity || !name) {
+    throw new Error(`invalid --rm-alias "${spec}": expected <entity>.<name>`);
+  }
+  if (!ALIAS_ENTITY_SET.has(entity)) {
+    throw new Error(
+      `unknown alias entity "${entity}" (allowed: ${ALIAS_ENTITY_TYPES.join(', ')})`
+    );
+  }
+  const storageKey = getAliasesKey(entity as AliasEntityType);
+  const aliases = (rule.aliases ?? {}) as Record<string, Record<string, string>>;
+  if (aliases[storageKey]?.[name] === undefined) {
+    throw new Error(`alias "${entity}.${name}" not found on this rule`);
+  }
+  delete aliases[storageKey][name];
+  if (Object.keys(aliases[storageKey]).length === 0) {
+    delete aliases[storageKey];
+  }
+  if (Object.keys(aliases).length === 0) {
+    delete rule.aliases;
+  } else {
+    rule.aliases = aliases as Partial<Aliases>;
+  }
+}
+
+/**
+ * Count the overridable VALUES a rule sets (its `--set`/`--alias` payload), i.e.
+ * everything except `id`/`when`. Used by `edit` to enforce a rule still carries ≥1
+ * value after a merge (the same "≥1 value" invariant `add` requires).
+ */
+export function countRuleValues(rule: ConfigOverride): number {
+  let count = 0;
+  for (const key of Object.keys(rule)) {
+    if (key === 'id' || key === 'when') continue;
+    if (key === 'aliases') {
+      // An empty/absent aliases block does not count as a value.
+      const aliases = rule.aliases ?? {};
+      if (ALIAS_STORAGE_KEYS.some((k) => Object.keys((aliases as Record<string, object>)[k] ?? {}).length > 0)) {
+        count += 1;
+      }
+      continue;
+    }
+    count += 1;
+  }
+  return count;
 }

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { ConfigOverride } from '../../../lib/types.js';
 import {
+  applyAlias,
+  applyRmAlias,
+  applySet,
+  applyUnset,
   buildWhenFromFlags,
+  countRuleValues,
   hasWhenFlags,
   parseAlias,
   parseSet,
@@ -301,5 +306,92 @@ describe('serializeRule', () => {
   it('labels an unlabeled rule by #index', () => {
     const rule: ConfigOverride = { when: { branch: 'main' } };
     expect(serializeRule(rule, 2)).toEqual({ label: '#2', index: 2, rule });
+  });
+});
+
+describe('applySet / applyUnset (edit value merge)', () => {
+  it('overwrites a named field, preserving the rest', () => {
+    const rule: ConfigOverride = { id: 'a', when: {}, defaultTeam: 'frontend', defaultProject: 'q3' };
+    applySet(rule, ['defaultTeam=mobile']);
+    expect(rule).toEqual({ id: 'a', when: {}, defaultTeam: 'mobile', defaultProject: 'q3' });
+  });
+
+  it('coerces a boolean (false preserved) via the shared parseSet', () => {
+    const rule: ConfigOverride = { id: 'a', when: {} };
+    applySet(rule, ['defaultAutoAssignLead=false']);
+    expect(rule.defaultAutoAssignLead).toBe(false);
+  });
+
+  it('rejects a non-whitelisted --set key on the edit path', () => {
+    const rule: ConfigOverride = { id: 'a', when: {} };
+    expect(() => applySet(rule, ['apiKey=x'])).toThrow(/cannot set "apiKey"/);
+  });
+
+  it('deletes a whitelisted field', () => {
+    const rule: ConfigOverride = { id: 'a', when: {}, defaultTeam: 'frontend', defaultProject: 'q3' };
+    applyUnset(rule, 'defaultProject');
+    expect(rule).toEqual({ id: 'a', when: {}, defaultTeam: 'frontend' });
+  });
+
+  it('rejects --unset of a non-whitelisted key', () => {
+    const rule: ConfigOverride = { id: 'a', when: {}, defaultTeam: 'frontend' };
+    expect(() => applyUnset(rule, 'apiKey')).toThrow(/cannot unset "apiKey"/);
+    expect(() => applyUnset(rule, 'id')).toThrow(/cannot unset "id"/);
+  });
+});
+
+describe('applyAlias / applyRmAlias', () => {
+  it('merges a new alias, preserving existing ones', () => {
+    const rule: ConfigOverride = { id: 'a', when: {}, aliases: { teams: { frontend: 't1' } } };
+    applyAlias(rule, ['team.backend=t2', 'project-status.review=s1']);
+    expect(rule.aliases).toEqual({
+      teams: { frontend: 't1', backend: 't2' },
+      projectStatuses: { review: 's1' },
+    });
+  });
+
+  it('removes an alias, dropping the emptied sub-object and the whole block', () => {
+    const rule: ConfigOverride = {
+      id: 'a',
+      when: {},
+      defaultTeam: 'frontend',
+      aliases: { teams: { frontend: 't1' } },
+    };
+    applyRmAlias(rule, 'team.frontend');
+    expect(rule).toEqual({ id: 'a', when: {}, defaultTeam: 'frontend' });
+  });
+
+  it('keeps the block when other aliases remain', () => {
+    const rule: ConfigOverride = {
+      id: 'a',
+      when: {},
+      aliases: { teams: { frontend: 't1', backend: 't2' } },
+    };
+    applyRmAlias(rule, 'team.frontend');
+    expect(rule.aliases).toEqual({ teams: { backend: 't2' } });
+  });
+
+  it('rejects an absent alias and an unknown entity', () => {
+    const rule: ConfigOverride = { id: 'a', when: {}, aliases: { teams: { frontend: 't1' } } };
+    expect(() => applyRmAlias(rule, 'team.nope')).toThrow(/not found on this rule/);
+    expect(() => applyRmAlias(rule, 'teams.frontend')).toThrow(/unknown alias entity "teams"/);
+    expect(() => applyRmAlias(rule, 'teamfrontend')).toThrow(/expected <entity>\.<name>/);
+  });
+});
+
+describe('countRuleValues', () => {
+  it('counts scalar values, ignoring id/when', () => {
+    expect(countRuleValues({ id: 'a', when: { repo: 'x' }, defaultTeam: 't' })).toBe(1);
+    expect(countRuleValues({ id: 'a', when: { repo: 'x' }, defaultTeam: 't', defaultProject: 'p' })).toBe(2);
+  });
+
+  it('counts false booleans as a value (resolver gates on !== undefined)', () => {
+    expect(countRuleValues({ id: 'a', when: {}, defaultAutoAssignLead: false })).toBe(1);
+  });
+
+  it('counts a non-empty aliases block, ignores an empty one', () => {
+    expect(countRuleValues({ id: 'a', when: {}, aliases: { teams: { frontend: 't1' } } })).toBe(1);
+    expect(countRuleValues({ id: 'a', when: {}, aliases: {} })).toBe(0);
+    expect(countRuleValues({ id: 'a', when: {} })).toBe(0);
   });
 });
