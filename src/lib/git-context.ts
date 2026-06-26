@@ -5,10 +5,6 @@
  * `{host, owner, name}`) so identity (`repo`/`owner`/`host`) and `branch` matchers
  * can be evaluated. `run` is injectable (the `profiles.ts` provider pattern) so unit
  * tests stay offline; results are cached per contextDir for the process.
- *
- * `git-remote.ts:parseRemoteOwner` is left untouched — it takes the FIRST path
- * segment as owner (for profile auto-detection); §5.4 needs the LAST segment as the
- * name and the rest as the owner (nested GitLab groups). Hence a separate normalizer.
  */
 
 import { execFileSync } from 'child_process';
@@ -84,6 +80,31 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
     return null;
   }
   return { host, owner: segments.slice(0, -1).join('/'), name: segments[segments.length - 1] };
+}
+
+/**
+ * Normalize a user-supplied `--git-remote-owner` value to a bare owner.
+ *
+ * Accepts BOTH forms for resilience: a full repo URL (SSH/HTTPS/scp) has its owner
+ * extracted via `normalizeRemoteUrl`, and a bare owner token (GitHub/GitLab owner
+ * charset, no scheme/host/path separators) is returned as-is. Returns null for
+ * malformed input (a URL-like string with no owner, or a token containing path/host
+ * separators or spaces) so the caller can error instead of silently storing a value
+ * that could never match a real repo.
+ */
+export function normalizeOwnerInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return parsed.owner;
+  }
+  if (/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
 }
 
 /**

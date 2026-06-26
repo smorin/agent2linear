@@ -9,6 +9,7 @@ import {
   buildGitContext,
   defaultGitRun,
   type GitRun,
+  normalizeOwnerInput,
   normalizeRemoteUrl,
 } from './git-context.js';
 
@@ -50,6 +51,31 @@ describe('normalizeRemoteUrl (§5.4)', () => {
     expect(normalizeRemoteUrl('ssh://nopath')).toBeNull(); // scheme:// but no owner/repo
     expect(normalizeRemoteUrl('git@github.com:acme')).toBeNull(); // < 2 segments
     expect(normalizeRemoteUrl('not a url')).toBeNull(); // no scheme, no scp colon
+  });
+});
+
+describe('normalizeOwnerInput - accepts a bare owner OR a full repo URL', () => {
+  it('passes a bare owner through, trimming surrounding whitespace', () => {
+    expect(normalizeOwnerInput('banksheets')).toBe('banksheets');
+    expect(normalizeOwnerInput('acme-co')).toBe('acme-co');
+    expect(normalizeOwnerInput('  acme.labs_1  ')).toBe('acme.labs_1');
+  });
+
+  it('extracts the owner from a full HTTPS repo URL', () => {
+    expect(normalizeOwnerInput('https://github.com/banksheets/get-bank-sheets-web.git')).toBe(
+      'banksheets'
+    );
+  });
+
+  it('extracts the owner from an SSH/scp repo URL', () => {
+    expect(normalizeOwnerInput('git@github.com:acme-co/repo.git')).toBe('acme-co');
+  });
+
+  it('rejects malformed input (URL-like with no owner, or path/host separators)', () => {
+    expect(normalizeOwnerInput('https://github.com')).toBeNull();
+    expect(normalizeOwnerInput('banksheets/repo')).toBeNull();
+    expect(normalizeOwnerInput('owner with spaces')).toBeNull();
+    expect(normalizeOwnerInput('')).toBeNull();
   });
 });
 

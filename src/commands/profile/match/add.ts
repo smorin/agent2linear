@@ -1,6 +1,5 @@
 import { readConfigForScope } from '../../../lib/config.js';
-import { normalizeRemoteUrl } from '../../../lib/git-context.js';
-import { normalizeRemoteOwner } from '../../../lib/git-remote.js';
+import { normalizeOwnerInput, normalizeRemoteUrl } from '../../../lib/git-context.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { saveProfile } from '../../../lib/profiles.js';
 import { getScopeInfo } from '../../../lib/scope.js';
@@ -79,7 +78,7 @@ export function profileMatchAddCommand(name: string, options: MatchAddOptions = 
     // malformed input so a bad value never gets stored where it can never match.
     const normalizedOwners: string[] = [];
     for (const raw of owners) {
-      const owner = normalizeRemoteOwner(raw);
+      const owner = normalizeOwnerInput(raw);
       if (!owner) {
         showError(
           `Invalid git remote owner: "${raw}"`,

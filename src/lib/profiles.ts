@@ -26,9 +26,8 @@ import type { Config, MatchRule, Profile } from './types.js';
 /**
  * Default remotes provider for `detectProfile`: the repo's full remotes map from
  * the shared `git-context.ts` parser. `buildGitContext(contextDir)` takes a
- * REQUIRED dir with NO cwd default (unlike the retired
- * `readGitOriginUrl(startDir = process.cwd())`), so this MUST default `startDir`
- * to `process.cwd()` — otherwise detection breaks on every plain (no-`-C`)
+ * REQUIRED dir with NO cwd default, so this MUST default `startDir` to
+ * `process.cwd()` — otherwise detection breaks on every plain (no-`-C`)
  * invocation (M31 Phase 2 seam semantics).
  */
 export const defaultRemotes = (startDir: string = process.cwd()): Record<string, RemoteIdentity> =>
