@@ -514,6 +514,113 @@ describe('resolveActiveWorkspace - owner-only + match-only regression guard (M31
   });
 });
 
+describe('resolveActiveWorkspace - host/repo/remote matching via config (M31 Phase 3)', () => {
+  // End-to-end through the public resolveActiveWorkspace() against a REAL temp git
+  // repo, proving the new MatchRule fields (host/repo/remote/case) flow through
+  // resolution from a HAND-AUTHORED config — no CLI yet (config.json is a
+  // first-class input surface). The repo is built in the chdir'd `workdir`; the
+  // global afterEach restores cwd and removes it.
+
+  // Build a real git repo at cwd with an `origin` and an optional `upstream`,
+  // mirroring tests/scripts' git_repo() helper. Sets a local identity so
+  // --allow-empty commits succeed without a global git config.
+  const buildRepo = (originUrl: string, upstreamUrl?: string): void => {
+    const runGit = (args: string[]): void => {
+      execFileSync('git', ['-C', workdir, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
+    };
+    runGit(['init', '-q', '-b', 'main']);
+    runGit(['config', 'user.email', 't@t.co']);
+    runGit(['config', 'user.name', 't']);
+    runGit(['remote', 'add', 'origin', originUrl]);
+    if (upstreamUrl) {
+      runGit(['remote', 'add', 'upstream', upstreamUrl]);
+    }
+    runGit(['commit', '-q', '--allow-empty', '-m', 'init']);
+  };
+
+  it('routes by a HOST-only rule', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'match-only',
+      profiles: { gh: { workspace: 'gh-ws', match: { gitRemoteHost: ['github.com'] } } },
+    });
+    buildRepo('https://github.com/whoever/whatever.git');
+
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.profile).toBe('gh');
+    expect(res.name).toBe('gh-ws');
+    expect(res.source).toBe('auto-detect');
+  });
+
+  it('routes by a REPO glob (my-org/secret-*)', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'match-only',
+      profiles: { secret: { workspace: 'secret-ws', match: { gitRemoteRepo: ['my-org/secret-*'] } } },
+    });
+    buildRepo('git@github.com:my-org/secret-keys.git');
+
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.profile).toBe('secret');
+    expect(res.source).toBe('auto-detect');
+  });
+
+  it('routes by AND(host + owner + repo) when all three match', () => {
+    const profiles = {
+      acme: {
+        workspace: 'acme-ws',
+        match: {
+          gitRemoteHost: ['github.com'],
+          gitRemoteOwner: ['acme-co'],
+          gitRemoteRepo: ['acme-co/widgets'],
+        },
+      },
+    };
+    writeGlobalConfigJson(xdgConfig, { noMatchPolicy: 'match-only', profiles });
+    buildRepo('https://github.com/acme-co/widgets.git');
+
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.profile).toBe('acme');
+    expect(res.name).toBe('acme-ws');
+  });
+
+  it('fork case: a remote:"upstream" + owner rule wins over a personal origin rule (declared first)', () => {
+    // origin = personal fork (alice), upstream = the org (acme). Declared so the
+    // upstream rule comes first -> first-positive-wins picks it for the fork.
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'match-only',
+      profiles: {
+        acme: { workspace: 'acme-ws', match: { remote: 'upstream', gitRemoteOwner: ['acme'] } },
+        personal: { workspace: 'personal-ws', match: { gitRemoteOwner: ['alice'] } },
+      },
+    });
+    buildRepo('git@github.com:alice/widgets.git', 'git@github.com:acme/widgets.git');
+
+    const res = resolveActiveWorkspace();
+    expect(res.denied).toBeUndefined();
+    expect(res.profile).toBe('acme');
+    expect(res.name).toBe('acme-ws');
+    expect(res.source).toBe('auto-detect');
+  });
+
+  it('bare remote:"upstream" matches a fork but NOT a repo with only an origin', () => {
+    writeGlobalConfigJson(xdgConfig, {
+      noMatchPolicy: 'match-only',
+      profiles: { isFork: { workspace: 'fork-ws', match: { remote: 'upstream' } } },
+    });
+    buildRepo('git@github.com:alice/widgets.git', 'git@github.com:acme/widgets.git');
+    expect(resolveActiveWorkspace().profile).toBe('isFork');
+
+    // A non-fork (origin only) does not match -> match-only denies.
+    __resetGitContextCache();
+    execFileSync('git', ['-C', workdir, 'remote', 'remove', 'upstream'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    expect(resolveActiveWorkspace().denied).toBeDefined();
+  });
+});
+
 /** Helper: write a global config.json apiKey under a stubbed XDG config dir. */
 function saveGlobalApiKey(xdgDir: string, apiKey: string): void {
   const dir = join(xdgDir, 'agent2linear');

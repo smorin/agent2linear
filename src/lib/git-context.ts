@@ -86,6 +86,29 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
   return { host, owner: segments.slice(0, -1).join('/'), name: segments[segments.length - 1] };
 }
 
+/**
+ * Resolve the remote(s) a rule's identity reads (M31 Phase 3): `undefined`→`origin`,
+ * a name → that remote, a list → those remotes, `'*'`→all. Shared by the M29/M30
+ * override lineage (`overrides.ts`) and the profile lineage (`profiles.ts`) so both
+ * use ONE remote-selection primitive. Pure over `Record<string, RemoteIdentity>` —
+ * deliberately free of any `types.ts` coupling so neither lineage forms an import
+ * cycle through this module.
+ */
+export function selectRemotes(
+  spec: '*' | string | string[] | undefined,
+  remotes: Record<string, RemoteIdentity>
+): Array<{ name: string; identity: RemoteIdentity }> {
+  const all = Object.entries(remotes).map(([name, identity]) => ({ name, identity }));
+  if (spec === undefined) {
+    return all.filter((r) => r.name === 'origin');
+  }
+  if (spec === '*') {
+    return all;
+  }
+  const names = Array.isArray(spec) ? spec : [spec];
+  return all.filter((r) => names.includes(r.name));
+}
+
 const cache = new Map<string, GitContext>();
 
 /**
