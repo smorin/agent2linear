@@ -18,9 +18,21 @@ import {
   readProjectConfig,
   writeConfigForScope,
 } from './config.js';
-import { parseRemoteOwner, readGitOriginUrl } from './git-remote.js';
+import { buildGitContext, type RemoteIdentity } from './git-context.js';
+import { matchGlob } from './glob-match.js';
 import type { Scope } from './scope.js';
 import type { Config, Profile } from './types.js';
+
+/**
+ * Default remotes provider for `detectProfile`: the repo's full remotes map from
+ * the shared `git-context.ts` parser. `buildGitContext(contextDir)` takes a
+ * REQUIRED dir with NO cwd default (unlike the retired
+ * `readGitOriginUrl(startDir = process.cwd())`), so this MUST default `startDir`
+ * to `process.cwd()` — otherwise detection breaks on every plain (no-`-C`)
+ * invocation (M31 Phase 2 seam semantics).
+ */
+export const defaultRemotes = (startDir: string = process.cwd()): Record<string, RemoteIdentity> =>
+  buildGitContext(startDir).remotes;
 
 /**
  * Profile keys that are NOT config defaults — stripped from the merge scope.
@@ -99,11 +111,19 @@ export function saveProfile(scope: Scope, name: string, profile: Profile): void 
  *
  * Short-circuits to null (without invoking the git provider) when no profile has
  * `match.gitRemoteOwner` rules — so the simple/no-detection case never spawns git.
- * `remoteUrlProvider` is injectable so tests never shell out.
+ * `remotesProvider` is injectable so tests never shell out.
+ *
+ * Owner matching now flows through the SHARED parser (`git-context.ts`) and the
+ * SHARED matcher (`matchGlob`, M31 Phase 2). Behavior is unchanged for the
+ * owner-only case: still reads `origin`, still case-insensitive (via
+ * `{ nocase: true }`), still list-OR. Literal owners carry no glob metacharacter
+ * other than `.`, which picomatch treats literally, so they match exactly as
+ * before. The one intended delta is nested-group segmentation (D2): the origin's
+ * owner is now `group/sub` (all-but-last) instead of `group` (first segment).
  */
 export function detectProfile(
   profiles: Record<string, Profile>,
-  remoteUrlProvider: (startDir?: string) => string | null = readGitOriginUrl
+  remotesProvider: (startDir?: string) => Record<string, RemoteIdentity> = defaultRemotes
 ): { name: string; exclude: boolean } | null {
   const matchable = Object.entries(profiles).filter(
     ([, p]) => p.match?.gitRemoteOwner && p.match.gitRemoteOwner.length > 0
@@ -112,16 +132,15 @@ export function detectProfile(
     return null;
   }
 
-  const parsed = parseRemoteOwner(remoteUrlProvider());
-  if (!parsed) {
+  const id = remotesProvider()['origin'];
+  if (!id) {
     return null;
   }
-  const owner = parsed.owner.toLowerCase();
 
   let positive: string | null = null;
   for (const [name, profile] of matchable) {
-    const owners = (profile.match?.gitRemoteOwner ?? []).map((o) => o.toLowerCase());
-    if (!owners.includes(owner)) {
+    const owners = profile.match?.gitRemoteOwner ?? [];
+    if (!owners.some((pattern) => matchGlob(pattern, id.owner, { nocase: true }))) {
       continue;
     }
     const excluded = profile.linear === false || profile.match?.linear === false;

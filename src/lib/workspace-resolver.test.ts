@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { __resetGitRemoteCache } from './git-remote.js';
+import { __resetGitContextCache } from './git-context.js';
 import { setInvocationContext } from './invocation-context.js';
 import {
   normalizeEnvVarName,
@@ -31,17 +31,17 @@ beforeEach(() => {
   vi.stubEnv('AGENT2LINEAR_WORKSPACE', '');
   process.chdir(workdir);
   setInvocationContext({});
-  // The current parser's single-slot origin-URL cache (git-remote.ts:59). The
-  // real-repo guard block below shells out to git, so a leaky cache would make it
-  // falsely green. Harmless to the hermetic blocks (they never populate it).
-  // (Phase 2 swaps this to __resetGitContextCache().)
-  __resetGitRemoteCache();
+  // The shared parser's per-contextDir git-context cache (git-context.ts). Detection
+  // now flows through this Map cache (M31 Phase 2), and the real-repo guard block
+  // below shells out to git, so a leaky cache would make it falsely green. Harmless
+  // to the hermetic blocks (they never populate it).
+  __resetGitContextCache();
 });
 
 afterEach(() => {
   process.chdir(origCwd);
   setInvocationContext({});
-  __resetGitRemoteCache();
+  __resetGitContextCache();
   vi.unstubAllEnvs();
   rmSync(xdgConfig, { recursive: true, force: true });
   rmSync(workdir, { recursive: true, force: true });
