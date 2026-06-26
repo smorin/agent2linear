@@ -236,6 +236,37 @@ export function detectMatchingProfiles(
 }
 
 /**
+ * The POSITIVE subset of `detectMatchingProfiles` (M31 Phase 4) — profiles whose
+ * rule matches the repo AND that are NOT excluded (`linear: false` on the profile or
+ * its `match`, the same exclusion predicate `detectProfile` uses for negative-wins).
+ *
+ * This is the SINGLE source of the ambiguity count: BOTH `doctor` and
+ * `profile match list` call it, so the two consumers can never disagree on how many
+ * profiles "really" route to a workspace. An excluded match is deterministic
+ * (negative-wins) and is NOT a routing ambiguity, so it never counts toward the
+ * warning threshold (Phase 4 decision A).
+ */
+export function detectPositiveMatchingProfiles(
+  profiles: Record<string, Profile>,
+  remotesProvider: (startDir?: string) => Record<string, RemoteIdentity> = defaultRemotes
+): string[] {
+  return detectMatchingProfiles(profiles, remotesProvider).filter((name) => {
+    const p = profiles[name];
+    return !(p.linear === false || p.match?.linear === false);
+  });
+}
+
+/**
+ * The informational ambiguity warning shown when >1 profile POSITIVELY matches the
+ * current repo (M31 Phase 4). Shared by `doctor` and `profile match list` so the
+ * wording can never drift. Purely informational: resolution is unchanged
+ * (negative-wins → first-positive-wins; order profiles to control which wins).
+ */
+export function ambiguityWarning(count: number): string {
+  return `⚠️  ${count} profiles match this repo (first-positive-wins; order profiles to control which)`;
+}
+
+/**
  * Remove a profile from the given scope's config.json. Returns false if absent.
  */
 export function removeProfile(scope: Scope, name: string): boolean {

@@ -5,6 +5,7 @@ import { getApiKey,getConfig, getProjectConfigPath, readProjectConfig } from '..
 import { getEntityCache } from '../lib/entity-cache.js';
 import { isTrackedByGit } from '../lib/git-remote.js';
 import { getCurrentUser,testConnection } from '../lib/linear-client.js';
+import { ambiguityWarning, detectPositiveMatchingProfiles, loadProfiles } from '../lib/profiles.js';
 import type { AliasEntityType } from '../lib/types.js';
 import { resolveActiveWorkspace } from '../lib/workspace-resolver.js';
 import { getGlobalWorkspacesPath, getProjectWorkspacesPath } from '../lib/workspaces.js';
@@ -88,6 +89,13 @@ export async function doctorCommand() {
     const activeName =
       resolution.name ?? (resolution.source === 'flag' ? '(ad-hoc)' : '(default/legacy)');
     console.log(`  ${activeName} · source: ${resolution.source}`);
+  }
+  // Informational ambiguity surfacing (M31 Phase 4): when >1 profile POSITIVELY
+  // matches this repo, ordering profiles is the lever that decides which wins. Does
+  // NOT change resolution or the pass/fail count below.
+  const positiveMatches = detectPositiveMatchingProfiles(loadProfiles());
+  if (positiveMatches.length >= 2) {
+    console.log(`  ${ambiguityWarning(positiveMatches.length)}`);
   }
 
   // 3c. Secrets hygiene (R6): never let a key get committed
