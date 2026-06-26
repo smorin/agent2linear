@@ -372,9 +372,51 @@ a2l config set defaultProfile acme    # persisted fallback default
 # 3. Auto-detect: route any repo under a GitHub org to this profile
 a2l profile match add acme --git-remote-owner acme-co --git-remote-owner acme-labs
 #   (accepts a bare owner OR a full repo URL — the owner is extracted)
+
+# Match on host and/or repo name too — all accept glob patterns:
+a2l profile match add acme --git-remote-host '*.gitlab.example.com' --git-remote-owner acme
+a2l profile match add acme --git-remote-repo 'my-org/secret-*'        # owner/name glob
+a2l profile match add acme --git-remote-owner Acme-Co --case-sensitive  # opt out of the case-insensitive default
 ```
 
 Now, inside any repo whose `origin` owner is `acme-co`/`acme-labs`, commands automatically use the `acme` workspace and its defaults.
+
+### Matching on host, repo name, and which remote
+
+A `match` rule can read **host**, **owner**, **repo** (`owner/name`), and choose **which remote** its identity criteria read:
+
+- All identity fields accept **glob patterns** — `github.com`, `*.gitlab.example.com`, `acme-*`, `my-org/secret-*`.
+- Within one rule, **present fields AND**; **each repeated field's list ORs**; a `linear: false` exclusion still wins. A rule matches only when *some selected remote* satisfies *every* present field.
+- Matching is **case-insensitive by default** (forge-correct). Pass `--case-sensitive` for the rare GitLab `Foo` ≠ `foo` case; it is per-rule, so it does not flip your other (GitHub) rules. (Turning it back off is a hand-edit of `config.json` for now.)
+- `--remote <name>` selects which remote(s) the identity reads: default `origin`, a name (`upstream`), `"*"` (any remote), or *bare* `--remote upstream` with no identity fields = "a remote named `upstream` exists" (the fork predicate).
+
+**Worked example — two orgs to one workspace, two users to another, refuse everything else:**
+
+```bash
+a2l config set noMatchPolicy match-only          # recognized repos only; refuse everywhere else
+
+# Org A (both its GitHub orgs) → the work workspace
+a2l profile match add work --git-remote-owner acme-co --git-remote-owner acme-labs
+
+# Two personal users → the personal workspace
+a2l profile match add personal --git-remote-owner alice --git-remote-owner bob
+```
+
+Now `acme-co/*` and `acme-labs/*` route to `work`; `alice/*` and `bob/*` route to `personal`; **any other repo hard-errors** (exit 1) — no default, no guessing.
+
+**Fork example — route by `upstream`, not your personal fork:**
+
+```bash
+# You forked acme/widgets to alice/widgets, so origin = your fork and upstream = the org.
+a2l profile match add acme --remote upstream --git-remote-owner acme   # read the upstream owner
+a2l profile match add personal --git-remote-owner alice                # plain origin-owner rule
+```
+
+Declare the `upstream` rule **first** so it wins for a fork (origin = `alice/widgets`, upstream = `acme/widgets`) — the `acme` profile resolves via the upstream owner even though `origin` is `alice`. In a non-forked `alice/*` repo (no `upstream`), the `personal` rule wins. When more than one profile matches the same repo, `a2l doctor` and `a2l profile match list` print an informational ambiguity warning (`⚠️ N profiles match this repo (first-positive-wins; order profiles to control which)`) — resolution is unchanged; ordering profiles is the lever.
+
+`a2l profile match list <profile>` prints each rule's `remote` (when not the default `origin`), `git-remote-host` / `git-remote-owner` / `git-remote-repo` lines, and `case-sensitive: true` when set.
+
+> **Release note (v0.31.0) — nested-group owners.** Profile detection now uses the same git parser as `config` overrides, so for **nested** self-hosted groups (`git@gitlab.com:group/sub/repo.git`) the **owner** is now the all-but-last path (`group/sub`), not just the first segment (`group`). A rule written as `--git-remote-owner group` no longer matches such a repo — use `--git-remote-owner group/sub` or the glob `--git-remote-owner 'group/*'`. Flat `host/owner/name` repos (e.g. plain GitHub) are unaffected.
 
 ### Selection precedence (which workspace?)
 
@@ -385,7 +427,7 @@ Highest to lowest:
 | 1 | `--workspace <name>` / `--api-key <key>` (per-invocation) | `a2l --workspace acme issue create …` |
 | 2 | `AGENT2LINEAR_WORKSPACE` env declarator | `AGENT2LINEAR_WORKSPACE=acme a2l …` |
 | 3 | Repo config `profile`/`workspace` in `.agent2linear/config.json` | `{ "profile": "acme" }` |
-| 4 | Git-remote auto-detect (`origin` owner → `profile.match.gitRemoteOwner`) | (automatic) |
+| 4 | Git-remote auto-detect (remote identity → `profile.match` host/owner/repo + `remote`) | (automatic) |
 | 5 | Global `defaultProfile` | `a2l config set defaultProfile acme` |
 | 6 | Legacy single key (`LINEAR_API_KEY` / config `apiKey`) | (the simple case) |
 

@@ -14,8 +14,8 @@
  * *matching* branch).
  */
 
+import { type RemoteIdentity, selectRemotes } from './git-context.js';
 import { matchGlob, matchPath } from './glob-match.js';
-import type { RemoteIdentity } from './git-context.js';
 import { logger } from './logger.js';
 import type { Aliases, ConfigLocation, ConfigOverride, OverridableConfig, WhenClause } from './types.js';
 
@@ -182,22 +182,6 @@ export function compareKeys(a: number[], b: number[]): number {
     }
   }
   return 0;
-}
-
-/** Resolve the remote(s) a node's identity reads: default `origin`, a name, a list, or `"*"`. */
-function selectRemotes(
-  spec: WhenClause['remote'],
-  remotes: Record<string, RemoteIdentity>
-): Array<{ name: string; identity: RemoteIdentity }> {
-  const all = Object.entries(remotes).map(([name, identity]) => ({ name, identity }));
-  if (spec === undefined) {
-    return all.filter((r) => r.name === 'origin');
-  }
-  if (spec === '*') {
-    return all;
-  }
-  const names = Array.isArray(spec) ? spec : [spec];
-  return all.filter((r) => names.includes(r.name));
 }
 
 /** Whether a remote's identity satisfies the node's identity criteria (those present). */

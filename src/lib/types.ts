@@ -103,12 +103,27 @@ export interface ConfigLocation {
 }
 
 /**
- * A profile's git-remote detection rule (Phase 3). A profile auto-resolves for a
- * repo whose `origin` owner is listed in `gitRemoteOwner`. `linear: false` marks
- * the matched org off-limits.
+ * A profile's git-remote detection rule (M28 Phase 3; M31 Phase 3 adds
+ * host/repo/remote/case). A profile auto-resolves for a repo whose selected
+ * remote(s) satisfy the present identity fields. Within one rule, present identity
+ * fields are AND'd and each field's list ORs; matching is case-insensitive by
+ * default. `linear: false` marks the matched org off-limits (negative-wins).
+ *
+ * Mirrors `WhenLeaf`'s host/owner/repo/remote vocabulary for one mental model:
+ * - `remote` selects which remote(s) identity reads (default `origin`; a name, a
+ *   list, or `'*'`; a BARE `remote` with no identity fields = "a remote of that
+ *   name exists" — the fork predicate).
+ * - `gitRemoteHost` / `gitRemoteOwner` / `gitRemoteRepo` are glob lists matched
+ *   against `id.host` / `id.owner` / `${id.owner}/${id.name}` respectively.
+ * - `caseSensitive` (default false) opts the whole rule into case-sensitive globs.
  */
 export interface MatchRule {
-  gitRemoteOwner?: string[];
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  remote?: '*' | (string & {}) | string[]; // which remote(s) identity reads; default origin (M29 vocab)
+  gitRemoteHost?: string[]; // host globs, e.g. "github.com", "*.gitlab.example.com"
+  gitRemoteOwner?: string[]; // owner globs (existing)
+  gitRemoteRepo?: string[]; // "owner/name" globs, e.g. "my-org/secret-*"
+  caseSensitive?: boolean; // default false (case-insensitive)
   linear?: boolean;
 }
 

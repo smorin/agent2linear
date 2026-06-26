@@ -5,10 +5,6 @@
  * `{host, owner, name}`) so identity (`repo`/`owner`/`host`) and `branch` matchers
  * can be evaluated. `run` is injectable (the `profiles.ts` provider pattern) so unit
  * tests stay offline; results are cached per contextDir for the process.
- *
- * `git-remote.ts:parseRemoteOwner` is left untouched — it takes the FIRST path
- * segment as owner (for profile auto-detection); §5.4 needs the LAST segment as the
- * name and the rest as the owner (nested GitLab groups). Hence a separate normalizer.
  */
 
 import { execFileSync } from 'child_process';
@@ -86,6 +82,118 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
   return { host, owner: segments.slice(0, -1).join('/'), name: segments[segments.length - 1] };
 }
 
+const IDENTITY_PATTERN_CHARS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/*?,!{}[]+()|@-';
+
+function isSafeIdentityPattern(
+  trimmed: string,
+  options: { allowSlash: boolean; requireSlash?: boolean }
+): boolean {
+  if (!trimmed || /\s|:/.test(trimmed)) {
+    return false;
+  }
+  if (!options.allowSlash && trimmed.includes('/')) {
+    return false;
+  }
+  if (options.requireSlash && !trimmed.includes('/')) {
+    return false;
+  }
+  if (options.allowSlash && (/^\//.test(trimmed) || /\/$/.test(trimmed) || trimmed.includes('//'))) {
+    return false;
+  }
+  if (![...trimmed].every((ch) => IDENTITY_PATTERN_CHARS.includes(ch))) {
+    return false;
+  }
+  // Allow `@(` as picomatch's extglob operator, but keep rejecting malformed
+  // URL/scp fragments such as `git@github.com`.
+  return !/@(?!\()/.test(trimmed);
+}
+
+/**
+ * Normalize a user-supplied `--git-remote-owner` value to an owner glob.
+ *
+ * Accepts BOTH forms for resilience: a full repo URL (SSH/HTTPS/scp) has its owner
+ * extracted via `normalizeRemoteUrl`, and an owner PATTERN is returned as-is. Owner
+ * patterns may be a bare owner, a NESTED group (`group/sub`, all-but-last), or a glob
+ * (`acme-*`, `group/*`, `my-org/secret-*`) — all identity fields accept globs (M31),
+ * and detection glob-matches the owner, so the CLI must store them. Returns null only
+ * for genuinely malformed input — empty/whitespace, or a token carrying URL/host
+ * separators (`:` / `@` / internal whitespace, e.g. a URL-like string with no owner) —
+ * so the caller can error instead of silently storing a value that can never match.
+ */
+export function normalizeOwnerInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return parsed.owner;
+  }
+  // Accept owner globs + nested-group owners (`/` and glob metacharacters), but reject
+  // whitespace and URL/host separators so a malformed paste still errors.
+  if (isSafeIdentityPattern(trimmed, { allowSlash: true })) {
+    return trimmed;
+  }
+  return null;
+}
+
+/**
+ * Normalize a user-supplied `--git-remote-host` value to a host glob.
+ */
+export function normalizeHostInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return parsed.host;
+  }
+  return isSafeIdentityPattern(trimmed, { allowSlash: false }) ? trimmed : null;
+}
+
+/**
+ * Normalize a user-supplied `--git-remote-repo` value to an `owner/name` glob.
+ */
+export function normalizeRepoInput(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = normalizeRemoteUrl(trimmed);
+  if (parsed) {
+    return `${parsed.owner}/${parsed.name}`;
+  }
+  return isSafeIdentityPattern(trimmed, { allowSlash: true, requireSlash: true }) ? trimmed : null;
+}
+
+/**
+ * Resolve the remote(s) a rule's identity reads (M31 Phase 3): `undefined`→`origin`,
+ * a name → that remote, a list → those remotes, `'*'` or a list containing `'*'`→all.
+ * Shared by the M29/M30 override lineage (`overrides.ts`) and the profile lineage
+ * (`profiles.ts`) so both use ONE remote-selection primitive. Pure over
+ * `Record<string, RemoteIdentity>` — deliberately free of any `types.ts` coupling so
+ * neither lineage forms an import cycle through this module.
+ */
+export function selectRemotes(
+  spec: '*' | string | string[] | undefined,
+  remotes: Record<string, RemoteIdentity>
+): Array<{ name: string; identity: RemoteIdentity }> {
+  const all = Object.entries(remotes).map(([name, identity]) => ({ name, identity }));
+  if (spec === undefined) {
+    return all.filter((r) => r.name === 'origin');
+  }
+  if (spec === '*') {
+    return all;
+  }
+  const names = Array.isArray(spec) ? spec : [spec];
+  if (names.includes('*')) {
+    return all;
+  }
+  return all.filter((r) => names.includes(r.name));
+}
+
 const cache = new Map<string, GitContext>();
 
 /**
@@ -105,20 +213,22 @@ export function buildGitContext(contextDir: string, run: GitRun = defaultGitRun(
   const branch = branchOut && branchOut !== 'HEAD' ? branchOut : undefined;
 
   const remotes: Record<string, RemoteIdentity> = {};
-  const remotesOut = run(['config', '--get-regexp', '^remote\\..*\\.url$']);
-  if (remotesOut) {
-    for (const line of remotesOut.split('\n')) {
-      const sp = line.indexOf(' ');
-      if (sp === -1) {
-        continue;
-      }
-      const nameMatch = /^remote\.(.+)\.url$/.exec(line.slice(0, sp));
-      if (!nameMatch) {
-        continue;
-      }
-      const identity = normalizeRemoteUrl(line.slice(sp + 1));
-      if (identity) {
-        remotes[nameMatch[1]] = identity;
+  if (top) {
+    const remotesOut = run(['config', '--local', '--get-regexp', '^remote\\..*\\.url$']);
+    if (remotesOut) {
+      for (const line of remotesOut.split('\n')) {
+        const sp = line.indexOf(' ');
+        if (sp === -1) {
+          continue;
+        }
+        const nameMatch = /^remote\.(.+)\.url$/.exec(line.slice(0, sp));
+        if (!nameMatch) {
+          continue;
+        }
+        const identity = normalizeRemoteUrl(line.slice(sp + 1));
+        if (identity && remotes[nameMatch[1]] === undefined) {
+          remotes[nameMatch[1]] = identity;
+        }
       }
     }
   }

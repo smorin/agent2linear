@@ -24,9 +24,8 @@
 
 import { readGlobalConfig, readProjectConfig } from './config.js';
 import { loadEnvFile } from './env-file.js';
-import { readGitOriginUrl } from './git-remote.js';
 import { getInvocationContext } from './invocation-context.js';
-import { detectProfile, loadProfiles } from './profiles.js';
+import { defaultRemotes, detectProfile, loadProfiles } from './profiles.js';
 import type { Profile, WorkspaceResolution, WorkspaceSource } from './types.js';
 import { loadWorkspaces } from './workspaces.js';
 
@@ -136,10 +135,14 @@ function resolveDecision(startDir?: string): Decision {
     return namedOrExcluded(project.workspace, 'project', profiles);
   }
 
-  // 4. Profile auto-detection via git-remote owner (negative match wins). Read the
-  //    origin from `startDir` when querying a context dir other than cwd (M29 J);
-  //    with no `startDir` the default provider reads cwd, unchanged.
-  const detected = detectProfile(profiles, startDir === undefined ? undefined : () => readGitOriginUrl(startDir));
+  // 4. Profile auto-detection via git remote identity (host/owner/repo + remote;
+  //    negative match wins). Read remotes from `startDir` when querying a context dir
+  //    other than cwd (M29 J); with no `startDir` the default provider
+  //    (`defaultRemotes`) reads cwd via its own `= process.cwd()` default, unchanged.
+  const detected = detectProfile(
+    profiles,
+    startDir === undefined ? defaultRemotes : () => defaultRemotes(startDir)
+  );
   if (detected) {
     if (detected.exclude) {
       return {

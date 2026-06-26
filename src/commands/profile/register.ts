@@ -112,27 +112,55 @@ Commands refuse to use an excluded profile unless forced with --workspace/--api-
   // Nested detection-rule group (mirrors "project dependencies …").
   const match = profile
     .command('match')
-    .description('Manage git-remote-owner auto-detection rules for a profile')
+    .description('Manage git-remote auto-detection rules (host/owner/repo/remote) for a profile')
     .action(() => {
       match.help();
     });
 
   match
     .command('add <profile>')
-    .description('Add git-remote-owner match rules to a profile')
+    .description('Add git-remote match rules (host/owner/repo/remote) to a profile')
     .option(
-      '--git-remote-owner <owner>',
-      'Git remote owner that maps to this profile (repeatable)',
+      '--git-remote-host <host>',
+      'Git remote host glob that maps to this profile, e.g. "github.com", "*.gitlab.example.com" (repeatable)',
       collect,
       []
     )
+    .option(
+      '--git-remote-owner <owner>',
+      'Git remote owner glob that maps to this profile (repeatable)',
+      collect,
+      []
+    )
+    .option(
+      '--git-remote-repo <owner/name>',
+      'Git remote "owner/name" glob that maps to this profile, e.g. "my-org/secret-*" (repeatable)',
+      collect,
+      []
+    )
+    .option(
+      '--remote <name>',
+      'Which remote(s) identity reads: a name (e.g. "upstream"), or "*" for any (default: origin)',
+      collect,
+      []
+    )
+    .option('--case-sensitive', 'Match host/owner/repo case-sensitively (default: case-insensitive)')
     .option('-g, --global', 'Edit global config (default)')
     .option('-p, --project', 'Edit project config')
     .addHelpText('after', `
+Within one rule, present identity fields (host/owner/repo) are AND'd and each list
+ORs; globs match case-insensitively unless --case-sensitive is given. --remote
+selects which remote(s) the identity reads (default: origin); a bare --remote with
+no identity fields matches a repo that simply HAS that remote (the fork predicate).
+
 Examples:
   $ agent2linear profile match add acme --git-remote-owner acme-co --git-remote-owner acme-labs
+  $ agent2linear profile match add acme --git-remote-host '*.gitlab.example.com' --git-remote-owner acme
+  $ agent2linear profile match add acme --git-remote-repo 'my-org/secret-*'
+  # Fork case: route by the upstream owner even when origin is a personal fork.
+  $ agent2linear profile match add acme --remote upstream --git-remote-owner acme
 
-A repo whose origin owner matches one of these auto-resolves to this profile.
+A repo whose selected remote(s) satisfy these globs auto-resolves to this profile.
 `)
     .action((name: string, options) => {
       profileMatchAddCommand(name, options);
@@ -141,7 +169,7 @@ A repo whose origin owner matches one of these auto-resolves to this profile.
   match
     .command('list <profile>')
     .alias('ls')
-    .description('List a profile’s git-remote-owner match rules')
+    .description('List a profile’s git-remote match rules (host/owner/repo/remote)')
     .action((name: string) => {
       profileMatchListCommand(name);
     });
@@ -149,13 +177,18 @@ A repo whose origin owner matches one of these auto-resolves to this profile.
   match
     .command('remove <profile>')
     .alias('rm')
-    .description('Remove a git-remote-owner match rule from a profile')
-    .option('--git-remote-owner <owner>', 'Git remote owner to remove')
+    .description('Remove a git-remote match rule (host/owner/repo/remote) from a profile')
+    .option('--git-remote-host <host>', 'Git remote host glob to remove')
+    .option('--git-remote-owner <owner>', 'Git remote owner glob to remove')
+    .option('--git-remote-repo <owner/name>', 'Git remote "owner/name" glob to remove')
+    .option('--remote <name>', 'Remote selector value to remove (e.g. "upstream")')
     .option('-g, --global', 'Edit global config (default)')
     .option('-p, --project', 'Edit project config')
     .addHelpText('after', `
 Examples:
   $ agent2linear profile match remove acme --git-remote-owner acme-labs
+  $ agent2linear profile match remove acme --git-remote-host '*.gitlab.example.com'
+  $ agent2linear profile match remove acme --remote upstream
 `)
     .action((name: string, options) => {
       profileMatchRemoveCommand(name, options);

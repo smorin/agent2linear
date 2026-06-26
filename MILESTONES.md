@@ -13,6 +13,44 @@
 
 ---
 
+## [x] Milestone M31: Repo-Identity Matching (host/owner/repo + remote) + Unified Matcher (v0.31.0)
+**Goal**: Extend profile auto-detection so a repo routes to a workspace by **host**, **repo name**, and **which remote** (`origin` / `upstream` / any — the fork case), not just the `origin` **owner** — and do it by **unifying** the two divergent git-URL parsers/matchers onto one parser (`git-context.ts`) + one glob matcher (`glob-match.ts`) + one remote-selection primitive (`selectRemotes`). All identity fields accept **globs** and match **case-insensitively by default**, with an **opt-in case-sensitive** per-rule flag. The existing owner-only + `match-only` "refuse to guess" behavior is locked by a committed regression test (including the negative assertion) **before** any refactor, so the change cannot silently move where writes land. Fully additive: an owner-only config behaves exactly as today, and `apiKey`/workspace selection is never affected.
+
+### Requirements
+- `a2l profile match add <p> --git-remote-host <glob>` / `--git-remote-repo <owner/name glob>` / `--remote <name>` alongside `--git-remote-owner`; `match list` shows all of them plus the case flag. Within one rule, **present identity fields AND**, **each list ORs**; `linear:false` exclusion still wins.
+- All identity fields accept **glob patterns** (`github.com`, `*.gitlab.example.com`, `my-org/secret-*`) and match **case-insensitively by default**, with **opt-in case-sensitive** via a per-rule `caseSensitive` flag (CLI `--case-sensitive`).
+- A rule chooses **which remote(s)** its identity reads via `remote` (mirrors M29's `WhenLeaf.remote`): default `origin`, a name (`upstream`), a list (match if *any* selected remote satisfies), `"*"` (any), or *bare* `remote` ("a remote of that name exists" — the fork predicate). This makes the **fork case** work: route by the `upstream` owner even when `origin` is a personal fork.
+- **One** git-identity parser (`git-context.ts`), **one** glob matcher (`glob-match.ts`), and **one** remote selector (`selectRemotes`) are shared by the profile lineage and the M29/M30 override lineage — one parser, one matcher, one cache. The profile-only parser is retired (`isTrackedByGit` kept).
+- The owner-only `match-only` behavior is **provably unchanged**, pinned by a committed regression test including the **negative** assertion (unrelated owner → denied, no fallback, even with `defaultProfile` set).
+- When **>1 profile positively matches** the same repo (more likely now, with forks), `doctor` and `profile match list` print an informational ambiguity warning (tie-break unchanged; ordering profiles is the lever that makes `upstream` win for forks).
+
+### Out of Scope
+- **Branch**-based workspace selection (door left open; not built).
+- Importing M29's most-specific-wins `Spec`/`resolveOverrides` scoring into write-routing — profiles keep negative-wins → first-positive-wins; only the predicate primitives (parse + glob + `selectRemotes`) are shared, never the defaults resolver.
+- A `--no-case-sensitive` (or `profile edit`) un-set path — turning `caseSensitive` back off is a hand-edit of `config.json` for v1 (consistent with other one-way `match` flags).
+- The optional offline shell demo (`tests/scripts/test-workspace-match.sh`) — the hermetic Vitest suites (Phase 1 guard + Phase 3 resolver/fork tests) are the CI regression surface for v1.
+- GitHub-API upstream discovery — "upstream" is the remote literally named `upstream` (offline only); changing `apiKey`/workspace key sourcing.
+
+### Tasks
+- [x] [M31-T01] Phase 1: lock owner-only + `match-only` behavior with a committed end-to-end regression guard (incl. the negative assertion + case-insensitive `ACME-CO`) **before** any refactor
+- [x] [M31-T02] Phase 2: unify `detectProfile` onto `git-context.ts` + shared `matchGlob` (owner behavior unchanged; nested-group owner becomes `group/sub` (all-but-last), D2); inject the full remotes map
+- [x] [M31-T03] Phase 3: host/repo/remote/case matching — extend `MatchRule` additively (`gitRemoteHost`/`gitRemoteRepo`/`remote`/`caseSensitive`); lift shared `selectRemotes` into `git-context.ts`; `detectMatchingProfiles`/`detectPositiveMatchingProfiles`
+- [x] [M31-T04] Phase 4: CLI flags (`--git-remote-host`/`--git-remote-repo`/`--remote`/`--case-sensitive`) on `match add`, mirrored on `remove`/`list`; ambiguity warning in `doctor` + `match list`
+- [x] [M31-T05] Phase 5: retire the legacy profile-only parser (`parseRemoteOwner`/`readGitOriginUrl`/`normalizeRemoteOwner`/`__resetGitRemoteCache`); keep `isTrackedByGit`
+- [x] [M31-T06] Phase 6: docs (README, CLAUDE.md), this milestone, version bump 0.30.0 → 0.31.0
+- [x] [M31-TS01] Vitest: `workspace-resolver` (hermetic real-git guard + host/repo/AND/fork resolution), `profiles` (multi-field AND, list-OR, host-/repo-/remote-only, remote selection, bare-remote, case opt-in, full-rule exclusion, `detectMatchingProfiles`), `glob-match` (`nocase`), `overrides` (`selectRemotes` move green)
+
+### Automated Verification
+- `npm run build`, `npm run typecheck`, `npm run lint`, `npm test` pass
+- `a2l --version` reports `0.31.0`
+
+### Manual Verification
+- In a fork (`origin=alice/widgets`, `upstream=acme/widgets`) with an `acme` (`remote: upstream`, owner `acme`) profile declared before a `personal` (origin owner `alice`) profile, `a2l doctor` resolves `acme` and prints the ambiguity warning; a repo with no `upstream` does not resolve via that rule
+- Owner-only + `match-only` in an unrecognized repo (with `defaultProfile` set) shows `⚠️ No workspace resolved …` and a mutating command exits 1 — including the uppercase `ACME-CO` case still resolving
+- README's worked `match-only` example, when followed in throwaway repos, behaves as written (org A → workspace A; the two users → workspace B; anything else → exit 1)
+
+---
+
 ## [x] Milestone M30: Configurable Prompt Templates for AI Issue Creation — M1 read-side (v0.30.0)
 **Goal**: Let an agent (or human) ask `a2l` for the **right markdown prompt to follow before creating a Linear issue**, selected by context. `defaultPrompt` becomes a first-class config default wired exactly like `defaultMilestoneTemplate` (general + path/repo/branch via the *existing* `overrides[]`); a small **team layer** is applied on top via `promptRules` in a committable `prompts.json`. M1 is read-side only — prompts are hand-authored JSON/`.md`. Fully additive: a config with no prompts behaves exactly as today, and `apiKey`/workspace selection is never affected.
 

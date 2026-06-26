@@ -112,7 +112,12 @@ export function matchPath(pattern: string, contextDir: string, repoRoot: string 
  * the pattern matches the full value directly — e.g. `acme/*` vs `acme/web`,
  * `acme/**` vs a nested-group `acme/platform/web`, `*.gitlab.com` vs a host,
  * `release/*` vs a branch.
+ *
+ * `opts.nocase` (default `false`, preserving M29's case-sensitive behavior so the
+ * override tests stay green) opts into case-insensitive matching — the profile
+ * lineage passes `{ nocase: true }` so owner/host/repo detection stays
+ * case-insensitive (M31 Phase 2).
  */
-export function matchGlob(pattern: string, value: string): boolean {
-  return picomatch(pattern, PICOMATCH_OPTS)(value);
+export function matchGlob(pattern: string, value: string, opts?: { nocase?: boolean }): boolean {
+  return picomatch(pattern, { ...PICOMATCH_OPTS, nocase: opts?.nocase ?? false })(value);
 }
