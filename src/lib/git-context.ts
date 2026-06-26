@@ -83,14 +83,16 @@ export function normalizeRemoteUrl(raw: string): RemoteIdentity | null {
 }
 
 /**
- * Normalize a user-supplied `--git-remote-owner` value to a bare owner.
+ * Normalize a user-supplied `--git-remote-owner` value to an owner glob.
  *
  * Accepts BOTH forms for resilience: a full repo URL (SSH/HTTPS/scp) has its owner
- * extracted via `normalizeRemoteUrl`, and a bare owner token (GitHub/GitLab owner
- * charset, no scheme/host/path separators) is returned as-is. Returns null for
- * malformed input (a URL-like string with no owner, or a token containing path/host
- * separators or spaces) so the caller can error instead of silently storing a value
- * that could never match a real repo.
+ * extracted via `normalizeRemoteUrl`, and an owner PATTERN is returned as-is. Owner
+ * patterns may be a bare owner, a NESTED group (`group/sub`, all-but-last), or a glob
+ * (`acme-*`, `group/*`, `my-org/secret-*`) — all identity fields accept globs (M31),
+ * and detection glob-matches the owner, so the CLI must store them. Returns null only
+ * for genuinely malformed input — empty/whitespace, or a token carrying URL/host
+ * separators (`:` / `@` / internal whitespace, e.g. a URL-like string with no owner) —
+ * so the caller can error instead of silently storing a value that can never match.
  */
 export function normalizeOwnerInput(input: string): string | null {
   const trimmed = input.trim();
@@ -101,7 +103,9 @@ export function normalizeOwnerInput(input: string): string | null {
   if (parsed) {
     return parsed.owner;
   }
-  if (/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) {
+  // Accept owner globs + nested-group owners (`/` and glob metacharacters), but reject
+  // whitespace and URL/host separators (`:` / `@`) so a malformed paste still errors.
+  if (/^[A-Za-z0-9._/*?,!{}[\]-]+$/.test(trimmed)) {
     return trimmed;
   }
   return null;

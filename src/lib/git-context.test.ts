@@ -71,9 +71,16 @@ describe('normalizeOwnerInput - accepts a bare owner OR a full repo URL', () => 
     expect(normalizeOwnerInput('git@github.com:acme-co/repo.git')).toBe('acme-co');
   });
 
-  it('rejects malformed input (URL-like with no owner, or path/host separators)', () => {
-    expect(normalizeOwnerInput('https://github.com')).toBeNull();
-    expect(normalizeOwnerInput('banksheets/repo')).toBeNull();
+  it('accepts owner globs and nested-group owners (M31 — all identity fields take globs)', () => {
+    expect(normalizeOwnerInput('acme-*')).toBe('acme-*');
+    expect(normalizeOwnerInput('group/sub')).toBe('group/sub'); // nested group (all-but-last)
+    expect(normalizeOwnerInput('group/*')).toBe('group/*'); // the D2 migration glob
+    expect(normalizeOwnerInput('my-org/secret-*')).toBe('my-org/secret-*');
+  });
+
+  it('rejects genuinely malformed input (empty, whitespace, or URL/host separators)', () => {
+    expect(normalizeOwnerInput('https://github.com')).toBeNull(); // URL-like, no owner
+    expect(normalizeOwnerInput('git@github.com:owner')).toBeNull(); // host:single-segment, no repo
     expect(normalizeOwnerInput('owner with spaces')).toBeNull();
     expect(normalizeOwnerInput('')).toBeNull();
   });

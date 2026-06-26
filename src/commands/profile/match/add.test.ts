@@ -64,7 +64,11 @@ describe('profileMatchAddCommand - --git-remote-owner normalization', () => {
         throw new Error(`exit:${code}`);
       }) as never);
 
-    expect(() => profileMatchAddCommand('p', { gitRemoteOwner: ['bad/owner'] })).toThrow('exit:1');
+    // Whitespace/URL separators are still rejected; `owner/glob` patterns are NOT
+    // malformed any more (they are valid nested-owner / glob inputs — see below).
+    expect(() => profileMatchAddCommand('p', { gitRemoteOwner: ['owner with spaces'] })).toThrow(
+      'exit:1'
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
     // No match rules were written.
     expect(loadProfiles().p.match).toBeUndefined();
@@ -130,6 +134,13 @@ describe('profileMatchAddCommand - host/repo/remote/case (M31 Phase 4)', () => {
   it('accepts a bare --remote with no identity fields (the fork predicate)', () => {
     profileMatchAddCommand('p', { remote: ['upstream'] });
     expect(loadProfiles().p.match).toEqual({ remote: 'upstream' });
+  });
+
+  it('stores owner globs and nested-group owners verbatim (M31 — owner accepts globs)', () => {
+    // The v0.31.0 release note tells nested-group users to run exactly these — they
+    // must round-trip through the CLI, not just hand-edited config.
+    profileMatchAddCommand('p', { gitRemoteOwner: ['acme-*', 'group/sub', 'group/*'] });
+    expect(loadProfiles().p.match?.gitRemoteOwner).toEqual(['acme-*', 'group/sub', 'group/*']);
   });
 
   it('rejects --case-sensitive alone (it is a modifier, not a matchable rule)', () => {
