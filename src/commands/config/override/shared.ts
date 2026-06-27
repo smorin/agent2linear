@@ -390,7 +390,15 @@ export function resolveSelector(
     if (!Number.isInteger(index) || index < 0 || index >= rules.length) {
       return undefined;
     }
-    return { rule: rules[index], index };
+    // A hand-edited null / non-object slot is non-selectable by `#<index>` too (mirrors
+    // the label branch), so get/edit/remove/move report "not found" rather than treat it
+    // as a real rule and crash later.
+    const rule = rules[index];
+    const r = rule as unknown;
+    if (r === null || typeof r !== 'object' || Array.isArray(r)) {
+      return undefined;
+    }
+    return { rule, index };
   }
   // Label lookup: a hand-edited config can carry DUPLICATE labels (the CLI write path
   // hard-blocks them, but config.json can be edited directly). A first-match would let

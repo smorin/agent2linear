@@ -315,6 +315,9 @@ describe('resolveSelector', () => {
     const withJunk = [null, { id: 'a', when: {} }] as unknown as ConfigOverride[];
     expect(resolveSelector(withJunk, 'a')).toEqual({ rule: withJunk[1], index: 1 });
     expect(resolveSelector(withJunk, 'nope')).toBeUndefined();
+    // A null slot is non-selectable by #index too — not returned as a "rule".
+    expect(resolveSelector(withJunk, '#0')).toBeUndefined();
+    expect(resolveSelector(withJunk, '#1')).toEqual({ rule: withJunk[1], index: 1 });
   });
 });
 
