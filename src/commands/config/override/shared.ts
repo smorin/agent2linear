@@ -424,18 +424,32 @@ export function specificityTag(when: WhenClause): string {
   return 'catch-all';
 }
 
-/** Gather every positive leaf facet in a `when` tree (skipping `not` subtrees). */
+/**
+ * Gather every positive leaf facet in a `when` tree (skipping `not` subtrees).
+ * Tolerant of a malformed hand-edited shape (e.g. `allOf: {}` or a non-object child):
+ * `specificityTag` runs OUTSIDE the resolver's `matchWhen` warn-skip (it feeds
+ * `config explain` / `config ov list`), so it must degrade to "no facet here" rather
+ * than throw "not iterable" and crash the read command.
+ */
 function collectPositiveFacets(node: WhenClause, into: Set<WhenFacet>): void {
+  const obj = node as unknown;
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+    return;
+  }
   for (const facet of WHEN_FACETS) {
     if ((node as Record<string, unknown>)[facet] !== undefined) {
       into.add(facet);
     }
   }
-  for (const child of node.allOf ?? []) {
-    collectPositiveFacets(child, into);
+  if (Array.isArray(node.allOf)) {
+    for (const child of node.allOf) {
+      collectPositiveFacets(child, into);
+    }
   }
-  for (const child of node.anyOf ?? []) {
-    collectPositiveFacets(child, into);
+  if (Array.isArray(node.anyOf)) {
+    for (const child of node.anyOf) {
+      collectPositiveFacets(child, into);
+    }
   }
 }
 
@@ -547,7 +561,6 @@ export function applyRmAlias(rule: ConfigOverride, spec: string): void {
 export function countRuleValues(rule: ConfigOverride): number {
   let count = 0;
   for (const key of Object.keys(rule)) {
-    if (key === 'id' || key === 'when') continue;
     if (key === 'aliases') {
       // An empty/absent aliases block does not count as a value.
       const aliases = rule.aliases ?? {};
@@ -556,7 +569,12 @@ export function countRuleValues(rule: ConfigOverride): number {
       }
       continue;
     }
-    count += 1;
+    // Only a whitelisted overridable field is a VALUE — `id`/`when` and any unknown
+    // hand-edited metadata key are not (the resolver reads only OVERRIDABLE_FIELDS), so
+    // `edit`'s "≥1 value" invariant can never be satisfied by junk.
+    if (OVERRIDABLE_FIELD_SET.has(key)) {
+      count += 1;
+    }
   }
   return count;
 }

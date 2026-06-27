@@ -70,10 +70,13 @@ export function runOverrideMove(selector: string, options: OverrideMoveOptions =
       return;
     }
 
+    // Report the anchor by its POST-move index — `anchor.index` is the stale pre-splice
+    // slot, which for an unlabeled anchor can now point at the moved rule, not the anchor.
+    const anchorNewIndex = rules.indexOf(anchorRule);
     showSuccess('Override rule moved!', {
       Label: String(record.label),
       Scope: scopeLabel,
-      Position: `${hasBefore ? 'before' : 'after'} ${anchor.rule.id ?? `#${anchor.index}`}`,
+      Position: `${hasBefore ? 'before' : 'after'} ${anchor.rule.id ?? `#${anchorNewIndex}`}`,
       'New index': String(newIndex),
     });
   } catch (error) {

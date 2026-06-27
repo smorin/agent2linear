@@ -268,7 +268,7 @@ if should_run 21; then
   PLAIN="$SANDBOX/plain"; mkdir -p "$PLAIN/.agent2linear"
   echo '{ "defaultTeam": "plain-team" }' > "$PLAIN/.agent2linear/config.json"
   out="$(node "$CLI_JS" config explain "$PLAIN" 2>&1)"
-  assert_contains "$out" "(no override rules matched this context)" "no-overrides explain note"
+  assert_contains "$out" "(no override rule supplied a value for this context)" "no-overrides explain note"
 fi
 
 echo "=========================================="

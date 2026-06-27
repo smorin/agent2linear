@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ConfigOverride } from '../../../lib/types.js';
+import type { ConfigOverride, WhenClause } from '../../../lib/types.js';
 import {
   applyAlias,
   applyRmAlias,
@@ -318,6 +318,14 @@ describe('specificityTag', () => {
     // a not-only rule has no positive leaf → catch-all.
     expect(specificityTag({ not: { repo: 'acme/legacy' } })).toBe('catch-all');
   });
+
+  it('does not crash on a malformed allOf/anyOf shape from a hand-edited config', () => {
+    // matchWhen warn-skips these; specificityTag runs OUTSIDE that try/catch (config
+    // explain / config ov list), so it must degrade rather than throw "not iterable".
+    expect(specificityTag({ allOf: {} } as unknown as WhenClause)).toBe('catch-all');
+    expect(specificityTag({ anyOf: 'nope' } as unknown as WhenClause)).toBe('catch-all');
+    expect(specificityTag({ repo: 'acme/web', allOf: {} } as unknown as WhenClause)).toBe('exact-repo');
+  });
 });
 
 describe('serializeRule', () => {
@@ -416,5 +424,15 @@ describe('countRuleValues', () => {
     expect(countRuleValues({ id: 'a', when: {}, aliases: { teams: { frontend: 't1' } } })).toBe(1);
     expect(countRuleValues({ id: 'a', when: {}, aliases: {} })).toBe(0);
     expect(countRuleValues({ id: 'a', when: {} })).toBe(0);
+  });
+
+  it('ignores unknown top-level keys (only overridable fields + aliases count)', () => {
+    // A hand-edited rule whose only extra key is unrecognized metadata has ZERO values,
+    // so `edit`'s "≥1 value" invariant cannot be satisfied by junk (matches the docstring
+    // and the resolver, which reads only OVERRIDABLE_FIELDS).
+    expect(countRuleValues({ id: 'a', when: {}, bogus: 'x' } as unknown as ConfigOverride)).toBe(0);
+    expect(
+      countRuleValues({ id: 'a', when: {}, bogus: 'x', defaultTeam: 't' } as unknown as ConfigOverride)
+    ).toBe(1);
   });
 });

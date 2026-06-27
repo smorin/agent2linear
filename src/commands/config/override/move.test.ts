@@ -137,4 +137,20 @@ describe('runOverrideMove', () => {
     expect(parsed.index).toBe(2);
     expect(ids()).toEqual(['b', 'c', 'a']);
   });
+
+  it('reports the anchor by its POST-move index for unlabeled rules', () => {
+    // Three UNLABELED rules; moving #2 before #0 lands the moved rule at index 0 and
+    // shifts the anchor (orig #0) to index 1. The success message must reference the
+    // anchor's NEW slot (#1), not its stale pre-move slot (#0 — now the moved rule).
+    seedGlobal([
+      { when: { repo: 'acme/web' }, defaultTeam: 't0' },
+      { when: { repo: 'acme/web' }, defaultTeam: 't1' },
+      { when: { repo: 'acme/web' }, defaultTeam: 't2' },
+    ]);
+    const log = vi.spyOn(console, 'log');
+    runOverrideMove('#2', { before: '#0', global: true });
+    const out = log.mock.calls.flat().map(String).join('\n');
+    expect(out).toContain('before #1');
+    expect(out).not.toContain('before #0');
+  });
 });

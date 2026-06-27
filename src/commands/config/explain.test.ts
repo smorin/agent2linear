@@ -66,10 +66,10 @@ describe('renderExplainText', () => {
     expect(text).toContain('cli-team');
     expect(text).toContain('repo override');
     expect(text).toContain('(not set)');
-    expect(text).not.toContain('(no override rules matched');
+    expect(text).not.toContain('(no override rule supplied');
   });
 
-  it('shows (none) for repoRoot/remotes/branch and the no-match note when nothing overrides', () => {
+  it('shows (none) for repoRoot/remotes/branch and the no-value note when nothing overrides', () => {
     const data: ExplainData = {
       contextDir: '/tmp/x',
       repoRoot: null,
@@ -81,7 +81,25 @@ describe('renderExplainText', () => {
     expect(text).toContain('repoRoot    (none)');
     expect(text).toContain('remotes     (none)');
     expect(text).toContain('branch      (none)');
-    expect(text).toContain('(no override rules matched this context)');
+    expect(text).toContain('(no override rule supplied a value for this context)');
+  });
+
+  it('uses value-centric wording when a rule matches but supplies no value (no contradiction)', () => {
+    const data: ExplainData = {
+      contextDir: '/repo',
+      repoRoot: '/repo',
+      remotes: {},
+      fields: [{ key: 'defaultTeam', value: 'platform', location: { type: 'global' } }],
+      rules: [
+        { label: 'r', scope: 'global', ruleIndex: 0, when: {}, matched: true, tag: 'catch-all', winsFields: [] },
+      ],
+    };
+    const text = renderExplainText(data);
+    // The rule is shown ✓ in the rules: section ...
+    expect(text).toContain('✓ r ');
+    // ... so the note must NOT claim "no override rules matched" (the old contradiction).
+    expect(text).not.toContain('no override rules matched');
+    expect(text).toContain('(no override rule supplied a value for this context)');
   });
 });
 

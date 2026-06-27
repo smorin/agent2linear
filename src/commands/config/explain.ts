@@ -188,7 +188,11 @@ export function renderExplainText(data: ExplainData): string {
     lines.push(`  ${field.key.padEnd(24)} ${shown.padEnd(16)} ← ${sourceLabel(field.location)}`);
   }
   if (!data.fields.some((f) => f.location.type === 'override')) {
-    lines.push('(no override rules matched this context)');
+    // Note guards the RESOLVED block (no field came from an override) — which is NOT the
+    // same as "no rule matched": a rule can match (✓ in the `rules:` section below) yet
+    // win no field (out-specified, or a global rule suppressed by repo top-level config).
+    // Word it by VALUE so it never contradicts a ✓ rule in the section that follows.
+    lines.push('(no override rule supplied a value for this context)');
   }
   // M31 (4b, lite): the all-rules annotated section. ✓/✗ is `matchWhen` (no drift);
   // each rule echoes its compact `when` beside the `context:` block above so a ✗
