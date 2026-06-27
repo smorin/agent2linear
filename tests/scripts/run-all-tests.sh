@@ -174,6 +174,44 @@ else
 fi
 
 # ============================================================
+# CONFIG OVERRIDE CLI (M31 — offline/hermetic, runs regardless of scope)
+# ============================================================
+
+echo ""
+echo -e "${BLUE}[Suite $((++SUITE_COUNT))] CONFIG OVERRIDE CLI${NC}"
+echo ""
+
+# Atomic temp file (unpredictable name) instead of a predictable /tmp/...-$$ path a local
+# process could pre-create or symlink; trap-removed since the mktemp name won't match the
+# `rm -f /tmp/test-*-output-$$.log` cleanup at the end of this script.
+OV_CLI_OUTPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/test-config-override-cli-output.XXXXXX.log")"
+trap 'rm -f "$OV_CLI_OUTPUT_FILE"' EXIT
+
+if ./test-config-override-cli.sh 2>&1 | tee "$OV_CLI_OUTPUT_FILE"; then
+    OV_CLI_EXIT=0
+else
+    OV_CLI_EXIT=$?
+fi
+
+read -r OV_CLI_PASSED OV_CLI_FAILED OV_CLI_TOTAL <<<"$(extract_results "$(cat "$OV_CLI_OUTPUT_FILE")")"
+
+TOTAL_PASSED=$((TOTAL_PASSED + OV_CLI_PASSED))
+TOTAL_FAILED=$((TOTAL_FAILED + OV_CLI_FAILED))
+TOTAL_TESTS=$((TOTAL_TESTS + OV_CLI_TOTAL))
+
+echo ""
+echo -e "${BLUE}Config Override CLI Results:${NC}"
+echo -e "  Passed: ${GREEN}$OV_CLI_PASSED${NC}"
+echo -e "  Failed: ${RED}$OV_CLI_FAILED${NC}"
+echo -e "  Total:  $OV_CLI_TOTAL"
+
+if [ $OV_CLI_EXIT -eq 0 ]; then
+    echo -e "  Status: ${GREEN}✅ PASSED${NC}"
+else
+    echo -e "  Status: ${RED}❌ FAILED${NC}"
+fi
+
+# ============================================================
 # PROJECT TESTS
 # ============================================================
 

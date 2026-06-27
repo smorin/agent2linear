@@ -134,6 +134,34 @@ describe('resolveOverrides — field-level resolution (U2)', () => {
   });
 });
 
+describe('resolveOverrides — `id` is provenance-only (M31 invariant)', () => {
+  it("surfaces a rule's `id` as `ruleId` provenance, never as a resolved value", () => {
+    const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ id: 'cli-team', when: { path: 'cli/**' }, defaultTeam: 'cli-team' }]),
+    ]);
+    // `id` is carried on the location only.
+    expect(r.locations.defaultTeam.ruleId).toBe('cli-team');
+    // …and never leaks into the resolved values map (only the overridable field).
+    expect('id' in r.values).toBe(false);
+    expect(r.values).toEqual({ defaultTeam: 'cli-team' });
+  });
+
+  it('omits `ruleId` for a legacy unlabeled rule (byte-identical provenance)', () => {
+    const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ when: { path: 'cli/**' }, defaultTeam: 'cli-team' }]),
+    ]);
+    expect(r.locations.defaultTeam.ruleId).toBeUndefined();
+    expect('ruleId' in r.locations.defaultTeam).toBe(false);
+  });
+
+  it('treats a blank hand-edited id ("") as absent (no ruleId provenance) — M32 CR6', () => {
+    const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
+      layer('project', [{ id: '', when: { path: 'cli/**' }, defaultTeam: 'cli-team' } as ConfigOverride]),
+    ]);
+    expect(r.locations.defaultTeam.ruleId).toBeUndefined();
+  });
+});
+
 describe('resolveOverrides — alias overlay', () => {
   it('merges alias maps per entity type and key, strongest rule winning', () => {
     const r = resolveOverrides(ctx(`${REPO}/cli/x`), [
@@ -230,6 +258,24 @@ describe('needsGitContext / resolveOverrides — malformed composite hardening (
     ]);
     expect(warn).toHaveBeenCalled();
     expect(r.values.defaultTeam).toBe('catch');
+  });
+});
+
+describe('resolveOverrides / needsGitContext — null or non-object entry (M32 review CR2)', () => {
+  it('warn-skips a null entry and still resolves a valid sibling at its true index', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const rules = [null, { when: {}, defaultTeam: 'ok' }] as unknown as ConfigOverride[];
+    const r = resolveOverrides(ctx(REPO), [layer('project', rules)]);
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls[0][0]).toMatch(/not an object/);
+    expect(r.values.defaultTeam).toBe('ok');
+    expect(r.locations.defaultTeam.ruleIndex).toBe(1); // index preserved (skip never shifts it)
+  });
+
+  it('needsGitContext does not throw on a null entry', () => {
+    const rules = [null, { when: { path: 'cli/**' } }] as unknown as ConfigOverride[];
+    expect(() => needsGitContext([layer('project', rules)])).not.toThrow();
+    expect(needsGitContext([layer('project', rules)])).toBe(true);
   });
 });
 

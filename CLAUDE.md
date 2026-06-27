@@ -268,11 +268,35 @@
     path > branch > catch-all); ties break by declaration order.
   - Targeting: global `-C, --cwd <dir>` (git-style) + AGENT2LINEAR_CWD make any command resolve
     as if launched in <dir> (config discovery + override matching + relative path args).
-  - Debugging: `config explain [dir] [--json]` prints the resolved context + winning rule per
-    field; `config get <key> [dir]` returns one override-resolved field.
+  - Authoring (M32 — `config override`, alias `config ov`): full CRUD + reorder without hand-editing
+    config.json. Every rule is addressable by a stable human-chosen LABEL (top-level `id`); legacy
+    unlabeled rules by `#<index>`. Verbs (all take `-g/--global` default or `-p/--project`, `--json`):
+      - `add <label>` — ≥1 `when` criterion + ≥1 value; flag-sugar (`--when-repo/-owner/-host/-path/
+        -branch/-remote`, repeatable + comma = OR within a facet; `--when-not-*` → one De-Morgan `not`)
+        XOR the `--when-json` escape hatch; `--set <key=value>` (OVERRIDABLE_FIELDS only — apiKey
+        rejected structurally) / `--alias <entity>.<name>=<id>`. Dup label in scope is hard-blocked.
+      - `list` (context-independent inventory, scope→file order + a static specificity tag) / `get
+        <selector>` (full rule) / `edit <selector>` (field-by-field value merge + `--unset`/`--rm-alias`;
+        ANY `when` input replaces the whole `when`; may assign a label to a `#<index>` rule) /
+        `remove <selector>` (alias `rm`) / `move <selector> --before|--after <selector>` (reorder a
+        scope to control equal-specificity tie-break). `--dry-run` on `add`/`edit`.
+      - Single-item `--json` (get/add/edit/remove/move) is a BARE object; `list` + `explain`'s
+        `rules[]` are the only arrays. Eager validation (globs, `when` keys, label uniqueness) before write.
+      - Implementation: src/commands/config/override/{add,list,get,edit,remove,move,register,shared}.ts.
+        shared.ts is the pure builder/validator/serializer (parseSet/parseAlias/buildWhenFromFlags/
+        validateWhenJson/resolveSelector/specificityTag/apply*); the value whitelist is the resolver's
+        own OVERRIDABLE_FIELDS (single source of truth — no CLI-vs-engine drift).
+  - Debugging: `config explain [dir] [--json]` prints the resolved context + winning rule per field —
+    named by its LABEL (`label ?? #<ruleIndex>`, a valid `config ov` selector). M32 (4b lite) adds a
+    `rules:` section annotating EVERY rule (both scopes) ✓/✗ for the context — ✓/✗ comes from the
+    resolver's OWN matchWhen(rule.when, ctx) (no drift) and each rule's `when` is echoed (no per-facet
+    prose reason); `--json` carries a top-level `rules: [{label, scope, when, matched, winsFields}]`
+    array alongside `resolved` (`winsFields` derived from the resolved locations, not recomputed).
+    `config get <key> [dir]` returns one override-resolved field (label-named).
   - Implementation: src/lib/glob-match.ts (path: picomatch + anchoring; identity/branch glob),
     src/lib/git-context.ts (§5.4 identity normalization; injectable runner; leaves
-    git-remote.ts untouched), src/lib/overrides.ts (recursive matchWhen → {matched, score}),
+    git-remote.ts untouched), src/lib/overrides.ts (recursive matchWhen → {matched, score}; copies
+    `rule.id` into the provenance ConfigLocation.ruleId — provenance only, never a resolved value),
     threaded via getConfig(contextDir?) in src/lib/config.ts. The per-rule alias overlay is
     stashed in the invocation context and applied at highest precedence by loadAliases().
 
