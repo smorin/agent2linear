@@ -13,6 +13,61 @@
 
 ---
 
+## [x] Milestone M32: `config override` CLI — manage M29 context-aware overrides (v0.32.0)
+
+> **Numbering note:** this work was planned/labeled "M31" in its structure outline and git
+> history (commits `a5e0e4c`/`a1f13e2`/`0d298a1`, "M31 Phase 1/2/3"), but **M31 / v0.31.0** is
+> already held by the released **Repo-Identity Matching** milestone below. Renumbered to
+> **M32 / v0.32.0** to preserve the repo's 1:1 milestone↔minor convention (repo-identity keeps
+> M31, having shipped first). The "M31 Phase N" commit messages are immutable history; the
+> milestone heading, task IDs, and version here use **M32 / v0.32.0**.
+
+**Goal**: Add a first-class **`config override`** command group (alias `config ov`) with full
+CRUD + reorder — `add` / `list` / `get` / `edit` / `remove` / `move` — so a user/agent can author,
+view, edit, reorder, and delete M29 `overrides[]` rules entirely from the CLI, in global or project
+scope, without hand-editing `config.json`. Every rule is addressable by a stable, human-chosen
+**label** (top-level `id`); legacy unlabeled rules by `#<index>`. No resolution semantics change:
+each verb only read-modify-writes the array the M29 engine already resolves, and M29's security
+invariant (`apiKey` is never overridable) is preserved structurally. Fully additive: a config with
+no `overrides` (and any pre-existing hand-written rule) behaves byte-identically — the resolver
+ignores the new top-level `id`.
+
+### Requirements
+- `config ov add <label>` builds a rule from ergonomic flags — `--when-repo/-owner/-host/-path/-branch/-remote` (repeatable, comma = OR within a facet), `--when-not-*` (collapse to one De-Morgan `not`), `--set <key=value>`, `--alias <entity>.<name>=<id>` — or the `--when-json` escape hatch for arbitrary nested trees (flag-sugar XOR `--when-json`). ≥1 criterion (on the flag path) + ≥1 value required — an intentional **catch-all** is written explicitly as `--when-json '{}'`; a duplicate label in scope is hard-blocked (no `--force`).
+- `--set` accepts only the resolver's `OVERRIDABLE_FIELDS` (single source of truth) — `apiKey`/`when`/`aliases`/`id` are rejected, structurally guaranteeing `apiKey` can never be set via an override.
+- `list` is a **context-independent inventory** (scope→file order) with a static specificity **tag** per row (not a sort key); `get`/`edit`/`remove`/`move` address an existing rule by `<label>` or `#<index>` within the selected scope. `edit` merges the value side field-by-field (`--set`/`--unset`/`--alias`/`--rm-alias`), replaces the whole `when` on any `when` input, and can assign a label to a `#<index>` rule. `move --before|--after` reorders within a scope (controls M29's equal-specificity tie-break).
+- `when` structure, the value whitelist, label uniqueness, and **empty/blank glob patterns** are validated **before** writing (picomatch is lenient on other glob syntax — it compiles almost any pattern — so only blank patterns are rejected eagerly; a malformed-but-non-blank glob simply never matches at resolve time). Single-item `--json` (get/add/edit/remove/move) is a bare object; `list` and `explain`'s `rules[]` are the only arrays. `--dry-run` on `add`/`edit`.
+- **Read-side label provenance (4a):** `config explain` / `config get` / `config list` name the winning rule by `label ?? #<ruleIndex>` (a valid `config ov` selector); the resolver copies `rule.id` into `ConfigLocation.ruleId` as **provenance only** (never a resolved value).
+- **All-rules annotated `explain` (4b, lite):** `config explain` adds a `rules:` section annotating EVERY rule (both scopes) ✓/✗ for the context — driven by the resolver's OWN `matchWhen(rule.when, ctx)` (no drift) — echoing each rule's `when` (no per-facet prose reason; deferred). `--json` carries a top-level `rules: [{label, scope, when, matched, winsFields}]` array alongside `resolved`.
+
+### Out of Scope
+- Changing M29 resolution semantics — every verb only read-modify-writes the existing `overrides[]`; VALUE resolution stays byte-identical.
+- A bespoke per-facet prose "reason" generator for `explain` 4b ("branch X ≠ Y" sentences) — deferred to a fast-follow; 4b ships in its "lite" form (✓/✗ + echoed `when` + tier tag).
+- An interactive Ink wizard for authoring rules (`config ov` is non-interactive flag-driven for v1).
+- `extends`/includes for splitting large `overrides` arrays out of `config.json`.
+
+### Tasks
+- [x] [M32-T01] Phase 1: spine + value side — register `config override`/`ov`, `id` schema field, scope read-modify-write loop, `add`/`list`/`get` round-trip (single-leaf `when`); export `OVERRIDABLE_FIELDS`/`KNOWN_WHEN_KEYS`/`getAliasesKey`; `shared.ts` builder/validator/serializer
+- [x] [M32-T02] Phase 2: full `when` authoring — flag-sugar composites (`anyOf` OR-within-a-facet, De-Morgan `not`), `--when-json` escape hatch (mutually exclusive), ≥2-OR-list hard error, eager glob/`when`-key validation
+- [x] [M32-T03] Phase 3: manage existing rules — `edit` (value merge + `--unset`/`--rm-alias`, wholesale `when` replace, label a `#<index>` rule), `remove` (alias `rm`), `move --before|--after`
+- [x] [M32-T04] Phase 4: read-side label provenance (4a — `ConfigLocation.ruleId`, `config explain`/`get`/`list`) + all-rules ✓/✗ annotated `explain` (4b lite, driven by `matchWhen`, `rules[]` JSON) + integration capstone; docs (README, CLAUDE.md), this milestone
+- [x] [M32-TS01] Vitest: `override/{add,list,get,edit,remove,move,shared}` (value parsing + apiKey rejection, when-builder matrix, selectors, merge/reorder), `overrides` (`id` is provenance-only, no-overrides byte-identical), `config explain`/`get`/`list` (label provenance + the 4b annotated view + the `winsFields⇒matched` invariant)
+- [x] [M32-TS02] Offline shell: `tests/scripts/test-config-override-cli.sh` (add→list→get→edit→move→remove + `config explain` label + 4b ✓/✗ + `rules[]` JSON + additivity), registered in `run-all-tests.sh`'s offline group
+
+### Automated Verification
+- `npm run build`, `npm run typecheck`, `npm run lint`, `npm test` pass
+- `bash tests/scripts/test-config-override-cli.sh` (offline, hermetic; no `LINEAR_API_KEY`) passes; `run-all-tests.sh` includes it
+- `node dist/index.js config ov --help` lists `add` / `list` / `get` / `edit` / `remove` / `move`
+- `a2l --version` reports `0.32.0`
+
+### Manual Verification
+- `a2l config ov add t1 --when-repo acme/web --set defaultTeam=frontend --project --dry-run` prints the rule and writes nothing; after a real `add`, `config ov list`/`get` show it; `--set apiKey=x` is rejected
+- Author a Tier-4 rule via `--when-json` and confirm it fires with `config explain <dir>`; `--when-path ''` and `--when-repo a,b --when-owner c,d` are rejected before writing (the latter with a ready-to-paste `--when-json`)
+- `move` flips a tie between two equal-specificity rules (winner changes per `config explain`); `edit` assigns a label to a `#<index>` legacy rule, after which it is addressable by that label
+- `config explain <dir>` names the winning rule by its **label** (not a bare `ruleIndex`), and the `rules:` section lists every rule with ✓/✗ match status (driven by `matchWhen`) echoing each rule's `when`
+
+---
+
 ## [x] Milestone M31: Repo-Identity Matching (host/owner/repo + remote) + Unified Matcher (v0.31.0)
 **Goal**: Extend profile auto-detection so a repo routes to a workspace by **host**, **repo name**, and **which remote** (`origin` / `upstream` / any — the fork case), not just the `origin` **owner** — and do it by **unifying** the two divergent git-URL parsers/matchers onto one parser (`git-context.ts`) + one glob matcher (`glob-match.ts`) + one remote-selection primitive (`selectRemotes`). All identity fields accept **globs** and match **case-insensitively by default**, with an **opt-in case-sensitive** per-rule flag. The existing owner-only + `match-only` "refuse to guess" behavior is locked by a committed regression test (including the negative assertion) **before** any refactor, so the change cannot silently move where writes land. Fully additive: an owner-only config behaves exactly as today, and `apiKey`/workspace selection is never affected.
 

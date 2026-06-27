@@ -46,4 +46,23 @@ describe('config list — override provenance (M29)', () => {
     expect(out).toContain('repo override');
     expect(out).toContain('"path":"cli/**"');
   });
+
+  it('M31: names the winning rule by its label when the rule is labeled', async () => {
+    mkdirSync(join(repo, '.agent2linear'), { recursive: true });
+    writeFileSync(
+      join(repo, '.agent2linear', 'config.json'),
+      JSON.stringify({
+        defaultTeam: 'platform',
+        overrides: [{ id: 'cli-team', when: { path: 'cli/**' }, defaultTeam: 'cli-team' }],
+      })
+    );
+    mkdirSync(join(repo, 'cli'), { recursive: true });
+    setInvocationContext({ contextDir: join(repo, 'cli') });
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await listConfig();
+    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+
+    expect(out).toContain('repo override cli-team');
+  });
 });

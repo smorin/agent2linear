@@ -23,3 +23,6 @@ jobs:
       - run: npx eslint src --ext .ts,.tsx
       - run: npx vitest run
       - run: npx tsup
+      # Offline/hermetic E2E against the built CLI (dist/index.js). Needs NO secret —
+      # the suite unsets LINEAR_API_KEY and sandboxes HOME/XDG; runs on both Node versions.
+      - run: bash tests/scripts/test-config-override-cli.sh

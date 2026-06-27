@@ -84,6 +84,10 @@ export type OverridableConfig = Pick<
 
 /** A single context-aware override: a `when` clause plus the values it supplies. */
 export interface ConfigOverride extends OverridableConfig {
+  // M31: optional, human-chosen addressable label (unique per scope). The M29
+  // resolver only reads `OVERRIDABLE_FIELDS` + `aliases` + `when`, so a top-level
+  // `id` is ignored by resolution — existing hand-written configs are unchanged.
+  id?: string;
   when: WhenClause;
 }
 
@@ -94,6 +98,10 @@ export interface ConfigLocation {
   scope?: 'global' | 'project';
   ruleIndex?: number;
   when?: WhenClause;
+  // Set only when type === 'override' (M31): the winning rule's human-chosen label
+  // (`rule.id`), surfaced as provenance so the read side can name a rule the same way
+  // the write side does (`label ?? #<ruleIndex>`). Never a resolved config VALUE.
+  ruleId?: string;
   // Set only when type === 'override' (M30): whether the winning match was carried
   // by a LOCATION/identity matcher (path/repo/owner/host) rather than only
   // branch/team/not — i.e. the actual matching `anyOf` arm, not the clause shape.

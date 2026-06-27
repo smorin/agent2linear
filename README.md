@@ -247,6 +247,29 @@ Add an optional `overrides` array to any `config.json` (global or repo) to resol
 
 **Precedence (most → least):** repo scope beats global regardless of specificity; within a scope, most-specific wins (exact `repo` > `repo` glob/`owner`/`host` > `path` > `branch` > catch-all); ties break by declaration order. Configs without `overrides` behave exactly as before.
 
+**Authoring rules from the CLI — `config override` (alias `config ov`):** the full lifecycle without hand-editing JSON. Every rule is addressable by a stable, human-chosen **label** (`<label>`); legacy unlabeled rules are addressable by `#<index>`. Each command takes `-g/--global` (default) or `-p/--project`, and supports `--json` (and `--dry-run` for `add`/`edit`).
+
+```bash
+# add — one or more `when` criteria + one or more values, named <label>
+a2l config ov add cli-team --when-path 'cli/**' --set defaultTeam=frontend --project
+a2l config ov add release  --when-branch 'release/*,main' --set defaultTeam=ship --global   # comma/repeat = OR within a facet
+a2l config ov add web-alias --when-repo acme/web --alias team.default=team_cli123 --project  # per-rule alias remap
+a2l config ov add nested   --when-json '{"anyOf":[{"path":"cli/**"},{"branch":"main"}]}' --set defaultTeam=cli --global
+a2l config ov add fallback --when-json '{}' --set defaultTeam=platform --global              # explicit catch-all
+
+# list / get — context-independent inventory; each row carries a static specificity tag
+a2l config ov list                    # both scopes (project + global)
+a2l config ov get cli-team --project  # one rule in full (by label or #<index>)
+
+# edit / remove / move — manage an existing rule by selector
+a2l config ov edit cli-team --set defaultInitiative=q3 --unset defaultProject --project  # field-by-field value merge
+a2l config ov edit '#2' --id release --project                                           # label a legacy #<index> rule
+a2l config ov move release --before cli-team --project                                   # reorder (controls equal-specificity tie-break)
+a2l config ov remove release --project                                                   # alias: rm
+```
+
+`--set` accepts only the overridable defaults (`defaultTeam`, `defaultInitiative`, `defaultProject`, the templates, `defaultPrompt`, `defaultAutoAssignLead`) — `apiKey` can never be set via an override. Flag-sugar (`--when-*`) and the `--when-json` escape hatch are mutually exclusive; comma-lists or repeated `--when-<facet>` express OR **within** a facet, and `--when-json` is the escape hatch for arbitrary nested trees. Globs and label uniqueness are validated **before** writing, so a malformed or never-matching rule is rejected up front.
+
 **Targeting another directory — `-C, --cwd`:** a global, git-style flag makes *any* command resolve as if launched in `<dir>` (config discovery, override matching, and relative path args). Falls back to `$AGENT2LINEAR_CWD`, then the current directory.
 
 ```bash
@@ -254,12 +277,12 @@ a2l -C ~/work/acme/web/apps/mobile issue create --title "Bug"   # resolves defau
 AGENT2LINEAR_CWD=~/work/acme/web a2l issue create --title "Bug" # same, via env
 ```
 
-**Debugging routing — `config explain`:** prints the resolved context (contextDir, repoRoot, remotes, branch) and the winning rule per field. `config get <key> [dir]` returns a single override-resolved field for scripting.
+**Debugging routing — `config explain`:** prints the resolved context (contextDir, repoRoot, remotes, branch) and the winning rule per field — named by its **label** (`config ov` selector), so you can jump straight to `config ov edit <label>`. A `rules:` section then annotates **every** rule (both scopes) with ✓/✗ for this context (the ✓/✗ comes from the same matcher that drives resolution, so the audit can never disagree) and echoes each rule's `when`. `config get <key> [dir]` returns a single override-resolved field for scripting.
 
 ```bash
 a2l config explain ~/work/acme/web/apps/mobile        # positional dir = sugar for -C
-a2l config explain --json                             # machine-readable, for agents
-a2l config get defaultTeam apps/web                   # one override-resolved field
+a2l config explain --json                             # machine-readable (resolved map + a rules[] audit array), for agents
+a2l config get defaultTeam apps/web                   # one override-resolved field (names the winning rule's label)
 ```
 
 ## Prompt Templates
@@ -1259,9 +1282,20 @@ npm run test:coverage
 
 This project uses [Vitest](https://vitest.dev/) for unit testing with comprehensive coverage of core utilities.
 
-**Test Structure:**
-- Unit tests: `src/**/*.test.ts` - Fast, isolated tests for utilities and parsers
-- Integration tests: `tests/scripts/*.sh` - End-to-end tests with real Linear API
+**Two test suites — different runners, different concurrency models:**
+
+| Suite | Location | Runner | Concurrency | Isolation |
+|-------|----------|--------|-------------|-----------|
+| **Unit tests** | `src/**/*.test.ts` | Vitest (`npm run test`) | **Parallel** — files run concurrently in a worker pool | Each file owns its own `mktemp` sandbox + `vi.stubEnv('XDG_CONFIG_HOME', …)` per `beforeEach`, with `afterEach` cleanup |
+| **Integration / E2E** | `tests/scripts/*.sh` | Bash (`./run-all-tests.sh`) | **Sequential** — one process, no backgrounding | Each script uses a fresh `mktemp` sandbox (`HOME`/`XDG`); the override-CLI suite is a stateful lifecycle (see below) |
+
+**What must stay sequential — and why:**
+- **`tests/scripts/*.sh` are sequential by design.** `run-all-tests.sh` runs each suite as a single blocking foreground process (no `&`/`wait`), and the bash suites shell out to the built `dist/index.js`. They are **not** run by Vitest and must not be parallelized.
+- **`tests/scripts/test-config-override-cli.sh` is a stateful lifecycle suite**: its numbered cases (`add → list → get → edit → move → remove → explain`) execute in source order against **one shared sandbox** — case 1 creates the rule that later cases build on. Run the **full** suite, or use `--range` **starting at 1** (e.g. `--range 1-7`) to stop early. A non-prefix slice (`--test 14`, `--range 10-14`) reports false failures because the earlier fixtures never ran — expected, not a bug.
+
+**Parallelism is safe for the Vitest suite** because every test file is self-isolated (its own temp `XDG_CONFIG_HOME`) and there are no `.concurrent` tests. **New unit tests must follow that pattern** (own `mktemp` sandbox + `stubEnv` in `beforeEach`) so they stay parallel-safe.
+
+**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 18 + 20), build, and the offline `test-config-override-cli.sh` E2E (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they create real `TEST_*` entities in a throwaway Linear workspace.
 
 **Running Tests:**
 ```bash

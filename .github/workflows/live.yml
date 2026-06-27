@@ -1,0 +1,39 @@
+name: Live (Linear API)
+
+# Live integration tests against the REAL Linear API (throwaway test workspace).
+# Trusted events ONLY — never `pull_request` — so LINEAR_API_KEY is never exposed to a
+# fork/untrusted PR. The fast PR checks live in ci.yml (unit + offline E2E).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Serialize live runs so concurrent merges don't interleave data or hammer the API;
+# don't cancel a data-creating run mid-flight.
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+      - run: npm ci
+      - run: npx tsup # build dist/index.js (the suites invoke it)
+      # Fast auth smoke: `whoami` exits non-zero on a bad/rotated key, so this fails in
+      # ~2s before the heavy suite runs. (`doctor` exits 0 on bad auth, so it is NOT used.)
+      - name: Auth smoke (whoami)
+        run: node dist/index.js whoami
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # Full live integration suite — creates real TEST_* entities in the throwaway
+      # workspace; exits non-zero if any test fails.
+      - name: Live integration suite
+        run: cd tests/scripts && bash run-all-tests.sh
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
