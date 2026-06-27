@@ -25,6 +25,7 @@ import {
   hasWhenFlags,
   parseWhenJson,
   resolveSelector,
+  ruleLabel,
   serializeRule,
   type WhenFlagOptions,
 } from './shared.js';
@@ -145,7 +146,7 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
       if (options.json) {
         console.log(JSON.stringify(serializeRule(rule, matchIndex), null, 2));
       } else {
-        showInfo(`Dry run — would update override "${rule.id ?? `#${matchIndex}`}" in ${scopeLabel} config:`);
+        showInfo(`Dry run — would update override "${ruleLabel(rule.id, matchIndex)}" in ${scopeLabel} config:`);
         console.log(JSON.stringify(rule, null, 2));
       }
       return;
@@ -160,7 +161,7 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
       return;
     }
 
-    showSuccess('Override rule updated!', { Label: rule.id ?? `#${matchIndex}`, Scope: scopeLabel });
+    showSuccess('Override rule updated!', { Label: ruleLabel(rule.id, matchIndex), Scope: scopeLabel });
     console.log(JSON.stringify(rule, null, 2));
     showInfo(`Verify it fires with: agent2linear config explain <dir>`);
   } catch (error) {

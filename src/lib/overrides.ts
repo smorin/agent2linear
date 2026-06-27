@@ -130,7 +130,14 @@ function hasGlobMeta(s: string): boolean {
 
 /** Whether any candidate rule needs the git/filesystem context (so it's built lazily). */
 export function needsGitContext(layers: OverrideLayer[]): boolean {
-  return layers.some((layer) => layer.rules.some((rule) => whenNeedsContext(rule.when ?? {})));
+  return layers.some((layer) =>
+    layer.rules.some((rule) => {
+      // A hand-edited config can carry a null / non-object entry; treat it as "needs
+      // nothing" here (resolveOverrides warn-skips it) rather than dereference `.when`.
+      const r = rule as unknown;
+      return r !== null && typeof r === 'object' && whenNeedsContext((rule as ConfigOverride).when ?? {});
+    })
+  );
 }
 
 /** Path-tier specificity (§5.6): leading literal segments, then wildcard count. */
@@ -378,6 +385,15 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
     const scopeRank = layer.scope === 'project' ? 1 : 0;
     for (let ruleIndex = 0; ruleIndex < layer.rules.length; ruleIndex++) {
       const rule = layer.rules[ruleIndex];
+      // A hand-edited config can carry a null / non-object entry (the CLI write path
+      // never does). Warn-skip it — same posture as a rule with a bad `when` key — so a
+      // single stray entry can't crash every command that resolves config. The index is
+      // preserved (the loop counter), keeping provenance/`ruleIndex` truthful.
+      const r = rule as unknown;
+      if (r === null || typeof r !== 'object' || Array.isArray(r)) {
+        logger.warn(`Skipping override rule (${layer.scope} #${ruleIndex}): not an object`);
+        continue;
+      }
       const when = rule.when ?? ({} as WhenClause);
       let result: { matched: boolean; score: Spec };
       try {
@@ -419,8 +435,9 @@ export function resolveOverrides(ctx: OverrideContext, layers: OverrideLayer[]):
       locationCarried: m.locationCarried,
       // M31: surface the rule's label as PROVENANCE only — `id` is never read into a
       // resolved value (the loop below iterates the fixed OVERRIDABLE_FIELDS whitelist,
-      // which excludes `id`), so this cannot leak into a config field.
-      ...(m.rule.id !== undefined ? { ruleId: m.rule.id } : {}),
+      // which excludes `id`), so this cannot leak into a config field. A blank hand-edited
+      // `id: ""` is treated as ABSENT so the read side falls back to `#<ruleIndex>` (M32).
+      ...(typeof m.rule.id === 'string' && m.rule.id.trim() !== '' ? { ruleId: m.rule.id } : {}),
     };
     for (const field of OVERRIDABLE_FIELDS) {
       const value = m.rule[field];

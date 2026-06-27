@@ -12,7 +12,9 @@ import {
   parseAlias,
   parseSet,
   parseWhenJson,
+  redactRuleSecrets,
   resolveSelector,
+  ruleLabel,
   serializeRule,
   specificityTag,
   validateWhenJson,
@@ -296,6 +298,60 @@ describe('resolveSelector', () => {
   it('returns undefined for malformed numeric #index selectors', () => {
     expect(resolveSelector(rules, '#1abc')).toBeUndefined();
     expect(resolveSelector(rules, '#1.5')).toBeUndefined();
+  });
+
+  it('throws on an ambiguous label (hand-edited duplicate ids), not first-match', () => {
+    // A first-match would silently edit/remove/move the WRONG persisted rule.
+    const dupes: ConfigOverride[] = [
+      { id: 'dup', when: { repo: 'a' }, defaultTeam: 'one' },
+      { id: 'dup', when: { repo: 'b' }, defaultTeam: 'two' },
+    ];
+    expect(() => resolveSelector(dupes, 'dup')).toThrow(/ambiguous/);
+    // `#<index>` stays the unambiguous escape hatch.
+    expect(resolveSelector(dupes, '#1')).toEqual({ rule: dupes[1], index: 1 });
+  });
+
+  it('tolerates a null/non-object entry instead of dereferencing it', () => {
+    const withJunk = [null, { id: 'a', when: {} }] as unknown as ConfigOverride[];
+    expect(resolveSelector(withJunk, 'a')).toEqual({ rule: withJunk[1], index: 1 });
+    expect(resolveSelector(withJunk, 'nope')).toBeUndefined();
+  });
+});
+
+describe('ruleLabel', () => {
+  it('uses a non-empty id, else falls back to #<index>', () => {
+    expect(ruleLabel('frontend', 3)).toBe('frontend');
+    expect(ruleLabel(undefined, 3)).toBe('#3');
+  });
+
+  it('treats a blank hand-edited id as absent (→ #<index>)', () => {
+    expect(ruleLabel('', 2)).toBe('#2');
+    expect(ruleLabel('   ', 2)).toBe('#2');
+  });
+});
+
+describe('redactRuleSecrets', () => {
+  it('masks the value of a non-overridable secret-named key', () => {
+    const rule = {
+      id: 'a',
+      when: {},
+      defaultTeam: 'frontend',
+      apiKey: 'lin_api_SECRET',
+    } as unknown as ConfigOverride;
+    const out = redactRuleSecrets(rule) as unknown as Record<string, unknown>;
+    expect(out.apiKey).toBe('***');
+    expect(out.defaultTeam).toBe('frontend'); // whitelisted value untouched
+  });
+
+  it('never mutates the input (list/get read objects that are written back)', () => {
+    const rule = { id: 'a', when: {}, token: 'sekret' } as unknown as ConfigOverride;
+    redactRuleSecrets(rule);
+    expect((rule as unknown as Record<string, unknown>).token).toBe('sekret');
+  });
+
+  it('leaves a rule with no secret-named keys structurally equal', () => {
+    const rule: ConfigOverride = { id: 'a', when: { repo: 'x' }, defaultTeam: 't' };
+    expect(redactRuleSecrets(rule)).toEqual(rule);
   });
 });
 

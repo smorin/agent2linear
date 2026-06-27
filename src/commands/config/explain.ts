@@ -3,7 +3,7 @@ import { buildGitContext, type RemoteIdentity } from '../../lib/git-context.js';
 import { getInvocationContext } from '../../lib/invocation-context.js';
 import { matchWhen, type OverrideContext } from '../../lib/overrides.js';
 import type { ConfigLocation, ConfigOverride, ResolvedConfig, WhenClause } from '../../lib/types.js';
-import { specificityTag } from './override/shared.js';
+import { ruleLabel, specificityTag } from './override/shared.js';
 
 /**
  * `config explain [dir]` (M29 §7): for a resolution-context directory, print each
@@ -118,8 +118,11 @@ export function buildExplainData(dir?: string): ExplainData {
   // the SAME data `getConfig`/`resolveOverrides` use (contextDir/repoRoot/branch/
   // remotes), so the ✓/✗ from `matchWhen` can never disagree with the resolution.
   const ctx: OverrideContext = { contextDir, repoRoot, branch: git.branch, remotes: git.remotes };
-  const globalRules = (readGlobalConfig().overrides ?? []) as ConfigOverride[];
-  const projectRules = (readProjectConfig(contextDir).overrides ?? []) as ConfigOverride[];
+  // Coerce to an array — a hand-edited `"overrides": {}` (non-array) must not crash the
+  // annotate `.map` below; each entry is then guarded individually in `annotateRules`.
+  const toRuleArray = (raw: unknown): ConfigOverride[] => (Array.isArray(raw) ? (raw as ConfigOverride[]) : []);
+  const globalRules = toRuleArray(readGlobalConfig().overrides);
+  const projectRules = toRuleArray(readProjectConfig(contextDir).overrides);
   const rules: ExplainRule[] = [
     ...annotateRules('global', globalRules, ctx, fields),
     ...annotateRules('project', projectRules, ctx, fields),
@@ -140,14 +143,20 @@ function annotateRules(
   fields: ExplainField[]
 ): ExplainRule[] {
   return rules.map((rule, ruleIndex) => {
-    const when = (rule.when ?? {}) as WhenClause;
+    // A hand-edited entry can be null / non-object; render it ✗ (catch-all) rather than
+    // dereference `.when`/`.id` (mirrors resolveOverrides' warn-skip; indices preserved).
+    const r = rule as unknown;
+    const safe = r !== null && typeof r === 'object' && !Array.isArray(r);
+    const when = (safe ? (rule.when ?? {}) : {}) as WhenClause;
     let matched = false;
-    try {
-      matched = matchWhen(when, ctx).matched;
-    } catch {
-      // A rule with an unsupported key / invalid glob never matches (the resolver
-      // warn-skips it); render it ✗ rather than crashing explain.
-      matched = false;
+    if (safe) {
+      try {
+        matched = matchWhen(when, ctx).matched;
+      } catch {
+        // A rule with an unsupported key / invalid glob never matches (the resolver
+        // warn-skips it); render it ✗ rather than crashing explain.
+        matched = false;
+      }
     }
     const winsFields = fields
       .filter(
@@ -155,7 +164,7 @@ function annotateRules(
       )
       .map((f) => f.key);
     return {
-      label: rule.id ?? `#${ruleIndex}`,
+      label: ruleLabel(safe ? rule.id : undefined, ruleIndex),
       scope,
       ruleIndex,
       when,

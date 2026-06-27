@@ -197,6 +197,25 @@ describe('buildExplainData / explainConfig — query path', () => {
     expect(data.repoRoot).not.toBeNull();
   });
 
+  it('does not crash on a malformed hand-edited overrides ({} or [null]) — M32 CR2', () => {
+    const dir = join(repoRoot, 'cli');
+    mkdirSync(dir, { recursive: true });
+    const cfgDir = join(xdgConfig, 'agent2linear');
+    mkdirSync(cfgDir, { recursive: true });
+
+    // Non-array `overrides` (previously crashed annotateRules' `.map`).
+    writeFileSync(join(cfgDir, 'config.json'), JSON.stringify({ overrides: {} }));
+    expect(() => buildExplainData(dir)).not.toThrow();
+
+    // A null entry in the array (previously crashed on `rule.when`).
+    writeFileSync(join(cfgDir, 'config.json'), JSON.stringify({ overrides: [null, { when: {}, defaultTeam: 't' }] }));
+    __resetGitContextCache();
+    const data = buildExplainData(dir);
+    // The valid sibling is annotated at its true index; the null entry rendered ✗, no crash.
+    const valid = data.rules.find((r) => r.scope === 'global' && r.ruleIndex === 1);
+    expect(valid?.matched).toBe(true);
+  });
+
   it('shows defaultPrompt with override provenance when a rule wins (M30)', () => {
     mkdirSync(join(repoRoot, '.agent2linear'), { recursive: true });
     writeFileSync(

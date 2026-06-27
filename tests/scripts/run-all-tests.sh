@@ -181,7 +181,11 @@ echo ""
 echo -e "${BLUE}[Suite $((++SUITE_COUNT))] CONFIG OVERRIDE CLI${NC}"
 echo ""
 
-OV_CLI_OUTPUT_FILE="/tmp/test-config-override-cli-output-$$.log"
+# Atomic temp file (unpredictable name) instead of a predictable /tmp/...-$$ path a local
+# process could pre-create or symlink; trap-removed since the mktemp name won't match the
+# `rm -f /tmp/test-*-output-$$.log` cleanup at the end of this script.
+OV_CLI_OUTPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/test-config-override-cli-output.XXXXXX.log")"
+trap 'rm -f "$OV_CLI_OUTPUT_FILE"' EXIT
 
 if ./test-config-override-cli.sh 2>&1 | tee "$OV_CLI_OUTPUT_FILE"; then
     OV_CLI_EXIT=0
@@ -189,7 +193,7 @@ else
     OV_CLI_EXIT=$?
 fi
 
-read OV_CLI_PASSED OV_CLI_FAILED OV_CLI_TOTAL <<< $(extract_results "$(cat "$OV_CLI_OUTPUT_FILE")")
+read -r OV_CLI_PASSED OV_CLI_FAILED OV_CLI_TOTAL <<<"$(extract_results "$(cat "$OV_CLI_OUTPUT_FILE")")"
 
 TOTAL_PASSED=$((TOTAL_PASSED + OV_CLI_PASSED))
 TOTAL_FAILED=$((TOTAL_FAILED + OV_CLI_FAILED))

@@ -392,8 +392,25 @@ export function resolveSelector(
     }
     return { rule: rules[index], index };
   }
-  const index = rules.findIndex((r) => r.id === selector);
-  return index === -1 ? undefined : { rule: rules[index], index };
+  // Label lookup: a hand-edited config can carry DUPLICATE labels (the CLI write path
+  // hard-blocks them, but config.json can be edited directly). A first-match would let
+  // get/edit/remove/move silently mutate or delete the WRONG rule, so fail fast on
+  // ambiguity — `#<index>` stays the unambiguous escape hatch. A null / non-object entry
+  // is skipped rather than dereferenced (same hand-edit tolerance the resolver applies).
+  const matches: Array<{ rule: ConfigOverride; index: number }> = [];
+  rules.forEach((rule, index) => {
+    const r = rule as unknown;
+    if (r !== null && typeof r === 'object' && !Array.isArray(r) && (r as ConfigOverride).id === selector) {
+      matches.push({ rule, index });
+    }
+  });
+  if (matches.length > 1) {
+    throw new Error(
+      `override rule "${selector}" is ambiguous in this scope (${matches.length} rules share that label); ` +
+        `use #<index> or de-duplicate labels first`
+    );
+  }
+  return matches[0];
 }
 
 /** The positive leaf facets in `list`-tag precedence order (most → least specific). */
@@ -454,15 +471,48 @@ function collectPositiveFacets(node: WhenClause, into: Set<WhenFacet>): void {
 }
 
 /**
- * Serialize a rule into a record for `--json` / `--dry-run` output. Carries the
- * array index and the display label (`id ?? #<index>`) so machine consumers and the
- * read side name a rule the same way.
+ * The display label / `config ov` selector for a rule: its `id` when that is a NON-EMPTY
+ * string, else `#<index>`. Centralizes the `id ?? #<index>` pattern (read + write sides
+ * name a rule identically) and normalizes a blank hand-edited `id: ""` to `#<index>` — a
+ * usable selector — instead of rendering an empty label.
+ */
+export function ruleLabel(id: string | undefined, index: number): string {
+  return typeof id === 'string' && id.trim() !== '' ? id : `#${index}`;
+}
+
+/** Key names whose VALUES are masked in displayed rules (defense-in-depth, M32 review). */
+const SECRET_KEY_RE = /(?:api[-_]?key|secret|token|password|passwd|credential)/i;
+
+/**
+ * Return a rule with the VALUES of any non-overridable, secret-named key masked to `***`.
+ * The resolver already ignores such keys (only `OVERRIDABLE_FIELDS` resolve), so this is
+ * display hygiene: it stops a hand-edited secret in committable config from being echoed
+ * by `list`/`get` — especially `--json`, which agents pipe into logs. ALWAYS returns a
+ * shallow copy and never mutates the input: `list`/`get` read the same objects the write
+ * verbs persist via `writeConfigForScope`, so masking in place could write `***` back to
+ * config.json.
+ */
+export function redactRuleSecrets(rule: ConfigOverride): ConfigOverride {
+  const copy = { ...rule } as Record<string, unknown>;
+  for (const key of Object.keys(copy)) {
+    if (!OVERRIDABLE_FIELD_SET.has(key) && SECRET_KEY_RE.test(key)) {
+      copy[key] = '***';
+    }
+  }
+  return copy as unknown as ConfigOverride;
+}
+
+/**
+ * Serialize a rule into a record for `--json` / `--dry-run` output. Carries the array
+ * index and the display label (`ruleLabel`) so machine consumers and the read side name a
+ * rule the same way; the rule is run through `redactRuleSecrets` so a hand-edited secret
+ * never leaks into machine-readable output.
  */
 export function serializeRule(rule: ConfigOverride, index: number): Record<string, unknown> {
   return {
-    label: rule.id ?? `#${index}`,
+    label: ruleLabel(rule.id, index),
     index,
-    rule,
+    rule: redactRuleSecrets(rule),
   };
 }
 

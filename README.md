@@ -1282,9 +1282,18 @@ npm run test:coverage
 
 This project uses [Vitest](https://vitest.dev/) for unit testing with comprehensive coverage of core utilities.
 
-**Test Structure:**
-- Unit tests: `src/**/*.test.ts` - Fast, isolated tests for utilities and parsers
-- Integration tests: `tests/scripts/*.sh` - End-to-end tests with real Linear API
+**Two test suites — different runners, different concurrency models:**
+
+| Suite | Location | Runner | Concurrency | Isolation |
+|-------|----------|--------|-------------|-----------|
+| **Unit tests** | `src/**/*.test.ts` | Vitest (`npm run test`) | **Parallel** — files run concurrently in a worker pool | Each file owns its own `mktemp` sandbox + `vi.stubEnv('XDG_CONFIG_HOME', …)` per `beforeEach`, with `afterEach` cleanup |
+| **Integration / E2E** | `tests/scripts/*.sh` | Bash (`./run-all-tests.sh`) | **Sequential** — one process, no backgrounding | Each script uses a fresh `mktemp` sandbox (`HOME`/`XDG`); the override-CLI suite is a stateful lifecycle (see below) |
+
+**What must stay sequential — and why:**
+- **`tests/scripts/*.sh` are sequential by design.** `run-all-tests.sh` runs each suite as a single blocking foreground process (no `&`/`wait`), and the bash suites shell out to the built `dist/index.js`. They are **not** run by Vitest and must not be parallelized.
+- **`tests/scripts/test-config-override-cli.sh` is a stateful lifecycle suite**: its numbered cases (`add → list → get → edit → move → remove → explain`) execute in source order against **one shared sandbox** — case 1 creates the rule that later cases build on. Run the **full** suite, or use `--range` **starting at 1** (e.g. `--range 1-7`) to stop early. A non-prefix slice (`--test 14`, `--range 10-14`) reports false failures because the earlier fixtures never ran — expected, not a bug.
+
+**Parallelism is safe for the Vitest suite** because every test file is self-isolated (its own temp `XDG_CONFIG_HOME`) and there are no `.concurrent` tests. **New unit tests must follow that pattern** (own `mktemp` sandbox + `stubEnv` in `beforeEach`) so they stay parallel-safe.
 
 **Running Tests:**
 ```bash

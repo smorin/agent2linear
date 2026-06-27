@@ -14,8 +14,16 @@
 #
 # Usage:
 #   npm run build && bash tests/scripts/test-config-override-cli.sh
-#   bash tests/scripts/test-config-override-cli.sh --test 5
-#   bash tests/scripts/test-config-override-cli.sh --range 3-7
+#   bash tests/scripts/test-config-override-cli.sh --range 1-7   # prefix range — stop early
+#   bash tests/scripts/test-config-override-cli.sh --test 1      # a self-contained early case
+#
+# SEQUENTIAL by design: this is a stateful LIFECYCLE suite (add -> list -> get -> edit ->
+# move -> remove -> explain) where every case runs in source order against ONE shared
+# sandbox (test 1 creates the rule later cases build on). Run the FULL suite, or use
+# --range starting at 1 (e.g. --range 1-7) to stop early. `--test N` / `--range A-B` for a
+# LATER, non-prefix slice will report false failures because the fixtures created by the
+# earlier tests never ran — that is expected, not a bug. (The Vitest unit tests in
+# src/**/*.test.ts are the parallel, per-file-isolated suite; see README "Testing".)
 
 set -uo pipefail
 

@@ -13,7 +13,7 @@
 import { readConfigForScope, writeConfigForScope } from '../../../lib/config.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { getScopeInfo } from '../../../lib/scope.js';
-import { resolveSelector, serializeRule } from './shared.js';
+import { resolveSelector, ruleLabel, serializeRule } from './shared.js';
 
 interface OverrideMoveOptions {
   before?: string;
@@ -76,7 +76,7 @@ export function runOverrideMove(selector: string, options: OverrideMoveOptions =
     showSuccess('Override rule moved!', {
       Label: String(record.label),
       Scope: scopeLabel,
-      Position: `${hasBefore ? 'before' : 'after'} ${anchor.rule.id ?? `#${anchorNewIndex}`}`,
+      Position: `${hasBefore ? 'before' : 'after'} ${ruleLabel(anchor.rule.id, anchorNewIndex)}`,
       'New index': String(newIndex),
     });
   } catch (error) {

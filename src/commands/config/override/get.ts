@@ -12,7 +12,7 @@
 import { readConfigForScope } from '../../../lib/config.js';
 import { showError } from '../../../lib/output.js';
 import { getScopeInfo } from '../../../lib/scope.js';
-import { resolveSelector, serializeRule } from './shared.js';
+import { redactRuleSecrets, resolveSelector, serializeRule } from './shared.js';
 
 interface OverrideGetOptions {
   global?: boolean;
@@ -34,7 +34,8 @@ export function runOverrideGet(selector: string, options: OverrideGetOptions = {
       return;
     }
 
-    console.log(JSON.stringify(found.rule, null, 2));
+    // Human path also masks secret-named values (the resolver ignores them anyway).
+    console.log(JSON.stringify(redactRuleSecrets(found.rule), null, 2));
   } catch (error) {
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);

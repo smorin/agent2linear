@@ -12,7 +12,7 @@
 import { readConfigForScope } from '../../../lib/config.js';
 import { formatListJSON } from '../../../lib/output.js';
 import type { ConfigOverride } from '../../../lib/types.js';
-import { serializeRule, specificityTag } from './shared.js';
+import { redactRuleSecrets, ruleLabel, serializeRule, specificityTag } from './shared.js';
 
 interface OverrideListOptions {
   global?: boolean;
@@ -29,10 +29,15 @@ function scopesToList(options: OverrideListOptions): ListScope[] {
   return ['global', 'project'];
 }
 
-/** Compact one-line summary of the values a rule sets. */
+/** Whether a raw overrides[] entry is a usable rule object (hand-edited configs can hold junk). */
+function isRuleObject(rule: unknown): rule is ConfigOverride {
+  return rule !== null && typeof rule === 'object' && !Array.isArray(rule);
+}
+
+/** Compact one-line summary of the values a rule sets (secret-named values masked). */
 function valueSummary(rule: ConfigOverride): string {
   const parts: string[] = [];
-  for (const [key, value] of Object.entries(rule)) {
+  for (const [key, value] of Object.entries(redactRuleSecrets(rule))) {
     if (key === 'id' || key === 'when') continue;
     if (key === 'aliases') {
       parts.push('aliases');
@@ -51,6 +56,7 @@ export function runOverrideList(options: OverrideListOptions = {}): void {
     for (const scope of scopes) {
       const rules = readConfigForScope(scope).overrides ?? [];
       rules.forEach((rule, index) => {
+        if (!isRuleObject(rule)) return; // skip hand-edited junk rather than crash
         records.push({ scope, ...serializeRule(rule, index), tag: specificityTag(rule.when) });
       });
     }
@@ -68,7 +74,8 @@ export function runOverrideList(options: OverrideListOptions = {}): void {
     }
     any = true;
     rules.forEach((rule, index) => {
-      const label = rule.id ?? `#${index}`;
+      if (!isRuleObject(rule)) return; // skip hand-edited junk rather than crash
+      const label = ruleLabel(rule.id, index);
       const tag = specificityTag(rule.when);
       console.log(`  ${label} [${tag}]`);
       console.log(`    when: ${JSON.stringify(rule.when)}`);
