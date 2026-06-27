@@ -72,7 +72,17 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
     const cfg = readConfigForScope(scope);
     cfg.overrides ??= [];
 
-    if (cfg.overrides.some((r) => r.id === trimmedLabel)) {
+    if (
+      cfg.overrides.some((r) => {
+        const entry = r as unknown;
+        return (
+          entry !== null &&
+          typeof entry === 'object' &&
+          !Array.isArray(entry) &&
+          (entry as { id?: string }).id === trimmedLabel
+        );
+      })
+    ) {
       throw new Error(`override rule "${trimmedLabel}" already exists in ${scopeLabel} config`);
     }
 

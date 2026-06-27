@@ -164,6 +164,18 @@ describe('runOverrideEdit', () => {
     expect(err.mock.calls.flat().join(' ')).toMatch(/already exists/);
   });
 
+  it('rejects --id collisions when hand-edited overrides contain null slots', () => {
+    seedGlobal([
+      { when: { branch: 'main' }, defaultTeam: 'core' },
+      null,
+      { id: 'a', when: { repo: 'acme/web' }, defaultTeam: 'frontend' },
+    ]);
+    const { exit, err } = expectExit(() => runOverrideEdit('#0', { id: 'a', global: true }));
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err.mock.calls.flat().join(' ')).toMatch(/already exists/);
+    expect(globalRules()[0]).toEqual({ when: { branch: 'main' }, defaultTeam: 'core' });
+  });
+
   it('allows --id equal to the rule own label (no-op rename, not a collision)', () => {
     seedGlobal([{ id: 'a', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }]);
     runOverrideEdit('a', { id: 'a', set: ['defaultTeam=mobile'], global: true });

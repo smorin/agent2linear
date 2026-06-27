@@ -100,7 +100,18 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
             '--id only names an unlabeled #<index> rule'
         );
       }
-      if (rules.some((r, i) => i !== matchIndex && r.id === newId)) {
+      if (
+        rules.some((r, i) => {
+          const entry = r as unknown;
+          return (
+            i !== matchIndex &&
+            entry !== null &&
+            typeof entry === 'object' &&
+            !Array.isArray(entry) &&
+            (entry as { id?: string }).id === newId
+          );
+        })
+      ) {
         throw new Error(`override rule "${newId}" already exists in ${scopeLabel} config`);
       }
       rule.id = newId;

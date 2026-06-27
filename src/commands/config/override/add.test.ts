@@ -65,6 +65,21 @@ describe('runOverrideAdd', () => {
     expect(readConfigForScope('global').overrides).toHaveLength(1);
   });
 
+  it('hard-blocks a duplicate label when hand-edited overrides contain null slots', () => {
+    const cfgDir = join(xdgConfig, 'agent2linear');
+    mkdirSync(cfgDir, { recursive: true });
+    writeFileSync(
+      join(cfgDir, 'config.json'),
+      JSON.stringify({ overrides: [null, { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }] }, null, 2)
+    );
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const err = vi.spyOn(console, 'error');
+    runOverrideAdd('t1', { whenRepo: 'acme/mobile', set: ['defaultTeam=mobile'], global: true });
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(err.mock.calls.flat().join(' ')).toMatch(/already exists/);
+    expect(readConfigForScope('global').overrides).toHaveLength(2);
+  });
+
   it('rejects --set apiKey=… before writing', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
