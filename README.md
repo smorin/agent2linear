@@ -1295,6 +1295,8 @@ This project uses [Vitest](https://vitest.dev/) for unit testing with comprehens
 
 **Parallelism is safe for the Vitest suite** because every test file is self-isolated (its own temp `XDG_CONFIG_HOME`) and there are no `.concurrent` tests. **New unit tests must follow that pattern** (own `mktemp` sandbox + `stubEnv` in `beforeEach`) so they stay parallel-safe.
 
+**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 18 + 20), build, and the offline `test-config-override-cli.sh` E2E (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they create real `TEST_*` entities in a throwaway Linear workspace.
+
 **Running Tests:**
 ```bash
 # Run all unit tests once (recommended for CI/CD and verification)
