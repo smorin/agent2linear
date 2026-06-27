@@ -24,6 +24,7 @@ import {
   countRuleValues,
   hasWhenFlags,
   parseWhenJson,
+  redactRuleSecrets,
   resolveSelector,
   ruleLabel,
   serializeRule,
@@ -147,7 +148,7 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
         console.log(JSON.stringify(serializeRule(rule, matchIndex), null, 2));
       } else {
         showInfo(`Dry run — would update override "${ruleLabel(rule.id, matchIndex)}" in ${scopeLabel} config:`);
-        console.log(JSON.stringify(rule, null, 2));
+        console.log(JSON.stringify(redactRuleSecrets(rule), null, 2));
       }
       return;
     }
@@ -162,7 +163,7 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
     }
 
     showSuccess('Override rule updated!', { Label: ruleLabel(rule.id, matchIndex), Scope: scopeLabel });
-    console.log(JSON.stringify(rule, null, 2));
+    console.log(JSON.stringify(redactRuleSecrets(rule), null, 2));
     showInfo(`Verify it fires with: agent2linear config explain <dir>`);
   } catch (error) {
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -29,6 +29,12 @@ function scopesToList(options: OverrideListOptions): ListScope[] {
   return ['global', 'project'];
 }
 
+/** Coerce hand-edited malformed overrides values to an empty rule list. */
+function readRules(scope: ListScope): unknown[] {
+  const overrides = readConfigForScope(scope).overrides;
+  return Array.isArray(overrides) ? overrides : [];
+}
+
 /** Whether a raw overrides[] entry is a usable rule object (hand-edited configs can hold junk). */
 function isRuleObject(rule: unknown): rule is ConfigOverride {
   return rule !== null && typeof rule === 'object' && !Array.isArray(rule);
@@ -54,7 +60,7 @@ export function runOverrideList(options: OverrideListOptions = {}): void {
   if (options.json) {
     const records: Array<Record<string, unknown>> = [];
     for (const scope of scopes) {
-      const rules = readConfigForScope(scope).overrides ?? [];
+      const rules = readRules(scope);
       rules.forEach((rule, index) => {
         if (!isRuleObject(rule)) return; // skip hand-edited junk rather than crash
         records.push({ scope, ...serializeRule(rule, index), tag: specificityTag(rule.when) });
@@ -66,7 +72,7 @@ export function runOverrideList(options: OverrideListOptions = {}): void {
 
   let any = false;
   for (const scope of scopes) {
-    const rules = readConfigForScope(scope).overrides ?? [];
+    const rules = readRules(scope);
     console.log(`\n${scope} overrides:`);
     if (rules.length === 0) {
       console.log('  (none)');

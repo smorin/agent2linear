@@ -17,6 +17,12 @@ function seedGlobal(overrides: unknown[]): void {
   writeFileSync(join(dir, 'config.json'), JSON.stringify({ overrides }, null, 2));
 }
 
+function seedGlobalConfig(config: unknown): void {
+  const dir = join(xdgConfig, 'agent2linear');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'config.json'), JSON.stringify(config, null, 2));
+}
+
 function seedProject(overrides: unknown[]): void {
   const dir = join(workdir, '.agent2linear');
   mkdirSync(dir, { recursive: true });
@@ -105,6 +111,23 @@ describe('runOverrideList', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     runOverrideList({});
     const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(out).toContain('(none)');
+  });
+
+  it('--json treats a malformed non-array overrides value as empty', () => {
+    seedGlobalConfig({ overrides: {} });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    runOverrideList({ global: true, json: true });
+    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(JSON.parse(out)).toEqual([]);
+  });
+
+  it('human output treats a malformed non-array overrides value as empty', () => {
+    seedGlobalConfig({ overrides: {} });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    runOverrideList({ global: true });
+    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(out).toContain('global overrides:');
     expect(out).toContain('(none)');
   });
 });

@@ -214,6 +214,52 @@ describe('runOverrideEdit', () => {
     expect(globalRules()[0].defaultTeam).toBe('frontend');
   });
 
+  it('--dry-run human output redacts hand-edited secret-named keys', () => {
+    seedGlobal([
+      {
+        id: 't1',
+        when: { repo: 'acme/web' },
+        defaultTeam: 'frontend',
+        apiKey: 'lin_api_SECRET',
+        token: 'tok_SECRET',
+      },
+    ]);
+    const log = vi.spyOn(console, 'log');
+    runOverrideEdit('t1', { set: ['defaultTeam=mobile'], global: true, dryRun: true });
+    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(out).not.toContain('lin_api_SECRET');
+    expect(out).not.toContain('tok_SECRET');
+    expect(out).toContain('"apiKey": "***"');
+    expect(out).toContain('"token": "***"');
+    expect(globalRules()[0].defaultTeam).toBe('frontend');
+  });
+
+  it('human success output redacts hand-edited secret-named keys without mutating them', () => {
+    seedGlobal([
+      {
+        id: 't1',
+        when: { repo: 'acme/web' },
+        defaultTeam: 'frontend',
+        apiKey: 'lin_api_SECRET',
+        token: 'tok_SECRET',
+      },
+    ]);
+    const log = vi.spyOn(console, 'log');
+    runOverrideEdit('t1', { set: ['defaultTeam=mobile'], global: true });
+    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(out).not.toContain('lin_api_SECRET');
+    expect(out).not.toContain('tok_SECRET');
+    expect(out).toContain('"apiKey": "***"');
+    expect(out).toContain('"token": "***"');
+    expect(globalRules()[0]).toEqual({
+      id: 't1',
+      when: { repo: 'acme/web' },
+      defaultTeam: 'mobile',
+      apiKey: 'lin_api_SECRET',
+      token: 'tok_SECRET',
+    });
+  });
+
   it('--json emits the updated rule record as a bare object', () => {
     seedGlobal([{ id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }]);
     const log = vi.spyOn(console, 'log');
