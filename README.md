@@ -404,6 +404,104 @@ a2l profile match add acme --git-remote-owner Acme-Co --case-sensitive  # opt ou
 
 Now, inside any repo whose `origin` owner is `acme-co`/`acme-labs`, commands automatically use the `acme` workspace and its defaults.
 
+### Common multi-repo setup: two workspaces, routed by repo owner
+
+This is the usual setup when you have a work Linear workspace and a personal
+Linear workspace, and you want `a2l` to pick the right one from the current
+repo's GitHub owner.
+
+```bash
+# 1. Store both keys without putting secrets in config.json.
+echo "$WORK_LINEAR_API_KEY" | a2l workspace add work --api-key -
+echo "$PERSONAL_LINEAR_API_KEY" | a2l workspace add personal --api-key -
+
+# 2. Create one profile per Linear workspace.
+a2l profile add work --workspace work --default-team platform
+a2l profile add personal --workspace personal --default-team inbox
+
+# 3. Route repo owners to profiles. Owners are matched case-insensitively.
+a2l profile match add work \
+  --git-remote-owner acme-co \
+  --git-remote-owner acme-labs
+
+a2l profile match add personal \
+  --git-remote-owner alice \
+  --git-remote-owner alice-labs
+
+# 4. Refuse to guess in repos that do not match either profile.
+a2l config set noMatchPolicy match-only
+```
+
+After that:
+
+- `github.com/acme-co/*` and `github.com/acme-labs/*` resolve to `work`.
+- `github.com/alice/*` and `github.com/alice-labs/*` resolve to `personal`.
+- Any other repo fails with a no-match error instead of silently using the wrong key.
+- `--workspace <name>` or `--api-key` still forces a one-off override.
+
+Verify the routing from inside representative repos:
+
+```bash
+a2l workspace current   # offline: selected workspace + source
+a2l whoami              # API-backed identity check
+a2l doctor              # config, workspace, and secret hygiene checks
+```
+
+If you run agents or CI non-interactively and you trust your match rules, disable
+the write confirmation for auto-detected multi-workspace writes:
+
+```bash
+a2l config set confirmAutoDetectedWrites false
+```
+
+Otherwise, mutating commands in auto-detected multi-workspace repos require an
+interactive confirmation, `-y`, or an explicit `--workspace`.
+
+#### Dotfiles/env-file variant
+
+If you manage secrets outside agent2linear, profiles can point at per-workspace
+env files instead of using `a2l workspace add`. The files are dotenv-style,
+untracked, and only need to contain the key for that workspace:
+
+```text
+~/.config/agent2linear/work.env      # LINEAR_API_KEY_WORK=lin_api_...
+~/.config/agent2linear/personal.env  # LINEAR_API_KEY_PERSONAL=lin_api_...
+```
+
+Then hand-author or generate this global config at
+`~/.config/agent2linear/config.json`:
+
+```json
+{
+  "noMatchPolicy": "match-only",
+  "confirmAutoDetectedWrites": false,
+  "profiles": {
+    "work": {
+      "workspace": "work",
+      "defaultTeam": "platform",
+      "match": {
+        "remote": ["origin", "upstream"],
+        "gitRemoteOwner": ["acme-co", "acme-labs"]
+      },
+      "envFile": "~/.config/agent2linear/work.env"
+    },
+    "personal": {
+      "workspace": "personal",
+      "defaultTeam": "inbox",
+      "match": {
+        "gitRemoteOwner": ["alice", "alice-labs"]
+      },
+      "envFile": "~/.config/agent2linear/personal.env"
+    }
+  }
+}
+```
+
+That `remote: ["origin", "upstream"]` on the work profile handles the common fork
+case: if `origin` is your personal fork but `upstream` points at the work org, the
+work profile can still win. Keep the work profile before the personal profile so
+first-positive-wins picks it for those forks.
+
 ### Matching on host, repo name, and which remote
 
 A `match` rule can read **host**, **owner**, **repo** (`owner/name`), and choose **which remote** its identity criteria read:
