@@ -539,6 +539,26 @@ Declare the `upstream` rule **first** so it wins for a fork (origin = `alice/wid
 
 > **Release note (v0.31.0) — nested-group owners.** Profile detection now uses the same git parser as `config` overrides, so for **nested** self-hosted groups (`git@gitlab.com:group/sub/repo.git`) the **owner** is now the all-but-last path (`group/sub`), not just the first segment (`group`). A rule written as `--git-remote-owner group` no longer matches such a repo — use `--git-remote-owner group/sub` or the glob `--git-remote-owner 'group/*'`. Flat `host/owner/name` repos (e.g. plain GitHub) are unaffected.
 
+### How you clone a fork affects routing
+
+Auto-detection reads your **local git remotes** — it never calls the forge. So whether a forked checkout routes correctly depends entirely on *how you obtained it*: for a fork rule (`--remote upstream --git-remote-owner ACMEORG`) to match, an `ACMEORG`-owned `origin` **or** `upstream` must actually be present. Verified behavior for a fork `USERNAME/repo` of `ACMEORG/repo`:
+
+| How you get the code | Resulting remotes | Auto-detect result |
+|---|---|---|
+| `gh repo fork --clone` | `origin=USERNAME` + `upstream=ACMEORG` | ✅ upstream rule matches → ACMEORG workspace |
+| `gh repo clone USERNAME/repo` | `origin=USERNAME` + `upstream=ACMEORG` | ✅ upstream rule matches → ACMEORG workspace |
+| `gh repo clone USERNAME/repo` *(forge API unreachable / rate-limited)* | clone **aborts**, exit 1 | ✅ fail-safe — no misrouted checkout is produced |
+| `git clone <fork-url>` (HTTPS **or** SSH) | `origin=USERNAME` only | ⚠️ upstream rule can't match → falls through to your origin-owner rule |
+| Tarball / ZIP / `git archive` (no `.git`) | *none* | ⚠️ no remotes → `match-only` refuses; pass `--workspace` |
+
+Only forge-aware tooling (`gh`) knows a repo's parent and adds `upstream`; plain `git` sets `origin` to the URL you gave it and nothing more (identical for HTTPS and SSH). `gh repo clone` discovers the parent via a forge API call — and if that call can't complete, it **errors out instead of producing an `upstream`-less clone**, so `gh` never silently routes you to the wrong workspace.
+
+**Rule of thumb:** obtain forks with `gh repo fork --clone` or `gh repo clone`. After a plain `git clone`, restore routing yourself:
+
+```bash
+git remote add upstream https://github.com/ACMEORG/repo.git
+```
+
 ### Selection precedence (which workspace?)
 
 Highest to lowest:
