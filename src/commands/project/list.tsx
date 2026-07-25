@@ -1,353 +1,585 @@
-import type { Command } from 'commander';
+import { type Command, Option } from 'commander';
 import { Box, render, Text } from 'ink';
 import React from 'react';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { RuntimeError, UsageError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
+import type { CursorHistoryJsonValue } from '../../lib/cursor-history.js';
+import {
+  buildCursorCommands,
+  type CanonicalCommandOption,
+  type CursorCommands,
+  type CursorHistoryResult,
+  recordCursorContinuation,
+} from '../../lib/cursor-history-adapter.js';
 import { getEntityCache } from '../../lib/entity-cache.js';
-import { getAllProjects } from '../../lib/linear-client.js';
-import { filterColumns,formatContentPreview, showError } from '../../lib/output.js';
+import { getProjectListPage, PROJECT_LIST_ORDER } from '../../lib/linear-client.js';
+import { logger } from '../../lib/logger.js';
+import { filterColumns, formatContentPreview } from '../../lib/output.js';
+import { type OutputMode, resolveOutputMode } from '../../lib/output-mode.js';
+import {
+  type PageInfo,
+  PaginationInputError,
+  parsePageLimit,
+  validateRawCursor,
+} from '../../lib/pagination.js';
 import type { ProjectListFilters, ProjectListItem } from '../../lib/types.js';
+import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
+import { workspaceCacheKey } from '../../lib/xdg-paths.js';
 
 interface ProjectListCommandOptions {
-  allLeads?: boolean;
-  lead?: string;
-  allTeams?: boolean;
-  team?: string;
+  after?: string;
+  all?: boolean;
   allInitiatives?: boolean;
+  allLeads?: boolean;
+  allTeams?: boolean;
+  blocksOthers?: boolean;
+  columns?: string;
+  cursorHistory?: boolean;
+  dependsOnOthers?: boolean;
+  desc?: boolean;
+  descFull?: boolean;
+  descLength?: string;
+  format?: string;
+  hasDependencies?: boolean;
   initiative?: string;
-  status?: string;
-  priority?: string;
-  member?: string;
+  interactive?: boolean;
+  json?: boolean;
   label?: string;
+  lead?: string;
+  limit?: string;
+  member?: string;
+  output?: string;
+  priority?: string;
+  search?: string;
+  showDependencies?: boolean;
   startAfter?: string;
   startBefore?: string;
+  status?: string;
   targetAfter?: string;
   targetBefore?: string;
-  search?: string;
-  limit?: string;
-  format?: string;
+  team?: string;
   web?: boolean;
-  columns?: string;
-  hasDependencies?: boolean;
   withoutDependencies?: boolean;
-  dependsOnOthers?: boolean;
-  blocksOthers?: boolean;
 }
 
-// ========================================
-// HELPER: Build filters from options with smart defaults
-// ========================================
-async function buildDefaultFilters(options: ProjectListCommandOptions): Promise<ProjectListFilters> {
+interface DescriptionConfig {
+  full?: boolean;
+  hide?: boolean;
+  length?: number;
+}
+
+interface PublicCursorHistory {
+  status: CursorHistoryResult['status'];
+  entryId: string | null;
+}
+
+interface PaginationPresentation {
+  commands: CursorCommands | null;
+  cursorHistory: PublicCursorHistory;
+}
+
+interface DependencyFilterOptions {
+  blocksOthers?: boolean;
+  dependsOnOthers?: boolean;
+  hasDependencies?: boolean;
+  withoutDependencies?: boolean;
+}
+
+async function buildDefaultFilters(
+  options: ProjectListCommandOptions
+): Promise<ProjectListFilters> {
   const config = getConfig();
   const filters: ProjectListFilters = {};
 
-  // ========================================
-  // LEAD FILTER (default: current user)
-  // ========================================
   if (!options.allLeads) {
     if (options.lead) {
-      // Explicit lead specified - resolve it
-      const leadId = resolveAlias('member', options.lead);
-      filters.leadId = leadId;
+      filters.leadId = resolveAlias('member', options.lead);
     } else {
-      // Default: current user is the lead (cached)
       const cache = getEntityCache();
       const currentUser = await cache.getCurrentUser();
       filters.leadId = currentUser.id;
     }
   }
-  // If --all-leads: don't set leadId filter (show all leads)
 
-  // ========================================
-  // TEAM FILTER (default: config.defaultTeam)
-  // ========================================
   if (!options.allTeams) {
     const teamId = options.team || config.defaultTeam;
-    if (teamId) {
-      filters.teamId = resolveAlias('team', teamId);
-    }
+    if (teamId) filters.teamId = resolveAlias('team', teamId);
   }
-  // If --all-teams: don't set teamId filter (show all teams)
 
-  // ========================================
-  // INITIATIVE FILTER (default: config.defaultInitiative)
-  // ========================================
   if (!options.allInitiatives) {
     const initiativeId = options.initiative || config.defaultInitiative;
-    if (initiativeId) {
-      filters.initiativeId = resolveAlias('initiative', initiativeId);
-    }
+    if (initiativeId) filters.initiativeId = resolveAlias('initiative', initiativeId);
   }
-  // If --all-initiatives: don't set initiativeId filter (show all initiatives)
-
-  // ========================================
-  // EXPLICIT FILTERS (no defaults, only if specified)
-  // ========================================
 
   if (options.status) {
     filters.statusId = resolveAlias('project-status', options.status);
   }
-
   if (options.priority !== undefined) {
     const priority = parseInt(options.priority, 10);
     if (isNaN(priority) || priority < 0 || priority > 4) {
-      throw new Error('Priority must be a number between 0 (None) and 4 (Low)');
+      throw new UsageError('Priority must be a number between 0 (None) and 4 (Low)');
     }
     filters.priority = priority;
   }
-
   if (options.member) {
-    // Can be comma-separated list
-    const members = options.member.split(',').map((m: string) => m.trim());
-    filters.memberIds = members.map((m: string) => resolveAlias('member', m));
+    filters.memberIds = options.member
+      .split(',')
+      .map(value => resolveAlias('member', value.trim()));
   }
-
   if (options.label) {
-    // Can be comma-separated list
-    const labels = options.label.split(',').map((l: string) => l.trim());
-    filters.labelIds = labels.map((l: string) => resolveAlias('project-label', l));
+    filters.labelIds = options.label
+      .split(',')
+      .map(value => resolveAlias('project-label', value.trim()));
   }
-
-  // Date range filters
-  if (options.startAfter) {
-    filters.startDateAfter = options.startAfter;
-  }
-  if (options.startBefore) {
-    filters.startDateBefore = options.startBefore;
-  }
-  if (options.targetAfter) {
-    filters.targetDateAfter = options.targetAfter;
-  }
-  if (options.targetBefore) {
-    filters.targetDateBefore = options.targetBefore;
-  }
-
-  // Search query
-  if (options.search) {
-    filters.search = options.search;
-  }
-
+  if (options.startAfter) filters.startDateAfter = options.startAfter;
+  if (options.startBefore) filters.startDateBefore = options.startBefore;
+  if (options.targetAfter) filters.targetDateAfter = options.targetAfter;
+  if (options.targetBefore) filters.targetDateBefore = options.targetBefore;
+  if (options.search) filters.search = options.search;
   return filters;
 }
 
-// ========================================
-// HELPER: Apply dependency filters (client-side)
-// ========================================
-function applyDependencyFilters(
-  projects: ProjectListItem[],
-  options: {
-    hasDependencies?: boolean;
-    withoutDependencies?: boolean;
-    dependsOnOthers?: boolean;
-    blocksOthers?: boolean;
-  }
-): ProjectListItem[] {
-  let filtered = projects;
-
-  // Filter: has any dependencies
-  if (options.hasDependencies) {
-    filtered = filtered.filter(p =>
-      (p.dependsOnCount || 0) + (p.blocksCount || 0) > 0
-    );
-  }
-
-  // Filter: without dependencies
-  if (options.withoutDependencies) {
-    filtered = filtered.filter(p =>
-      (p.dependsOnCount || 0) + (p.blocksCount || 0) === 0
-    );
-  }
-
-  // Filter: depends on others
-  if (options.dependsOnOthers) {
-    filtered = filtered.filter(p => (p.dependsOnCount || 0) > 0);
-  }
-
-  // Filter: blocks others
-  if (options.blocksOthers) {
-    filtered = filtered.filter(p => (p.blocksCount || 0) > 0);
-  }
-
-  return filtered;
+function projectMatchesDependencyFilters(
+  project: ProjectListItem,
+  options: DependencyFilterOptions
+): boolean {
+  const dependsOn = project.dependsOnCount || 0;
+  const blocks = project.blocksCount || 0;
+  if (options.hasDependencies && dependsOn + blocks === 0) return false;
+  if (options.withoutDependencies && dependsOn + blocks > 0) return false;
+  if (options.dependsOnOthers && dependsOn === 0) return false;
+  if (options.blocksOthers && blocks === 0) return false;
+  return true;
 }
 
-// ========================================
-// HELPER: Format table output
-// ========================================
-function formatTableOutput(projects: ProjectListItem[], showDependencies = false, descConfig?: { show: boolean; length?: number; full?: boolean; hide?: boolean }): void {
+function hasDependencyFilter(options: DependencyFilterOptions): boolean {
+  return Boolean(
+    options.hasDependencies ||
+      options.withoutDependencies ||
+      options.dependsOnOthers ||
+      options.blocksOthers
+  );
+}
+
+function formatTableOutput(
+  projects: ProjectListItem[],
+  showDependencies = false,
+  descConfig?: DescriptionConfig
+): void {
   if (projects.length === 0) {
     console.log('No projects found.');
     return;
   }
 
-  // Description preview: shown by default unless --no-desc
   const showPreview = !descConfig?.hide;
-
-  // Header - tab-separated (with optional dependency and preview columns)
   const baseHeader = showDependencies
     ? 'ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks'
     : 'ID\tTitle\tStatus\tTeam\tLead';
-  console.log(showPreview ? `${baseHeader}\tPreview` : baseHeader);
+  console.log(showPreview ? baseHeader + '\tPreview' : baseHeader);
 
-  // Rows - tab-separated with full ID and Title (no truncation)
   for (const project of projects) {
-    const id = project.id;
-    const title = project.name;
     const status = (project.status?.name || project.state || '').substring(0, 11);
     const team = (project.team?.name || '').substring(0, 14);
     const lead = (project.lead?.name || '').substring(0, 19);
-
-    let row: string;
+    let row = project.id + '\t' + project.name + '\t' + status + '\t' + team + '\t' + lead;
     if (showDependencies) {
-      const depsOn = project.dependsOnCount !== undefined ? project.dependsOnCount.toString() : '0';
-      const blocks = project.blocksCount !== undefined ? project.blocksCount.toString() : '0';
-      row = `${id}\t${title}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}`;
-    } else {
-      row = `${id}\t${title}\t${status}\t${team}\t${lead}`;
+      row += '\t' + String(project.dependsOnCount ?? 0);
+      row += '\t' + String(project.blocksCount ?? 0);
     }
-
     if (showPreview) {
       const text = project.description || project.content || '';
       const preview = descConfig?.full
         ? text.replace(/\t/g, ' ').replace(/\n/g, ' ')
         : formatContentPreview(text, descConfig?.length);
-      row += `\t${preview}`;
+      row += '\t' + preview;
     }
-
     console.log(row);
   }
 
-  console.log(`\nTotal: ${projects.length} project${projects.length !== 1 ? 's' : ''}`);
+  console.log(
+    '\nTotal: ' + String(projects.length) + ' project' + (projects.length !== 1 ? 's' : '')
+  );
 }
 
-// ========================================
-// HELPER: Format JSON output
-// ========================================
-function formatJSONOutput(projects: ProjectListItem[]): void {
-  console.log(JSON.stringify(projects, null, 2));
-}
-
-// ========================================
-// HELPER: Format TSV output
-// ========================================
-function formatTSVOutput(projects: ProjectListItem[], showDependencies = false, descConfig?: { show: boolean; length?: number; full?: boolean; hide?: boolean }): void {
+function formatTSVOutput(
+  projects: ProjectListItem[],
+  showDependencies = false,
+  descConfig?: DescriptionConfig
+): void {
   const showPreview = !descConfig?.hide;
-
-  // Headers (with optional dependency and preview columns)
   const baseHeader = showDependencies
     ? 'ID\tTitle\tStatus\tTeam\tLead\tDeps-On\tBlocks'
     : 'ID\tTitle\tStatus\tTeam\tLead';
-  console.log(showPreview ? `${baseHeader}\tPreview` : baseHeader);
+  console.log(showPreview ? baseHeader + '\tPreview' : baseHeader);
 
-  // Rows
   for (const project of projects) {
     const status = project.status?.name || project.state || '';
     const team = project.team?.name || '';
     const lead = project.lead?.name || '';
-
-    let row: string;
+    let row = project.id + '\t' + project.name + '\t' + status + '\t' + team + '\t' + lead;
     if (showDependencies) {
-      const depsOn = project.dependsOnCount !== undefined ? project.dependsOnCount.toString() : '0';
-      const blocks = project.blocksCount !== undefined ? project.blocksCount.toString() : '0';
-      row = `${project.id}\t${project.name}\t${status}\t${team}\t${lead}\t${depsOn}\t${blocks}`;
-    } else {
-      row = `${project.id}\t${project.name}\t${status}\t${team}\t${lead}`;
+      row += '\t' + String(project.dependsOnCount ?? 0);
+      row += '\t' + String(project.blocksCount ?? 0);
     }
-
     if (showPreview) {
       const text = project.description || project.content || '';
       const preview = descConfig?.full
         ? text.replace(/\t/g, ' ').replace(/\n/g, ' ')
         : formatContentPreview(text, descConfig?.length);
-      row += `\t${preview}`;
+      row += '\t' + preview;
     }
-
     console.log(row);
   }
 }
 
-// ========================================
-// INK COMPONENT: Interactive list
-// ========================================
-interface ProjectListProps {
-  filters: ProjectListFilters;
-  format?: string;
+function flattenProjects(projects: ProjectListItem[]): Array<Record<string, unknown>> {
+  return projects.map(project => ({
+    id: project.id,
+    name: project.name,
+    status: project.status?.name || project.state || '',
+    team: project.team?.name || '',
+    lead: project.lead?.name || '',
+    description: project.description || '',
+    priority: project.priority,
+    url: project.url || '',
+    dependsOnCount: project.dependsOnCount || 0,
+    blocksCount: project.blocksCount || 0,
+  }));
 }
 
-function ProjectList({ filters }: ProjectListProps): React.ReactElement {
-  const [projects, setProjects] = React.useState<ProjectListItem[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+function formatColumnRows(
+  rows: Array<Record<string, unknown>>,
+  columns: string[],
+  includeTotal: boolean
+): void {
+  console.log(columns.join('\t'));
+  for (const row of rows) {
+    console.log(columns.map(column => String(row[column] ?? '')).join('\t'));
+  }
+  if (includeTotal) {
+    console.log('\nTotal: ' + String(rows.length) + ' project' + (rows.length !== 1 ? 's' : ''));
+  }
+}
 
-  React.useEffect(() => {
-    async function fetchProjects() {
-      try {
-        setLoading(true);
-        const projectList = await getAllProjects(filters);
-        setProjects(projectList);
-        setLoading(false);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : String(err));
-        setLoading(false);
-      }
-    }
+function resolveCommandOutputMode(
+  options: ProjectListCommandOptions,
+  command: Command
+): OutputMode {
+  const common = {
+    allowedModes: ['table', 'json', 'tsv'] as const,
+    json: options.json,
+  };
+  if (options.output === undefined) return resolveOutputMode(common);
+  return resolveOutputMode({
+    ...common,
+    output: options.output,
+    outputSource: command.getOptionValueSource('output') === 'default' ? 'default' : 'explicit',
+  });
+}
 
-    fetchProjects();
-  }, []);
+function canonicalCommandOptions(
+  filters: ProjectListFilters,
+  options: ProjectListCommandOptions,
+  outputMode: OutputMode
+): CanonicalCommandOption[] {
+  const result: CanonicalCommandOption[] = [];
+  const add = (flag: string, value?: string | number): void => {
+    result.push(value === undefined ? { flag } : { flag, value });
+  };
 
-  if (loading) {
-    return <Text>Loading projects...</Text>;
+  if (filters.teamId) add('--team', filters.teamId);
+  else add('--all-teams');
+  if (filters.initiativeId) add('--initiative', filters.initiativeId);
+  else add('--all-initiatives');
+  if (filters.leadId) add('--lead', filters.leadId);
+  else add('--all-leads');
+  if (filters.statusId) add('--status', filters.statusId);
+  if (filters.priority !== undefined) add('--priority', filters.priority);
+  if (filters.memberIds?.length) add('--member', filters.memberIds.join(','));
+  if (filters.labelIds?.length) add('--label', filters.labelIds.join(','));
+  if (filters.startDateAfter) add('--start-after', filters.startDateAfter);
+  if (filters.startDateBefore) add('--start-before', filters.startDateBefore);
+  if (filters.targetDateAfter) add('--target-after', filters.targetDateAfter);
+  if (filters.targetDateBefore) add('--target-before', filters.targetDateBefore);
+  if (filters.search) add('--search', filters.search);
+  if (options.showDependencies) add('--show-dependencies');
+  if (options.hasDependencies) add('--has-dependencies');
+  if (options.withoutDependencies) add('--without-dependencies');
+  if (options.dependsOnOthers) add('--depends-on-others');
+  if (options.blocksOthers) add('--blocks-others');
+  if (options.desc === false) add('--no-desc');
+  if (options.descLength) add('--desc-length', options.descLength);
+  if (options.descFull) add('--desc-full');
+  if (options.columns) add('--columns', options.columns);
+  if (options.interactive) add('--interactive');
+  if (options.cursorHistory === false) add('--no-cursor-history');
+  add('--output', outputMode);
+  return result;
+}
+
+function cursorHistoryFilters(
+  filters: ProjectListFilters,
+  dependencyOptions: DependencyFilterOptions
+): Record<string, CursorHistoryJsonValue> {
+  const result: Record<string, CursorHistoryJsonValue> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined) result[key] = value as CursorHistoryJsonValue;
+  }
+  result.hasDependencies = dependencyOptions.hasDependencies === true;
+  result.withoutDependencies = dependencyOptions.withoutDependencies === true;
+  result.dependsOnOthers = dependencyOptions.dependsOnOthers === true;
+  result.blocksOthers = dependencyOptions.blocksOthers === true;
+  return result;
+}
+
+async function preparePaginationPresentation(
+  pageInfo: PageInfo,
+  filters: ProjectListFilters,
+  options: ProjectListCommandOptions,
+  outputMode: OutputMode,
+  limit: number,
+  after: string | undefined,
+  dependencyOptions: DependencyFilterOptions
+): Promise<PaginationPresentation> {
+  const disabled = options.cursorHistory === false;
+  if (!pageInfo.hasNextPage || pageInfo.endCursor === null) {
+    return {
+      commands: null,
+      cursorHistory: {
+        status: disabled ? 'disabled' : 'not_applicable',
+        entryId: null,
+      },
+    };
   }
 
-  if (error) {
-    return <Text color="red">Error: {error}</Text>;
+  const commands = buildCursorCommands({
+    commandPath: ['project', 'list'],
+    options: canonicalCommandOptions(filters, options, outputMode),
+    limit,
+    startingAfter: after,
+    emittedCursor: pageInfo.endCursor,
+  });
+  let result: CursorHistoryResult;
+  try {
+    const workspace = disabled
+      ? { key: null, id: null, name: null }
+      : (() => {
+          const resolution = resolveActiveWorkspace();
+          return {
+            key: workspaceCacheKey(resolution.key),
+            id: null,
+            name: resolution.name ?? null,
+          };
+        })();
+    result = await recordCursorContinuation({
+      disabled,
+      pageInfo,
+      entry: {
+        workspace,
+        commandPath: 'project list',
+        resource: 'project',
+        target: null,
+        filters: cursorHistoryFilters(filters, dependencyOptions),
+        orderBy: PROJECT_LIST_ORDER,
+        limit,
+        commands,
+      },
+    });
+  } catch (error) {
+    result = { status: 'failed', entryId: null, error };
   }
 
+  if (result.status === 'failed') {
+    const detail = result.error instanceof Error ? result.error.message : String(result.error);
+    console.error('warning: failed to record cursor history: ' + detail);
+  }
+  return {
+    commands,
+    cursorHistory: { status: result.status, entryId: result.entryId },
+  };
+}
+
+function printHumanPaginationFooter(presentation: PaginationPresentation): void {
+  if (!presentation.commands) return;
+  console.log('\nMore projects are available.');
+  console.log('\nNext page:');
+  console.log('  ' + presentation.commands.nextCommand);
+  console.log('\nAll remaining:');
+  console.log('  ' + presentation.commands.allRemainingCommand);
+
+  if (presentation.cursorHistory.status === 'recorded') {
+    console.log('\nCursor history:');
+    console.log("  a2l cursor-history view '" + presentation.cursorHistory.entryId + "'");
+  } else if (presentation.cursorHistory.status === 'disabled') {
+    console.log('\nCursor history: disabled');
+  } else if (presentation.cursorHistory.status === 'failed') {
+    console.log('\nCursor history: not recorded');
+  }
+}
+
+interface ProjectListProps {
+  projects: ProjectListItem[];
+  presentation: PaginationPresentation;
+}
+
+function ProjectList({ projects, presentation }: ProjectListProps): React.ReactElement {
   if (projects.length === 0) {
     return <Text color="yellow">No projects found matching your filters.</Text>;
   }
 
   return (
     <Box flexDirection="column">
-      <Text bold underline>Projects ({projects.length})</Text>
+      <Text bold underline>
+        Projects ({projects.length})
+      </Text>
       <Text> </Text>
-
-      {projects.map((project) => (
+      {projects.map(project => (
         <Box key={project.id} flexDirection="column" marginBottom={1}>
           <Text>
-            <Text bold color="cyan">{project.name}</Text>
-            {' '}
+            <Text bold color="cyan">
+              {project.name}
+            </Text>{' '}
             <Text dimColor>({project.id.substring(0, 8)}...)</Text>
           </Text>
-
           <Text>
             Status: <Text color="green">{project.status?.name || project.state}</Text>
-            {' | '}
-            Team: <Text color="blue">{project.team?.name || 'N/A'}</Text>
-            {' | '}
-            Lead: <Text color="magenta">{project.lead?.name || 'N/A'}</Text>
+            {' | '}Team: <Text color="blue">{project.team?.name || 'N/A'}</Text>
+            {' | '}Lead: <Text color="magenta">{project.lead?.name || 'N/A'}</Text>
           </Text>
-
           {(project.description || project.content) && (
-            <Text dimColor>{formatContentPreview(project.description || project.content || '')}</Text>
+            <Text dimColor>
+              {formatContentPreview(project.description || project.content || '')}
+            </Text>
           )}
         </Box>
       ))}
+      {presentation.commands && (
+        <Box flexDirection="column">
+          <Text>Next page:</Text>
+          <Text>{presentation.commands.nextCommand}</Text>
+          <Text>All remaining:</Text>
+          <Text>{presentation.commands.allRemainingCommand}</Text>
+        </Box>
+      )}
     </Box>
   );
 }
 
-// ========================================
-// COMMAND REGISTRATION
-// ========================================
+async function runProjectList(options: ProjectListCommandOptions, command: Command): Promise<void> {
+  if (options.format !== undefined) {
+    throw new UsageError('Legacy -f/--format has been removed; use -o/--output <table|json|tsv>');
+  }
+
+  let limit: number;
+  let after: string | undefined;
+  try {
+    limit = parsePageLimit(options.limit);
+    after = validateRawCursor(options.after);
+  } catch (error) {
+    if (error instanceof PaginationInputError) {
+      throw new UsageError(error.message, { cause: error });
+    }
+    throw error;
+  }
+  const outputMode = resolveCommandOutputMode(options, command);
+  if (options.all && command.getOptionValueSource('limit') === 'cli') {
+    logger.debug('--all ignores --limit and fetches every remaining project');
+  }
+
+  if (options.hasDependencies && options.withoutDependencies) {
+    throw new UsageError('Cannot use --has-dependencies and --without-dependencies together');
+  }
+  if (options.web) throw new RuntimeError('Web mode not yet implemented');
+
+  const filters = await buildDefaultFilters(options);
+  const dependencyOptions: DependencyFilterOptions = {
+    hasDependencies: options.hasDependencies,
+    withoutDependencies: options.withoutDependencies,
+    dependsOnOthers: options.dependsOnOthers,
+    blocksOthers: options.blocksOthers,
+  };
+  filters.includeDependencies = Boolean(
+    options.showDependencies || hasDependencyFilter(dependencyOptions)
+  );
+
+  const matches = hasDependencyFilter(dependencyOptions)
+    ? (item: ProjectListItem) => projectMatchesDependencyFilters(item, dependencyOptions)
+    : undefined;
+  const page = await getProjectListPage(
+    filters,
+    { limit, after, fetchAll: options.all === true },
+    matches
+  );
+  const presentation = await preparePaginationPresentation(
+    page.pageInfo,
+    filters,
+    options,
+    outputMode,
+    limit,
+    after,
+    dependencyOptions
+  );
+  const descConfig: DescriptionConfig = {
+    length: options.descLength ? parseInt(options.descLength, 10) : undefined,
+    full: options.descFull === true,
+    hide: options.desc === false,
+  };
+
+  const columns = options.columns ? options.columns.split(',').map(column => column.trim()) : null;
+  if (columns) {
+    const outputProjects = filterColumns(flattenProjects(page.items), columns);
+    if (outputMode === 'json') {
+      console.log(
+        JSON.stringify(
+          {
+            projects: outputProjects,
+            pageInfo: page.pageInfo,
+            cursorHistory: presentation.cursorHistory,
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      formatColumnRows(outputProjects, columns, outputMode === 'table');
+      if (outputMode === 'table') printHumanPaginationFooter(presentation);
+    }
+  } else if (options.interactive) {
+    render(<ProjectList projects={page.items} presentation={presentation} />);
+  } else if (outputMode === 'json') {
+    console.log(
+      JSON.stringify(
+        {
+          projects: page.items,
+          pageInfo: page.pageInfo,
+          cursorHistory: presentation.cursorHistory,
+        },
+        null,
+        2
+      )
+    );
+  } else if (outputMode === 'tsv') {
+    formatTSVOutput(page.items, options.showDependencies, descConfig);
+  } else {
+    formatTableOutput(page.items, options.showDependencies, descConfig);
+    printHumanPaginationFooter(presentation);
+  }
+
+  if (outputMode === 'tsv' && page.pageInfo.hasNextPage) {
+    console.error(
+      'warning: more projects are available; continuation cursor: ' +
+        String(page.pageInfo.endCursor)
+    );
+  }
+}
+
 export function listProjectsCommand(program: Command): void {
   program
     .command('list')
     .alias('ls')
     .description('List projects with smart defaults and filtering')
-
-    // Filter options
     .option('-t, --team <id>', 'Filter by team (default: config.defaultTeam)')
     .option('-i, --initiative <id>', 'Filter by initiative (default: config.defaultInitiative)')
     .option('-s, --status <id>', 'Filter by project status')
@@ -356,171 +588,54 @@ export function listProjectsCommand(program: Command): void {
     .option('-m, --member <id>', 'Filter by member (comma-separated for multiple)')
     .option('--label <id>', 'Filter by label (comma-separated for multiple)')
     .option('--search <query>', 'Search in project name, description, or content')
-
-    // Date range filters
     .option('--start-after <date>', 'Filter projects starting after date (YYYY-MM-DD)')
     .option('--start-before <date>', 'Filter projects starting before date (YYYY-MM-DD)')
     .option('--target-after <date>', 'Filter projects targeting after date (YYYY-MM-DD)')
     .option('--target-before <date>', 'Filter projects targeting before date (YYYY-MM-DD)')
-
-    // Override flags
     .option('--all-leads', 'Show projects with any lead (overrides default: current user)')
     .option('--all-teams', 'Show projects from all teams (overrides default team)')
-    .option('--all-initiatives', 'Show projects from all initiatives (overrides default initiative)')
-
-    // Pagination options (M21.1)
-    .option('--limit <number>', 'Maximum number of results to return (default: 50, max: 250)', '50')
-    .option('--all', 'Fetch all matching projects across all pages (may be slow)')
-
-    // Output format
-    .option('-f, --format <type>', 'Output format: table (default), json, tsv', 'table')
+    .option(
+      '--all-initiatives',
+      'Show projects from all initiatives (overrides default initiative)'
+    )
+    .option('--limit <number>', 'Maximum number of matching results (default: 50, max: 250)', '50')
+    .option('--after <cursor>', 'Resume after an exact raw Linear cursor')
+    .option('-a, --all', 'Fetch all remaining matching projects')
+    .option('--no-cursor-history', 'Do not persist an emitted continuation cursor')
+    .option('-o, --output <table|json|tsv>', 'Output format: table (default), json, or tsv')
+    .option('--json', 'Exact shorthand for --output json')
+    .addOption(new Option('-f, --format <type>').hideHelp())
     .option('-I, --interactive', 'Interactive mode with Ink UI')
     .option('-w, --web', 'Open in web browser')
-
-    // M23: Dependency display and filters
     .option('--show-dependencies', 'Show dependency counts (depends-on/blocks)')
     .option('--has-dependencies', 'Filter: show only projects with any dependencies')
     .option('--without-dependencies', 'Filter: show only projects with no dependencies')
     .option('--depends-on-others', 'Filter: show only projects that depend on others')
     .option('--blocks-others', 'Filter: show only projects that block others')
-
-    // Description preview (shown by default; use --no-desc to hide)
     .option('--desc', 'Show description preview column (default, 80 chars)')
     .option('--desc-length <n>', 'Description preview length in characters')
     .option('--desc-full', 'Show full description column (no truncation)')
     .option('--no-desc', 'Hide description preview column')
-    .option('--columns <fields>', 'Comma-separated list of columns to display (e.g., "id,name,status")')
+    .option('--columns <fields>', 'Comma-separated list of columns to display')
+    .action(async (options: ProjectListCommandOptions, command: Command) => {
+      await runProjectList(options, command);
+    })
+    .addHelpText(
+      'after',
+      `
+Pagination:
+  The default returns at most 50 matching projects.
+  Copy the exact raw cursor printed by a truncated result into --after.
+  --all fetches every remaining project; --after C --all resumes after C.
+  --limit is long-only because -l remains --lead.
+  --no-cursor-history prevents local recording for this invocation.
 
-    .action(async (options) => {
-      try {
-        // M23: Validate conflicting dependency filters
-        if (options.hasDependencies && options.withoutDependencies) {
-          showError(
-            'Conflicting filters',
-            'Cannot use --has-dependencies and --without-dependencies together'
-          );
-          process.exit(1);
-        }
-
-        // Build filters with smart defaults
-        const filters = await buildDefaultFilters(options);
-
-        // Add pagination options (M21.1)
-        const limit = parseInt(options.limit, 10);
-        if (isNaN(limit) || limit < 1) {
-          throw new Error('Limit must be a positive number');
-        }
-        filters.limit = limit;
-        filters.fetchAll = options.all || false;
-
-        // M23: Add dependency fetching flag
-        // Fetch dependencies if: showing them OR filtering by them
-        const needsDependencies = options.showDependencies ||
-                                 options.hasDependencies ||
-                                 options.withoutDependencies ||
-                                 options.dependsOnOthers ||
-                                 options.blocksOthers;
-        filters.includeDependencies = needsDependencies;
-
-        // Web mode - open in browser
-        if (options.web) {
-          // TODO: Implement web browser opening
-          // For now, just show error
-          showError('Web mode not yet implemented');
-          process.exit(1);
-        }
-
-        // Build description config
-        const descConfig = {
-          show: true,
-          length: options.descLength ? parseInt(options.descLength, 10) : undefined,
-          full: options.descFull || false,
-          hide: options.desc === false, // --no-desc sets this to false
-        };
-
-        // Column selection mode
-        if (options.columns) {
-          let projects = await getAllProjects(filters);
-          projects = applyDependencyFilters(projects, {
-            hasDependencies: options.hasDependencies,
-            withoutDependencies: options.withoutDependencies,
-            dependsOnOthers: options.dependsOnOthers,
-            blocksOthers: options.blocksOthers,
-          });
-
-          const cols = options.columns.split(',').map((c: string) => c.trim());
-          const flattened = projects.map(p => ({
-            id: p.id,
-            name: p.name,
-            status: p.status?.name || p.state || '',
-            team: p.team?.name || '',
-            lead: p.lead?.name || '',
-            description: p.description || '',
-            priority: p.priority,
-            url: p.url || '',
-            dependsOnCount: p.dependsOnCount || 0,
-            blocksCount: p.blocksCount || 0,
-          }));
-          const filtered = filterColumns(flattened, cols);
-
-          if (options.format === 'json') {
-            console.log(JSON.stringify(filtered, null, 2));
-          } else {
-            console.log(cols.join('\t'));
-            for (const row of filtered) {
-              console.log(cols.map((c: string) => String(row[c] ?? '')).join('\t'));
-            }
-            console.log(`\nTotal: ${projects.length} project${projects.length !== 1 ? 's' : ''}`);
-          }
-          process.exit(0);
-        }
-
-        // Non-interactive formats - handle synchronously before Ink
-        if (options.format !== 'table' && !options.interactive) {
-          let projects = await getAllProjects(filters);
-
-          // M23: Apply dependency filters (client-side)
-          projects = applyDependencyFilters(projects, {
-            hasDependencies: options.hasDependencies,
-            withoutDependencies: options.withoutDependencies,
-            dependsOnOthers: options.dependsOnOthers,
-            blocksOthers: options.blocksOthers,
-          });
-
-          if (options.format === 'json') {
-            formatJSONOutput(projects);
-          } else if (options.format === 'tsv') {
-            formatTSVOutput(projects, options.showDependencies, descConfig);
-          } else {
-            // Default: table
-            formatTableOutput(projects, options.showDependencies, descConfig);
-          }
-
-          process.exit(0);
-        }
-
-        // Handle table format without interactive
-        if (options.format === 'table' && !options.interactive) {
-          let projects = await getAllProjects(filters);
-
-          // M23: Apply dependency filters (client-side)
-          projects = applyDependencyFilters(projects, {
-            hasDependencies: options.hasDependencies,
-            withoutDependencies: options.withoutDependencies,
-            dependsOnOthers: options.dependsOnOthers,
-            blocksOthers: options.blocksOthers,
-          });
-
-          formatTableOutput(projects, options.showDependencies, descConfig);
-          process.exit(0);
-        }
-
-        // Interactive mode with Ink UI
-        render(<ProjectList filters={filters} format={options.format} />);
-
-      } catch (error: unknown) {
-        showError(error instanceof Error ? error.message : String(error));
-        process.exit(1);
-      }
-    });
+Examples:
+  $ a2l project list --limit 50
+  $ a2l project list --limit 50 --after '<raw-linear-cursor>'
+  $ a2l project list --after '<raw-linear-cursor>' --all
+  $ a2l project list --json
+  $ a2l project list --no-cursor-history
+`
+    );
 }

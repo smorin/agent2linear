@@ -1,3 +1,5 @@
+import type { ConnectionPage, PageInput, PageResult } from '../pagination.js';
+import { PaginationInputError, PaginationRuntimeError, walkPages } from '../pagination.js';
 import type {
   IssueCreateInput,
   IssueListFilters,
@@ -6,6 +8,11 @@ import type {
   IssueViewData,
 } from '../types.js';
 import { getLinearClient, LinearClientError } from './client.js';
+import {
+  type CommentApiDependencies,
+  type LinearComment,
+  listComments,
+} from './comments.js';
 
 /**
  * Create a comment on an issue
@@ -92,7 +99,10 @@ export async function createIssue(input: IssueCreateInput): Promise<{
  * @param input - Issue update data
  * @returns Updated issue details
  */
-export async function updateIssue(issueId: string, input: IssueUpdateInput): Promise<{
+export async function updateIssue(
+  issueId: string,
+  input: IssueUpdateInput
+): Promise<{
   id: string;
   identifier: string;
   title: string;
@@ -201,375 +211,204 @@ export async function getIssueByIdentifier(identifier: string): Promise<{
   }
 }
 
-/**
- * Get all issues with comprehensive filtering and pagination (M15.5)
- *
- * PERFORMANCE CRITICAL: This function uses a custom GraphQL query to fetch
- * ALL issue data and relations in a SINGLE request to avoid N+1 query patterns.
- *
- * Pattern follows getAllProjects() optimization from M20/M21.
- *
- * @param filters - Optional filters for issues
- * @returns Array of issues with all display data
- */
-export async function getAllIssues(filters?: IssueListFilters): Promise<IssueListItem[]> {
-  try {
-    const client = getLinearClient();
-    const startTime = Date.now();
+type IssueSortField = NonNullable<IssueListFilters['sortField']>;
+type IssueSortDirection = NonNullable<IssueListFilters['sortOrder']>;
 
-    // Track API call if tracking is enabled
-    const { isTracking, logCall } = await import('../api-call-tracker.js');
-    const tracking = isTracking();
+export interface IssueListOrder {
+  field: IssueSortField | 'provider-default';
+  direction: IssueSortDirection | null;
+}
 
-    // ========================================
-    // BUILD GRAPHQL FILTER
-    // ========================================
-    interface GraphQLDateFilter { gte?: string; lte?: string }
-    const graphqlFilter: Record<string, unknown> & { createdAt?: GraphQLDateFilter; updatedAt?: GraphQLDateFilter } = {};
+export interface IssueListPageResult extends PageResult<IssueListItem> {
+  orderBy: IssueListOrder;
+}
 
-    if (filters?.teamId) {
-      graphqlFilter.team = { id: { eq: filters.teamId } };
-    }
+interface GraphQLDateFilter {
+  gte?: string;
+  lte?: string;
+}
 
-    if (filters?.assigneeId) {
-      graphqlFilter.assignee = { id: { eq: filters.assigneeId } };
-    }
+interface RawIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  description?: string;
+  priority?: number;
+  estimate?: number;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  canceledAt?: string;
+  archivedAt?: string;
+  url: string;
+  assignee?: { id: string; name: string; email: string };
+  team?: { id: string; key: string; name: string };
+  state?: {
+    id: string;
+    name: string;
+    type: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+  };
+  project?: { id: string; name: string };
+  cycle?: { id: string; name: string; number: number };
+  labels?: { nodes: Array<{ id: string; name: string; color?: string }> };
+  parent?: { id: string; identifier: string; title: string };
+}
 
-    if (filters?.projectId) {
-      graphqlFilter.project = { id: { eq: filters.projectId } };
-    }
+type IssueSortInput = Record<string, Record<string, string | boolean>>;
 
-    if (filters?.initiativeId) {
-      graphqlFilter.initiative = { id: { eq: filters.initiativeId } };
-    }
+const ISSUES_QUERY = `
+  query GetIssues(
+    $filter: IssueFilter
+    $first: Int
+    $after: String
+    $sort: [IssueSortInput!]
+  ) {
+    issues(filter: $filter, first: $first, after: $after, sort: $sort) {
+      edges {
+        cursor
+        node {
+          id
+          identifier
+          title
+          description
+          priority
+          estimate
+          dueDate
+          createdAt
+          updatedAt
+          completedAt
+          canceledAt
+          archivedAt
+          url
 
-    if (filters?.stateId) {
-      graphqlFilter.state = { id: { eq: filters.stateId } };
-    }
+          assignee {
+            id
+            name
+            email
+          }
 
-    if (filters?.priority !== undefined) {
-      graphqlFilter.priority = { eq: filters.priority };
-    }
+          team {
+            id
+            key
+            name
+          }
 
-    if (filters?.parentId) {
-      graphqlFilter.parent = { id: { eq: filters.parentId } };
-    }
+          state {
+            id
+            name
+            type
+          }
 
-    if (filters?.cycleId) {
-      graphqlFilter.cycle = { id: { eq: filters.cycleId } };
-    }
+          project {
+            id
+            name
+          }
 
-    if (filters?.hasParent !== undefined) {
-      graphqlFilter.parent = filters.hasParent ? { null: false } : { null: true };
-    }
+          cycle {
+            id
+            name
+            number
+          }
 
-    if (filters?.labelIds && filters.labelIds.length > 0) {
-      // Issues with ALL of these labels
-      graphqlFilter.labels = { some: { id: { in: filters.labelIds } } };
-    }
+          labels {
+            nodes {
+              id
+              name
+              color
+            }
+          }
 
-    if (filters?.search) {
-      graphqlFilter.searchableContent = { contains: filters.search };
-    }
-
-    // Date range filters
-    if (filters?.createdAfter || filters?.createdBefore) {
-      graphqlFilter.createdAt = {};
-      if (filters.createdAfter) graphqlFilter.createdAt.gte = new Date(filters.createdAfter).toISOString();
-      if (filters.createdBefore) graphqlFilter.createdAt.lte = new Date(filters.createdBefore).toISOString();
-    }
-
-    if (filters?.updatedAfter || filters?.updatedBefore) {
-      graphqlFilter.updatedAt = {};
-      if (filters.updatedAfter) graphqlFilter.updatedAt.gte = new Date(filters.updatedAfter).toISOString();
-      if (filters.updatedBefore) graphqlFilter.updatedAt.lte = new Date(filters.updatedBefore).toISOString();
-    }
-
-    // Handle status filters
-    if (filters?.includeCompleted === false) {
-      graphqlFilter.completedAt = { null: true };
-    }
-
-    if (filters?.includeCanceled === false) {
-      graphqlFilter.canceledAt = { null: true };
-    }
-
-    if (filters?.includeArchived === false) {
-      graphqlFilter.archivedAt = { null: true };
-    }
-
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Issue filters:', JSON.stringify(graphqlFilter, null, 2));
-    }
-
-    // ========================================
-    // PAGINATION SETUP (M15.5 Phase 1)
-    // ========================================
-    const pageSize = filters?.fetchAll ? 250 : Math.min(filters?.limit || 50, 250);
-    const fetchAll = filters?.fetchAll || false;
-    const targetLimit = filters?.limit || 50;
-
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Pagination:', { pageSize, fetchAll, targetLimit });
-    }
-
-    // ========================================
-    // CUSTOM GRAPHQL QUERY - ALL RELATIONS UPFRONT
-    // ========================================
-    const issuesQuery = `
-      query GetIssues($filter: IssueFilter, $first: Int, $after: String) {
-        issues(filter: $filter, first: $first, after: $after) {
-          nodes {
+          parent {
             id
             identifier
             title
-            description
-            priority
-            estimate
-            dueDate
-            createdAt
-            updatedAt
-            completedAt
-            canceledAt
-            archivedAt
-            url
-
-            assignee {
-              id
-              name
-              email
-            }
-
-            team {
-              id
-              key
-              name
-            }
-
-            state {
-              id
-              name
-              type
-            }
-
-            project {
-              id
-              name
-            }
-
-            cycle {
-              id
-              name
-              number
-            }
-
-            labels {
-              nodes {
-                id
-                name
-                color
-              }
-            }
-
-            parent {
-              id
-              identifier
-              title
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
           }
         }
       }
-    `;
-
-    // ========================================
-    // PAGINATION LOOP (M15.5 Phase 1)
-    // ========================================
-    interface RawIssue {
-      id: string;
-      identifier: string;
-      title: string;
-      description?: string;
-      priority?: number;
-      estimate?: number;
-      dueDate?: string;
-      createdAt: string;
-      updatedAt: string;
-      completedAt?: string;
-      canceledAt?: string;
-      archivedAt?: string;
-      url: string;
-      assignee?: { id: string; name: string; email: string };
-      team?: { id: string; key: string; name: string };
-      state?: { id: string; name: string; type: 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled' };
-      project?: { id: string; name: string };
-      cycle?: { id: string; name: string; number: number };
-      labels?: { nodes: Array<{ id: string; name: string; color?: string }> };
-      parent?: { id: string; identifier: string; title: string };
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
+  }
+`;
 
-    let rawIssues: RawIssue[] = [];
-    let cursor: string | null = null;
-    let hasNextPage = true;
+// Fetch an issue page while preserving Linear edge cursors and provider order.
+export async function getIssueListPage(
+  filters: IssueListFilters = {},
+  pageInput: PageInput = {}
+): Promise<IssueListPageResult> {
+  try {
+    const client = getLinearClient();
+    const startTime = Date.now();
+    const { isTracking, logCall } = await import('../api-call-tracker.js');
+    const tracking = isTracking();
+    const graphqlFilter = buildIssueFilter(filters);
+    const { input: sort, orderBy } = buildIssueSort(filters);
     let pageCount = 0;
+    let observedIssueCount = 0;
 
-    while (hasNextPage && (fetchAll || rawIssues.length < targetLimit)) {
-      pageCount++;
-
-      const variables = {
-        filter: Object.keys(graphqlFilter).length > 0 ? graphqlFilter : null,
-        first: pageSize,
-        after: cursor
-      };
-
-      const response = await client.client.rawRequest(issuesQuery, variables) as { data?: { issues?: { nodes?: RawIssue[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } } } };
-
-      // Track API call if tracking enabled
-      if (tracking) {
-        logCall('IssueList', 'query', 'main', Date.now() - startTime, variables);
-      }
-
-      const nodes = response.data?.issues?.nodes || [];
-      const pageInfo = response.data?.issues?.pageInfo;
-
-      rawIssues.push(...nodes);
-
-      hasNextPage = pageInfo?.hasNextPage || false;
-      cursor = pageInfo?.endCursor || null;
-
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error(`[agent2linear] Page ${pageCount}: fetched ${nodes.length} issues (total: ${rawIssues.length}, hasNextPage: ${hasNextPage})`);
-      }
-
-      // If not fetching all, stop when we have enough
-      if (!fetchAll && rawIssues.length >= targetLimit) {
-        break;
-      }
-    }
-
-    // ========================================
-    // TRUNCATION (M15.5 Phase 1)
-    // ========================================
-    if (!fetchAll && rawIssues.length > targetLimit) {
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error(`[agent2linear] Truncating from ${rawIssues.length} to ${targetLimit} issues`);
-      }
-      rawIssues = rawIssues.slice(0, targetLimit);
-    }
-
-    // ========================================
-    // SORTING (M15.5 Phase 3)
-    // ========================================
-    if (filters?.sortField && filters?.sortOrder) {
-      const sortField = filters.sortField;
-      const sortOrder = filters.sortOrder;
-      const ascending = sortOrder === 'asc';
-
-      rawIssues.sort((a: RawIssue, b: RawIssue) => {
-        let aVal: number;
-        let bVal: number;
-
-        switch (sortField) {
-          case 'priority':
-            aVal = a.priority !== undefined && a.priority !== null ? a.priority : 999;
-            bVal = b.priority !== undefined && b.priority !== null ? b.priority : 999;
-            break;
-          case 'created':
-            aVal = new Date(a.createdAt).getTime();
-            bVal = new Date(b.createdAt).getTime();
-            break;
-          case 'updated':
-            aVal = new Date(a.updatedAt).getTime();
-            bVal = new Date(b.updatedAt).getTime();
-            break;
-          case 'due':
-            aVal = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-            bVal = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-            break;
-          default:
-            return 0;
-        }
-
-        // Apply sort order
-        if (ascending) {
-          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-        } else {
-          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-        }
+    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
+      console.error('[agent2linear] Issue filters:', JSON.stringify(graphqlFilter, null, 2));
+      console.error('[agent2linear] Pagination:', {
+        limit: pageInput.limit ?? filters.limit ?? 50,
+        fetchAll: pageInput.fetchAll ?? filters.fetchAll ?? false,
+        after: pageInput.after ?? null,
       });
-
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error(`[agent2linear] Sorted ${rawIssues.length} issues by ${sortField} ${sortOrder}`);
-      }
+      console.error('[agent2linear] Issue order:', orderBy);
     }
 
-    // ========================================
-    // BUILD FINAL ISSUE LIST
-    // ========================================
-    const issueList: IssueListItem[] = rawIssues.map((issue: RawIssue) => ({
-      id: issue.id,
-      identifier: issue.identifier,
-      title: issue.title,
-      description: issue.description || undefined,
-      priority: issue.priority !== undefined ? issue.priority : undefined,
-      estimate: issue.estimate || undefined,
-      dueDate: issue.dueDate || undefined,
+    const rawPage = await walkPages<RawIssue>({
+      limit: pageInput.limit ?? filters.limit,
+      after: pageInput.after,
+      fetchAll: pageInput.fetchAll ?? filters.fetchAll,
+      fetchPage: async ({ first, after }) => {
+        pageCount += 1;
+        const variables = {
+          filter: Object.keys(graphqlFilter).length > 0 ? graphqlFilter : null,
+          first,
+          after,
+          sort,
+        };
+        const response = (await client.client.rawRequest(ISSUES_QUERY, variables)) as {
+          data?: { issues?: unknown };
+        };
 
-      assignee: issue.assignee ? {
-        id: issue.assignee.id,
-        name: issue.assignee.name,
-        email: issue.assignee.email
-      } : undefined,
+        if (tracking) {
+          logCall('IssueList', 'query', 'main', Date.now() - startTime, variables);
+        }
 
-      team: issue.team ? {
-        id: issue.team.id,
-        key: issue.team.key,
-        name: issue.team.name
-      } : undefined,
+        const connection = response.data?.issues as ConnectionPage<RawIssue>;
+        if (
+          process.env.LINEAR_CREATE_DEBUG_FILTERS === '1' &&
+          connection &&
+          Array.isArray(connection.edges) &&
+          connection.pageInfo &&
+          typeof connection.pageInfo.hasNextPage === 'boolean'
+        ) {
+          observedIssueCount += connection.edges.length;
+          console.error(
+            `[agent2linear] Page ${pageCount}: fetched ${connection.edges.length} issues ` +
+              `(total: ${observedIssueCount}, hasNextPage: ${connection.pageInfo.hasNextPage})`
+          );
+        }
 
-      state: issue.state ? {
-        id: issue.state.id,
-        name: issue.state.name,
-        type: issue.state.type
-      } : undefined,
+        return connection;
+      },
+    });
 
-      project: issue.project ? {
-        id: issue.project.id,
-        name: issue.project.name
-      } : undefined,
-
-      cycle: issue.cycle ? {
-        id: issue.cycle.id,
-        name: issue.cycle.name,
-        number: issue.cycle.number
-      } : undefined,
-
-      labels: (issue.labels?.nodes || []).map((label: { id: string; name: string; color?: string }) => ({
-        id: label.id,
-        name: label.name,
-        color: label.color || undefined
-      })),
-
-      parent: issue.parent ? {
-        id: issue.parent.id,
-        identifier: issue.parent.identifier,
-        title: issue.parent.title
-      } : undefined,
-
-      createdAt: issue.createdAt,
-      updatedAt: issue.updatedAt,
-      completedAt: issue.completedAt || undefined,
-      canceledAt: issue.canceledAt || undefined,
-      archivedAt: issue.archivedAt || undefined,
-      url: issue.url
-    }));
-
-    return issueList;
+    return {
+      items: rawPage.items.map(mapIssueListItem),
+      pageInfo: rawPage.pageInfo,
+      orderBy,
+    };
   } catch (error) {
-    if (error instanceof LinearClientError) {
+    if (
+      error instanceof LinearClientError ||
+      error instanceof PaginationInputError ||
+      error instanceof PaginationRuntimeError
+    ) {
       throw error;
     }
 
@@ -579,18 +418,211 @@ export async function getAllIssues(filters?: IssueListFilters): Promise<IssueLis
   }
 }
 
+// Retain the historical array-only return contract for existing callers.
+export async function getAllIssues(filters?: IssueListFilters): Promise<IssueListItem[]> {
+  const result = await getIssueListPage(filters);
+  return result.items;
+}
+
+function buildIssueFilter(filters: IssueListFilters): Record<string, unknown> & {
+  createdAt?: GraphQLDateFilter;
+  updatedAt?: GraphQLDateFilter;
+} {
+  const graphqlFilter: Record<string, unknown> & {
+    createdAt?: GraphQLDateFilter;
+    updatedAt?: GraphQLDateFilter;
+  } = {};
+
+  if (filters.teamId) {
+    graphqlFilter.team = { id: { eq: filters.teamId } };
+  }
+  if (filters.assigneeId) {
+    graphqlFilter.assignee = { id: { eq: filters.assigneeId } };
+  }
+  if (filters.projectId) {
+    graphqlFilter.project = { id: { eq: filters.projectId } };
+  }
+  if (filters.initiativeId) {
+    graphqlFilter.initiative = { id: { eq: filters.initiativeId } };
+  }
+  if (filters.stateId) {
+    graphqlFilter.state = { id: { eq: filters.stateId } };
+  }
+  if (filters.priority !== undefined) {
+    graphqlFilter.priority = { eq: filters.priority };
+  }
+  if (filters.parentId) {
+    graphqlFilter.parent = { id: { eq: filters.parentId } };
+  }
+  if (filters.cycleId) {
+    graphqlFilter.cycle = { id: { eq: filters.cycleId } };
+  }
+  if (filters.hasParent !== undefined) {
+    graphqlFilter.parent = filters.hasParent ? { null: false } : { null: true };
+  }
+  if (filters.labelIds && filters.labelIds.length > 0) {
+    graphqlFilter.labels = { some: { id: { in: filters.labelIds } } };
+  }
+  if (filters.search) {
+    graphqlFilter.searchableContent = { contains: filters.search };
+  }
+
+  if (filters.createdAfter || filters.createdBefore) {
+    graphqlFilter.createdAt = {};
+    if (filters.createdAfter) {
+      graphqlFilter.createdAt.gte = new Date(filters.createdAfter).toISOString();
+    }
+    if (filters.createdBefore) {
+      graphqlFilter.createdAt.lte = new Date(filters.createdBefore).toISOString();
+    }
+  }
+  if (filters.updatedAfter || filters.updatedBefore) {
+    graphqlFilter.updatedAt = {};
+    if (filters.updatedAfter) {
+      graphqlFilter.updatedAt.gte = new Date(filters.updatedAfter).toISOString();
+    }
+    if (filters.updatedBefore) {
+      graphqlFilter.updatedAt.lte = new Date(filters.updatedBefore).toISOString();
+    }
+  }
+
+  if (filters.includeCompleted === false) {
+    graphqlFilter.completedAt = { null: true };
+  }
+  if (filters.includeCanceled === false) {
+    graphqlFilter.canceledAt = { null: true };
+  }
+  if (filters.includeArchived === false) {
+    graphqlFilter.archivedAt = { null: true };
+  }
+
+  return graphqlFilter;
+}
+
+function buildIssueSort(filters: IssueListFilters): {
+  input: IssueSortInput[] | null;
+  orderBy: IssueListOrder;
+} {
+  if (!filters.sortField || !filters.sortOrder) {
+    return {
+      input: null,
+      orderBy: { field: 'provider-default', direction: null },
+    };
+  }
+
+  const direction = filters.sortOrder;
+  const order = direction === 'asc' ? 'Ascending' : 'Descending';
+  let sort: IssueSortInput;
+
+  switch (filters.sortField) {
+    case 'priority':
+      sort = {
+        priority: {
+          order,
+          noPriorityFirst: direction === 'desc',
+        },
+      };
+      break;
+    case 'created':
+      sort = { createdAt: { order } };
+      break;
+    case 'updated':
+      sort = { updatedAt: { order } };
+      break;
+    case 'due':
+      sort = {
+        dueDate: {
+          order,
+          nulls: direction === 'asc' ? 'last' : 'first',
+        },
+      };
+      break;
+  }
+
+  return {
+    input: [sort],
+    orderBy: { field: filters.sortField, direction },
+  };
+}
+
+function mapIssueListItem(issue: RawIssue): IssueListItem {
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description || undefined,
+    priority: issue.priority !== undefined ? issue.priority : undefined,
+    estimate: issue.estimate || undefined,
+    dueDate: issue.dueDate || undefined,
+    assignee: issue.assignee
+      ? {
+          id: issue.assignee.id,
+          name: issue.assignee.name,
+          email: issue.assignee.email,
+        }
+      : undefined,
+    team: issue.team
+      ? {
+          id: issue.team.id,
+          key: issue.team.key,
+          name: issue.team.name,
+        }
+      : undefined,
+    state: issue.state
+      ? {
+          id: issue.state.id,
+          name: issue.state.name,
+          type: issue.state.type,
+        }
+      : undefined,
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name,
+        }
+      : undefined,
+    cycle: issue.cycle
+      ? {
+          id: issue.cycle.id,
+          name: issue.cycle.name,
+          number: issue.cycle.number,
+        }
+      : undefined,
+    labels: (issue.labels?.nodes || []).map(label => ({
+      id: label.id,
+      name: label.name,
+      color: label.color || undefined,
+    })),
+    parent: issue.parent
+      ? {
+          id: issue.parent.id,
+          identifier: issue.parent.identifier,
+          title: issue.parent.title,
+        }
+      : undefined,
+    createdAt: issue.createdAt,
+    updatedAt: issue.updatedAt,
+    completedAt: issue.completedAt || undefined,
+    canceledAt: issue.canceledAt || undefined,
+    archivedAt: issue.archivedAt || undefined,
+    url: issue.url,
+  };
+}
+
 /**
  * Get issues assigned to the current user (M15.1)
  * Helper function for default list behavior
  * @returns Array of issues assigned to current user
  */
-export async function getCurrentUserIssues(): Promise<Array<{
-  id: string;
-  identifier: string;
-  title: string;
-  priority?: number;
-  url: string;
-}>> {
+export async function getCurrentUserIssues(): Promise<
+  Array<{
+    id: string;
+    identifier: string;
+    title: string;
+    priority?: number;
+    url: string;
+  }>
+> {
   try {
     const client = getLinearClient();
     const viewer = await client.viewer;
@@ -737,13 +769,22 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
       project?: { id: string; name: string };
       cycle?: { id: string; name: string; number: number };
       parent?: { id: string; identifier: string; title: string };
-      children: { nodes: Array<{ id: string; identifier: string; title: string; state?: { id: string; name: string } }> };
+      children: {
+        nodes: Array<{
+          id: string;
+          identifier: string;
+          title: string;
+          state?: { id: string; name: string };
+        }>;
+      };
       labels: { nodes: Array<{ id: string; name: string; color: string }> };
       subscribers: { nodes: Array<{ id: string; name: string; email: string }> };
       creator?: { id: string; name: string; email: string };
     }
 
-    const response = await client.client.rawRequest(issueQuery, { issueId }) as { data?: { issue?: RawFullIssue } };
+    const response = (await client.client.rawRequest(issueQuery, { issueId })) as {
+      data?: { issue?: RawFullIssue };
+    };
     const issueData = response.data?.issue;
 
     if (!issueData) {
@@ -766,7 +807,13 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
         ? {
             id: issueData.state.id,
             name: issueData.state.name,
-            type: issueData.state.type as 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled',
+            type: issueData.state.type as
+              | 'triage'
+              | 'backlog'
+              | 'unstarted'
+              | 'started'
+              | 'completed'
+              | 'canceled',
             color: issueData.state.color,
           }
         : { id: '', name: 'Unknown', type: 'backlog' as const, color: '#95a2b3' },
@@ -781,11 +828,13 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
             email: issueData.assignee.email,
           }
         : undefined,
-      subscribers: issueData.subscribers.nodes.map((sub: { id: string; name: string; email: string }) => ({
-        id: sub.id,
-        name: sub.name,
-        email: sub.email,
-      })),
+      subscribers: issueData.subscribers.nodes.map(
+        (sub: { id: string; name: string; email: string }) => ({
+          id: sub.id,
+          name: sub.name,
+          email: sub.email,
+        })
+      ),
 
       // Organization
       team: issueData.team
@@ -815,12 +864,19 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
             title: issueData.parent.title,
           }
         : undefined,
-      children: issueData.children.nodes.map((child: { id: string; identifier: string; title: string; state?: { id: string; name: string } }) => ({
-        id: child.id,
-        identifier: child.identifier,
-        title: child.title,
-        state: child.state?.name || 'Unknown',
-      })),
+      children: issueData.children.nodes.map(
+        (child: {
+          id: string;
+          identifier: string;
+          title: string;
+          state?: { id: string; name: string };
+        }) => ({
+          id: child.id,
+          identifier: child.identifier,
+          title: child.title,
+          state: child.state?.name || 'Unknown',
+        })
+      ),
       labels: issueData.labels.nodes.map((label: { id: string; name: string; color: string }) => ({
         id: label.id,
         name: label.name,
@@ -849,87 +905,78 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
   }
 }
 
-/**
- * Get issue comments (M15.2)
- *
- * PERFORMANCE OPTIMIZATION (v0.24.0-alpha.2.1):
- * Uses custom GraphQL query to avoid N+1 pattern (2 + N API calls -> 1 call)
- * Fetches all comment users upfront instead of lazy loading via SDK
- *
- * @param issueId - Issue UUID
- * @returns Array of comments
- */
-export async function getIssueComments(issueId: string): Promise<
-  Array<{
+export interface IssueViewComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
     id: string;
-    body: string;
-    createdAt: string;
-    updatedAt: string;
-    user: {
-      id: string;
-      name: string;
-      email: string;
+    name: string;
+    email: string;
+  };
+}
+
+function issueViewCommentUser(comment: LinearComment): IssueViewComment['user'] {
+  if (comment.user) {
+    return {
+      id: comment.user.id,
+      name: comment.user.name,
+      email: comment.user.email ?? '',
     };
-  }>
-> {
-  try {
-    const client = getLinearClient();
+  }
+  if (comment.botActor) {
+    return {
+      id: comment.botActor.id ?? '',
+      name: comment.botActor.name ?? comment.botActor.userDisplayName ?? 'Unknown',
+      email: '',
+    };
+  }
+  if (comment.externalUser) {
+    return {
+      id: comment.externalUser.id,
+      name: comment.externalUser.displayName || comment.externalUser.name,
+      email: comment.externalUser.email ?? '',
+    };
+  }
+  return { id: '', name: 'Unknown', email: '' };
+}
 
-    // Custom GraphQL query - fetch comments with user data in one request
-    const commentsQuery = `
-      query GetIssueComments($issueId: String!) {
-        issue(id: $issueId) {
-          id
-          comments {
-            nodes {
-              id
-              body
-              createdAt
-              updatedAt
-              user {
-                id
-                name
-                email
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    interface RawComment {
-      id: string;
-      body: string;
-      createdAt: string;
-      updatedAt: string;
-      user?: { id: string; name: string; email: string };
-    }
-
-    const response = await client.client.rawRequest(commentsQuery, { issueId }) as { data?: { issue?: { id: string; comments?: { nodes: RawComment[] } } } };
-    const issueData = response.data?.issue;
-
-    if (!issueData || !issueData.comments) {
-      return [];
-    }
-
-    return issueData.comments.nodes.map((comment: RawComment) => ({
+/**
+ * Fetch the bounded issue-view comment summary through the reliable M35 reader.
+ * This deliberately exposes no cursor-history side effect.
+ */
+export async function getIssueCommentSummary(
+  issueId: string,
+  dependencies?: CommentApiDependencies
+): Promise<{
+  comments: IssueViewComment[];
+  pageInfo: PageResult<LinearComment>['pageInfo'];
+}> {
+  const result = await listComments(
+    { type: 'issue', id: issueId },
+    { limit: 50 },
+    dependencies
+  );
+  return {
+    comments: result.items.map(comment => ({
       id: comment.id,
       body: comment.body,
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
-      user: comment.user
-        ? {
-            id: comment.user.id,
-            name: comment.user.name,
-            email: comment.user.email,
-          }
-        : { id: '', name: 'Unknown', email: '' },
-    }));
-  } catch (error) {
-    return [];
-  }
+      user: issueViewCommentUser(comment),
+    })),
+    pageInfo: result.pageInfo,
+  };
 }
 
+/** Backward-compatible array helper used by callers that do not need truncation metadata. */
+export async function getIssueComments(
+  issueId: string,
+  dependencies?: CommentApiDependencies
+): Promise<IssueViewComment[]> {
+  return (await getIssueCommentSummary(issueId, dependencies)).comments;
+}
 /**
  * Get issue history (M15.2)
  *
@@ -1016,7 +1063,9 @@ export async function getIssueHistory(issueId: string): Promise<
       removedLabels?: Array<{ id: string; name: string }>;
     }
 
-    const response = await client.client.rawRequest(historyQuery, { issueId }) as { data?: { issue?: { id: string; history?: { nodes: RawHistoryEntry[] } } } };
+    const response = (await client.client.rawRequest(historyQuery, { issueId })) as {
+      data?: { issue?: { id: string; history?: { nodes: RawHistoryEntry[] } } };
+    };
     const issueData = response.data?.issue;
 
     if (!issueData || !issueData.history) {
@@ -1037,8 +1086,12 @@ export async function getIssueHistory(issueId: string): Promise<
       toState: entry.toState?.name,
       fromAssignee: entry.fromAssignee?.name,
       toAssignee: entry.toAssignee?.name,
-      addedLabels: entry.addedLabels ? entry.addedLabels.map((l: { id: string; name: string }) => l.name) : undefined,
-      removedLabels: entry.removedLabels ? entry.removedLabels.map((l: { id: string; name: string }) => l.name) : undefined,
+      addedLabels: entry.addedLabels
+        ? entry.addedLabels.map((l: { id: string; name: string }) => l.name)
+        : undefined,
+      removedLabels: entry.removedLabels
+        ? entry.removedLabels.map((l: { id: string; name: string }) => l.name)
+        : undefined,
     }));
   } catch (error) {
     return [];

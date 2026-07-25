@@ -1,5 +1,6 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { confirmDestructiveAction } from '../../lib/confirm-destructive.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { readContentFile } from '../../lib/file-utils.js';
 import {
@@ -69,6 +70,8 @@ interface UpdateOptions {
   bulk?: string; // Comma-separated identifiers for bulk update
   json?: boolean; // Machine-readable output (incl. workspace.source)
   yes?: boolean; // Skip the auto-detected-workspace confirmation
+  /** Commander represents --no-input as input=false. */
+  input?: boolean;
 }
 
 /**
@@ -343,7 +346,9 @@ async function updateIssueNonInteractive(
       }
       updates.priority = priorityResult.value;
       const priorityNames = ['None', 'Urgent', 'High', 'Normal', 'Low'];
-      console.log(`🎯 Updating priority: ${priorityNames[priorityResult.value!]} (${priorityResult.value})`);
+      console.log(
+        `🎯 Updating priority: ${priorityNames[priorityResult.value!]} (${priorityResult.value})`
+      );
     }
 
     if (options.estimate !== undefined) {
@@ -391,7 +396,9 @@ async function updateIssueNonInteractive(
               console.error(`❌ Error: State validation failed\n`);
               console.error(`   State "${state.name}" belongs to team "${stateTeam.name}"`);
               console.error(`   but issue team is "${currentIssue.team.name}"`);
-              console.error(`\n   Please choose a state from the "${currentIssue.team.name}" team\n`);
+              console.error(
+                `\n   Please choose a state from the "${currentIssue.team.name}" team\n`
+              );
               process.exit(1);
             }
             console.log(`🔄 Updating state: ${state.name}`);
@@ -511,9 +518,13 @@ async function updateIssueNonInteractive(
 
         if (currentStateTeamId !== teamId) {
           console.error(`❌ Error: Cannot move to team "${teamCheck.name}"\n`);
-          console.error(`   Current state "${currentState.name}" belongs to team "${currentIssue.team.name}"`);
+          console.error(
+            `   Current state "${currentState.name}" belongs to team "${currentIssue.team.name}"`
+          );
           console.error(`\n   To move teams, you must also change the workflow state:`);
-          console.error(`     agent2linear issue update ${identifier} --team ${teamCheck.name} --state <state-id>\n`);
+          console.error(
+            `     agent2linear issue update ${identifier} --team ${teamCheck.name} --state <state-id>\n`
+          );
           process.exit(1);
         }
       }
@@ -702,7 +713,9 @@ async function updateIssueNonInteractive(
         const beforeCount = currentLabelIds.length;
         currentLabelIds = currentLabelIds.filter(id => !labelsToRemove.includes(id));
         const removedCount = beforeCount - currentLabelIds.length;
-        console.log(`🏷️  Removing ${removedCount} label(s) (${labelsToRemove.length - removedCount} not found)`);
+        console.log(
+          `🏷️  Removing ${removedCount} label(s) (${labelsToRemove.length - removedCount} not found)`
+        );
       }
 
       updates.labelIds = currentLabelIds;
@@ -859,10 +872,32 @@ async function updateIssueNonInteractive(
     // for bulk children (the batch is guarded once by the caller).
     const ws: WorkspaceResolution = skipGuard
       ? resolveActiveWorkspace()
-      : await guardWorkspaceForMutation(options);
+      : await guardWorkspaceForMutation({
+          json: options.json,
+          yes: options.yes,
+          noInput: options.input === false,
+        });
     const silent = options.json || getLogLevel() === 'quiet';
 
-    if (!silent) console.log('\n🚀 Updating issue...');
+    if (options.trash && !skipGuard) {
+      const confirmation = await confirmDestructiveAction(
+        'Move issue "' + identifier + '" to trash?',
+        { yes: options.yes === true, noInput: options.input === false }
+      );
+      if (confirmation?.confirmed === false) {
+        restoreLog();
+        if (options.json) {
+          process.stdout.write(
+            JSON.stringify({ ok: false, cancelled: true, issue: { identifier } }) + '\n'
+          );
+        } else {
+          console.log('Issue trash cancelled.');
+        }
+        return;
+      }
+    }
+
+    if (!silent) console.log('\n������ Updating issue...');
 
     const result = await updateIssue(issueId, updates);
 
@@ -870,7 +905,11 @@ async function updateIssueNonInteractive(
       restoreLog();
       const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
       console.log(
-        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), issue: result }, null, 2)
+        JSON.stringify(
+          { ok: true, workspace: workspaceForJson(ws, urlKey), issue: result },
+          null,
+          2
+        )
       );
       process.exit(0);
     }
@@ -920,7 +959,28 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
     // nothing, so it must not banner/confirm (matches the single-issue path).
     const ws = options.dryRun
       ? resolveActiveWorkspace()
-      : await guardWorkspaceForMutation(options);
+      : await guardWorkspaceForMutation({
+          json: options.json,
+          yes: options.yes,
+          noInput: options.input === false,
+        });
+
+    if (options.trash && !options.dryRun) {
+      const confirmation = await confirmDestructiveAction(
+        'Move ' + identifiers.length + ' issues to trash?',
+        { yes: options.yes === true, noInput: options.input === false }
+      );
+      if (confirmation?.confirmed === false) {
+        if (options.json) {
+          process.stdout.write(
+            JSON.stringify({ ok: false, cancelled: true, issueCount: identifiers.length }) + '\n'
+          );
+        } else {
+          console.log('Bulk issue trash cancelled.');
+        }
+        return;
+      }
+    }
 
     // --json (and not a dry-run): collect each issue's result and emit ONE
     // machine-readable object so a scripted caller can parse the whole batch.
@@ -938,9 +998,7 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
         if (r) issues.push(r);
       }
       restore();
-      console.log(
-        JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2)
-      );
+      console.log(JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2));
       process.exit(0);
     }
 

@@ -15,6 +15,8 @@ export interface InvocationContext {
   workspace?: string;
   /** Literal API key from `--api-key <key>` (or read from stdin for `--api-key -`). */
   apiKey?: string;
+  /** True when the invocation consumed stdin to resolve `--api-key -`. */
+  apiKeyFromStdin?: boolean;
   /**
    * Resolution-context dir from the program-level `-C, --cwd` flag (or
    * `AGENT2LINEAR_CWD`), realpath-canonicalized in the preAction hook (M29 §5.7).

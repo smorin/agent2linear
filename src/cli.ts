@@ -5,6 +5,7 @@ import { registerAliasCommands } from './commands/alias/register.js';
 import { registerCacheCommands } from './commands/cache/register.js';
 import { registerColorsCommands } from './commands/colors/register.js';
 import { registerConfigCommands } from './commands/config/register.js';
+import { registerCursorHistoryCommands } from './commands/cursor-history/register.js';
 import { registerCyclesCommands } from './commands/cycles/register.js';
 import { doctorCommand } from './commands/doctor.js';
 import { registerIconsCommands } from './commands/icons/register.js';
@@ -12,6 +13,7 @@ import { registerIconsCommands } from './commands/icons/register.js';
 import { registerInitiativesCommands } from './commands/initiatives/register.js';
 import { registerIssueCommands } from './commands/issue/register.js';
 import { registerIssueLabelsCommands } from './commands/issue-labels/register.js';
+import { registerLabelsShim } from './commands/labels/register.js';
 import { registerMembersCommands } from './commands/members/register.js';
 import { registerMilestoneTemplatesCommands } from './commands/milestone-templates/register.js';
 import { registerProfileCommands } from './commands/profile/register.js';
@@ -25,16 +27,24 @@ import { registerTemplatesCommands } from './commands/templates/register.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { registerWorkflowStatesCommands } from './commands/workflow-states/register.js';
 import { registerWorkspaceCommands } from './commands/workspace/register.js';
+import { UsageError } from './lib/cli-error.js';
 import { setInvocationContext } from './lib/invocation-context.js';
 import { setLogLevel } from './lib/logger.js';
 import { setNoColor } from './lib/output.js';
+import { stdinAllocationConflict } from './lib/stdin-allocation.js';
 import { readStdinKey } from './lib/workspace-resolver.js';
 
 const cli = new Command();
 
+// Let the process boundary render one stable error and set the documented exit.
+// Help/version still render normally and are recognized as successful Commander exits.
+cli.exitOverride().configureOutput({ outputError: () => undefined });
+
 cli
   .name('agent2linear')
-  .description('Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.')
+  .description(
+    'Command-line tool for creating Linear issues and projects. Designed for AI agents and automation.'
+  )
   .version('0.32.0')
   .option('-q, --quiet', 'Suppress progress messages (errors still shown)')
   .option('-v, --verbose', 'Show debug output')
@@ -45,16 +55,38 @@ cli
     '-C, --cwd <dir>',
     'Resolve config, override matching, and relative paths as if launched in <dir> (else $AGENT2LINEAR_CWD, else the current directory)'
   )
-  .hook('preAction', async (thisCommand) => {
+  .hook('preAction', async (thisCommand, actionCommand) => {
     const opts = thisCommand.opts();
     if (opts.quiet) setLogLevel('quiet');
     if (opts.verbose) setLogLevel('verbose');
     if (opts.color === false) setNoColor(true);
 
+    // Detect comment body/API-key stdin contention before either consumer reads.
+    const commandPath: string[] = [];
+    for (
+      let command: Command | null = actionCommand;
+      command !== null && command !== thisCommand;
+      command = command.parent
+    ) {
+      commandPath.unshift(command.name());
+    }
+    const actionOptions = actionCommand.opts();
+    const stdinConflict = stdinAllocationConflict({
+      apiKey: opts.apiKey,
+      commandPath,
+      body: actionOptions.body,
+      bodyFile: actionOptions.bodyFile,
+      stdinIsTTY: process.stdin.isTTY === true,
+    });
+    if (stdinConflict) {
+      throw new UsageError(stdinConflict);
+    }
+
     // Resolve `--api-key -` from stdin eagerly so the resolver only ever sees a
     // literal string and getApiKey() can stay synchronous.
     let apiKey: string | undefined = opts.apiKey;
-    if (apiKey === '-') {
+    const apiKeyFromStdin = apiKey === '-';
+    if (apiKeyFromStdin) {
       apiKey = await readStdinKey();
     }
     // The resolver treats --api-key as explicit only when --workspace is absent
@@ -82,7 +114,12 @@ cli
       process.chdir(contextDir);
     }
 
-    setInvocationContext({ workspace: opts.workspace, apiKey, contextDir });
+    setInvocationContext({
+      workspace: opts.workspace,
+      apiKey,
+      apiKeyFromStdin,
+      contextDir,
+    });
   })
   .action(() => {
     cli.help();
@@ -104,6 +141,7 @@ registerProjectLabelsCommands(cli);
 registerIconsCommands(cli);
 registerColorsCommands(cli);
 registerCacheCommands(cli);
+registerCursorHistoryCommands(cli);
 registerIssueCommands(cli);
 registerCyclesCommands(cli);
 registerWorkspaceCommands(cli);
@@ -154,33 +192,21 @@ milestones
     console.log('   See MILESTONES.md for planned features and timeline.');
   });
 
-const labels = cli
-  .command('labels')
-  .alias('lbl')
-  .description('Manage issue labels [Coming Soon]')
-  .action(() => {
-    labels.help();
-  });
-
-labels
-  .command('list')
-  .alias('ls')
-  .description('List labels [Not yet implemented]')
-  .action(() => {
-    console.log('⚠️  This command is not yet implemented.');
-    console.log('   See MILESTONES.md for planned features and timeline.');
-  });
+registerLabelsShim(cli);
 
 // Top-level commands
 cli
   .command('whoami')
   .description('Display authenticated user info')
-  .addHelpText('after', `
+  .addHelpText(
+    'after',
+    `
 Examples:
   $ agent2linear whoami    # Show your name, email, organization, and API key
 
 Displays the identity associated with your configured Linear API key.
-`)
+`
+  )
   .action(async () => {
     await whoamiCommand();
   });
@@ -188,7 +214,9 @@ Displays the identity associated with your configured Linear API key.
 cli
   .command('doctor')
   .description('Run diagnostic checks on your agent2linear environment')
-  .addHelpText('after', `
+  .addHelpText(
+    'after',
+    `
 Examples:
   $ agent2linear doctor    # Run all diagnostic checks
 
@@ -198,7 +226,8 @@ Checks:
   • Default team/initiative settings
   • Cache health
   • Alias counts
-`)
+`
+  )
   .action(async () => {
     await doctorCommand();
   });
@@ -206,7 +235,9 @@ Checks:
 cli
   .command('setup')
   .description('Interactive first-time setup wizard')
-  .addHelpText('after', `
+  .addHelpText(
+    'after',
+    `
 Examples:
   $ agent2linear setup    # Run interactive setup wizard
 
@@ -215,7 +246,8 @@ This command will guide you through:
   • Selecting your default team
   • Configuring optional defaults
   • Learning about key commands
-`)
+`
+  )
   .action(async () => {
     await setup();
   });

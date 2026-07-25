@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
+import { getInvocationContext } from './invocation-context.js';
 import {
   getCycleById,
   getIssueLabelById,
@@ -13,7 +14,6 @@ import {
   validateInitiativeExists,
   validateTeamExists,
 } from './linear-client.js';
-import { getInvocationContext } from './invocation-context.js';
 import type { AliasEntityType, Aliases, AliasLocation,ResolvedAliases } from './types.js';
 import { findProjectConfigDir, projectConfigWriteDir, userConfigDir } from './xdg-paths.js';
 

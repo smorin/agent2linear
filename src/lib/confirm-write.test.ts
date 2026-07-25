@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { UsageError } from './cli-error.js';
 import { confirmWorkspaceWrite, needsWorkspaceConfirm } from './confirm-write.js';
 import type { WorkspaceResolution } from './types.js';
 
@@ -44,13 +45,24 @@ describe('confirmWorkspaceWrite', () => {
     expect(exit).not.toHaveBeenCalled();
   });
 
-  it('fail-safe ERRORS (exit 1) on a non-TTY stdin when confirmation is required', async () => {
-    // vitest stdin is not a TTY, so this exercises the non-interactive branch.
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const exit = vi.spyOn(process, 'exit').mockImplementation(((): never => {
-      throw new Error('exit:1');
-    }) as never);
-    await expect(confirmWorkspaceWrite(autoDetected, {}, {}, true)).rejects.toThrow('exit:1');
-    expect(exit).toHaveBeenCalledWith(1);
+  it('CMT-SAF-NONTYY fails with usage 2 on non-TTY confirmation instead of exiting internally', async () => {
+    const exit = vi.spyOn(process, 'exit');
+    await expect(confirmWorkspaceWrite(autoDetected, {}, {}, true)).rejects.toMatchObject({
+      exitCode: 2,
+      message: expect.stringContaining('-y/--yes'),
+    });
+    expect(exit).not.toHaveBeenCalled();
+  });
+
+  it('CMT-SAF-IA-NOINPUT/PA-NOINPUT rejects required prompting explicitly', async () => {
+    await expect(
+      confirmWorkspaceWrite(autoDetected, { noInput: true }, {}, true)
+    ).rejects.toBeInstanceOf(UsageError);
+    await expect(
+      confirmWorkspaceWrite(autoDetected, { noInput: true }, {}, true)
+    ).rejects.toMatchObject({
+      exitCode: 2,
+      message: expect.stringContaining('--no-input'),
+    });
   });
 });

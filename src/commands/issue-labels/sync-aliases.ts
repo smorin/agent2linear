@@ -14,7 +14,9 @@ export interface SyncIssueLabelAliasesOptions extends SyncAliasesOptions {
 /**
  * Core function to sync issue label aliases (can be called from multiple places)
  */
-export async function syncIssueLabelAliasesCore(options: SyncIssueLabelAliasesOptions): Promise<void> {
+export async function syncIssueLabelAliasesCore(
+  options: SyncIssueLabelAliasesOptions
+): Promise<void> {
   // Resolve team alias to ID if provided
   let teamId = options.team;
   if (teamId) {
@@ -44,8 +46,11 @@ export function syncIssueLabelAliases(program: Command) {
     .option('--dry-run', 'Preview aliases without creating them')
     .option('-f, --force', 'Overwrite existing aliases')
     .option('-t, --team <id>', 'Only sync labels for specific team')
-    .option('--no-auto-suffix', 'Disable auto-numbering for duplicate slugs (skip duplicates instead)')
-    .action(async (options) => {
+    .option(
+      '--no-auto-suffix',
+      'Disable auto-numbering for duplicate slugs (skip duplicates instead)'
+    )
+    .action(async options => {
       await syncIssueLabelAliasesCore(options);
     });
 }

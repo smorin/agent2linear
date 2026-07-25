@@ -3,6 +3,8 @@ import { Command } from 'commander';
 import { createProjectLabelCommand } from './create.js';
 import { deleteProjectLabelCommand } from './delete.js';
 import { listProjectLabels } from './list.js';
+import { restoreProjectLabelCommand } from './restore.js';
+import { retireProjectLabelCommand } from './retire.js';
 import { syncProjectLabelAliases } from './sync-aliases.js';
 import { updateProjectLabelCommand } from './update.js';
 import { viewProjectLabel } from './view.js';
@@ -18,5 +20,7 @@ export function registerProjectLabelsCommands(cli: Command): void {
   createProjectLabelCommand(projectLabels);
   updateProjectLabelCommand(projectLabels);
   deleteProjectLabelCommand(projectLabels);
+  retireProjectLabelCommand(projectLabels);
+  restoreProjectLabelCommand(projectLabels);
   syncProjectLabelAliases(projectLabels);
 }

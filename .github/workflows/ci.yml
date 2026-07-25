@@ -26,3 +26,6 @@ jobs:
       # Offline/hermetic E2E against the built CLI (dist/index.js). Needs NO secret —
       # the suite unsets LINEAR_API_KEY and sandboxes HOME/XDG; runs on both Node versions.
       - run: bash tests/scripts/test-config-override-cli.sh
+      - run: bash tests/scripts/test-cursor-history-cli.sh
+      - run: bash tests/scripts/test-comments-cli.sh
+      - run: bash tests/scripts/test-label-lifecycle-cli.sh

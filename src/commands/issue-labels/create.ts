@@ -1,54 +1,24 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 
-import { resolveAlias } from '../../lib/aliases.js';
-import { createIssueLabel } from '../../lib/linear-client.js';
+import { type LabelCreateOptions,runLabelCreate } from '../labels/runner.js';
 
-export function createIssueLabelCommand(program: Command) {
+export function createIssueLabelCommand(program: Command): void {
   program
     .command('create')
-    .description('Create a new issue label')
+    .description('Create a workspace- or team-scoped issue label')
     .option('-n, --name <name>', 'Label name (required)')
     .option('-c, --color <hex>', 'Color (hex code)', '#5E6AD2')
-    .option('-d, --description <text>', 'Description')
-    .option('-t, --team <id>', 'Team ID (omit for workspace-level label)')
-    .action(async (options) => {
-      try {
-        if (!options.name) {
-          console.error('❌ Error: --name is required');
-          process.exit(1);
-        }
-
-        const { validateAndNormalizeColor } = await import('../../lib/validators.js');
-        const colorResult = validateAndNormalizeColor(options.color);
-        if (!colorResult.valid) {
-          console.error(`❌ Error: ${colorResult.error}`);
-          process.exit(1);
-        }
-        const color = colorResult.value!;
-        let teamId = options.team;
-        if (teamId) {
-          teamId = resolveAlias('team', teamId);
-        }
-
-        console.log('🚀 Creating issue label...');
-
-        const label = await createIssueLabel({
-          name: options.name,
-          color,
-          description: options.description,
-          teamId,
-        });
-
-        console.log('');
-        console.log('✅ Issue label created successfully!');
-        console.log(`   Name: ${label.name}`);
-        console.log(`   ID: ${label.id}`);
-        console.log(`   Color: ${label.color}`);
-        console.log(`   Scope: ${label.teamId ? 'Team' : 'Workspace'}`);
-        console.log('');
-      } catch (error) {
-        console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
-        process.exit(1);
-      }
+    .option('-d, --description <text>', 'Description; an empty string is allowed')
+    .option('-t, --team <id>', 'Team ID, name, or alias; omit for workspace scope')
+    .option('--dry-run', 'Validate and print the plan without mutating Linear')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
+    .option('--json', 'Equivalent to --output json')
+    .option('-y, --yes', 'Consent to any required workspace confirmation')
+    .option('--no-input', 'Never prompt; fail if explicit consent is required')
+    .action(async (options: LabelCreateOptions, command: Command) => {
+      await runLabelCreate('issue', {
+        ...options,
+        outputSource: command.getOptionValueSource('output') === 'cli' ? 'explicit' : 'default',
+      });
     });
 }

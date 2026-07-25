@@ -196,7 +196,7 @@ cd tests/scripts
 
 ### What Tests DON'T Do
 
-- ❌ Tests **do not delete** projects automatically
+- ❌ Tests **do not permanently delete** projects; cleanup remains reversible
 - ❌ Tests **do not modify** existing projects (except those created during testing)
 - ❌ Tests **do not delete** aliases (removed at end of test run)
 
@@ -213,7 +213,7 @@ After running tests, you'll have cleanup scripts:
 ./cleanup-all-projects.sh
 ```
 
-⚠️ **Note**: The cleanup scripts currently list project IDs but don't delete them automatically (since `project delete` command isn't implemented yet). You'll need to manually delete via Linear UI or wait for the delete command.
+⚠️ **Note**: The cleanup scripts list project IDs rather than mutating automatically. For reversible CLI cleanup, run `a2l project update <project-id> --trash -y`; use `--untrash` to restore. There is intentionally no permanent `project delete` command.
 
 ## Output Format
 
@@ -286,7 +286,7 @@ When adding new tests:
 
 ## Future Enhancements
 
-- [ ] Add `project delete` command and enable auto-cleanup
+- [ ] Optionally teach legacy project suites to use reversible `project update --trash` cleanup
 - [ ] Add tests for `project add-milestones` command
 - [ ] Add tests for template application
 - [ ] Add performance benchmarks

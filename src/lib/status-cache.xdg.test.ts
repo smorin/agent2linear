@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetInvocationContext, setInvocationContext } from './invocation-context.js';
 import { saveTeamsCache } from './status-cache.js';
 import { workspaceCacheKey } from './xdg-paths.js';
 
@@ -11,10 +12,14 @@ const origCwd = process.cwd();
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'a2l-cache-'));
+  // Keep this cache-path test independent of the developer's configured
+  // workspace profiles and repository match rules.
+  setInvocationContext({ apiKey: 'lin_api_testkey' });
 });
 
 afterEach(() => {
   process.chdir(origCwd);
+  resetInvocationContext();
   vi.unstubAllEnvs();
   rmSync(tmp, { recursive: true, force: true });
 });

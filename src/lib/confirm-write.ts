@@ -12,6 +12,7 @@
 
 import * as readline from 'readline';
 
+import { UsageError } from './cli-error.js';
 import { getConfig } from './config.js';
 import { getLogLevel } from './logger.js';
 import { showError } from './output.js';
@@ -22,6 +23,7 @@ import { configuredWorkspaceCount, resolveActiveWorkspace } from './workspace-re
 interface MutationOptions {
   json?: boolean;
   yes?: boolean;
+  noInput?: boolean;
 }
 
 /**
@@ -50,7 +52,7 @@ export function needsWorkspaceConfirm(
 
 /** Readline `(y/N)` prompt, default No. */
 function promptConfirmation(message: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((resolve) =>
     rl.question(`${message} (y/N): `, (answer) => {
       rl.close();
@@ -74,12 +76,16 @@ export async function confirmWorkspaceWrite(
     return;
   }
 
-  if (!process.stdin.isTTY) {
-    showError(
-      `Refusing to write to auto-detected workspace "${resolution.name}" non-interactively.`,
-      'Pass --workspace <name>, -y/--yes, or set "config set confirmAutoDetectedWrites false".'
+  if (options.noInput) {
+    throw new UsageError(
+      `workspace confirmation is required for "${resolution.name}", but --no-input forbids prompting — pass --workspace <name> or -y/--yes`
     );
-    process.exit(1);
+  }
+
+  if (!process.stdin.isTTY) {
+    throw new UsageError(
+      `workspace confirmation is required for "${resolution.name}" in non-interactive mode — pass --workspace <name> or -y/--yes`
+    );
   }
 
   const ok = await promptConfirmation(

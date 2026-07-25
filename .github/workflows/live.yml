@@ -31,6 +31,13 @@ jobs:
         run: node dist/index.js whoami
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # M33 lifecycle verification fails closed unless both the Linear organization and
+      # selected a2l workspace are exactly ConceptM. It creates only unique TEST_M33_* fixtures
+      # and retries cleanup in a finally block.
+      - name: M33 label and project lifecycle
+        run: npx tsx tests/scripts/test-label-lifecycle-live.ts
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       # Full live integration suite — creates real TEST_* entities in the throwaway
       # workspace; exits non-zero if any test fails.
       - name: Live integration suite

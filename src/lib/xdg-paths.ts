@@ -26,6 +26,11 @@ export function userCacheDir(): string {
   return resolveXdgBase('XDG_CACHE_HOME', '.cache');
 }
 
+/** User-level state root: $XDG_STATE_HOME/agent2linear else ~/.local/state/agent2linear */
+export function userStateDir(): string {
+  return resolveXdgBase('XDG_STATE_HOME', '.local/state');
+}
+
 /** Cache partition key: sha256(apiKey)[:12], or 'default' when no key is available. */
 export function workspaceCacheKey(apiKey?: string): string {
   if (!apiKey || apiKey.trim() === '') {

@@ -1,7 +1,11 @@
 import { openInBrowser } from '../../lib/browser.js';
 import { handleLinearError, isLinearError } from '../../lib/error-handler.js';
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
-import { getFullIssueById, getIssueComments, getIssueHistory } from '../../lib/linear-client.js';
+import {
+  getFullIssueById,
+  getIssueCommentSummary,
+  getIssueHistory,
+} from '../../lib/linear-client.js';
 import { formatContentPreview } from '../../lib/output.js';
 
 interface ViewOptions {
@@ -102,7 +106,7 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       let history;
 
       if (options.showComments) {
-        comments = await getIssueComments(issueId);
+        comments = (await getIssueCommentSummary(issueId)).comments;
       }
 
       if (options.showHistory) {
@@ -240,7 +244,8 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       console.log('💬 Comments:');
       console.log('─'.repeat(80));
 
-      const comments = await getIssueComments(issueId);
+      const commentSummary = await getIssueCommentSummary(issueId);
+      const comments = commentSummary.comments;
 
       if (comments.length === 0) {
         console.log('No comments yet.');
@@ -252,6 +257,11 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       }
 
       console.log('─'.repeat(80));
+      if (commentSummary.pageInfo.hasNextPage) {
+        console.log(
+          'More comments are available. Run: a2l issue comment list ' + identifier + ' --all'
+        );
+      }
       console.log('');
     }
 

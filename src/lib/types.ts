@@ -219,7 +219,18 @@ export interface ResolvedConfig extends Config {
   };
 }
 
-export type AliasEntityType = 'initiative' | 'team' | 'project' | 'project-status' | 'issue-template' | 'project-template' | 'member' | 'issue-label' | 'project-label' | 'workflow-state' | 'cycle';
+export type AliasEntityType =
+  | 'initiative'
+  | 'team'
+  | 'project'
+  | 'project-status'
+  | 'issue-template'
+  | 'project-template'
+  | 'member'
+  | 'issue-label'
+  | 'project-label'
+  | 'workflow-state'
+  | 'cycle';
 
 export interface AliasMap {
   [alias: string]: string; // alias -> Linear ID
@@ -349,6 +360,8 @@ export interface IssueLabel {
   description?: string;
   color: string;
   teamId?: string; // undefined for workspace-level labels
+  retiredAt: string | null;
+  archivedAt: string | null;
 }
 
 /**
@@ -359,6 +372,8 @@ export interface ProjectLabel {
   name: string;
   description?: string;
   color: string;
+  retiredAt: string | null;
+  archivedAt: string | null;
 }
 
 /**
@@ -398,11 +413,11 @@ export interface ProjectListFilters {
   search?: string;
 
   // Pagination options (M21.1)
-  limit?: number;      // Max results to return (default: 50, max: 250)
-  fetchAll?: boolean;  // Fetch all pages (uses pageSize: 250 for optimization)
+  limit?: number; // Max results to return (default: 50, max: 250)
+  fetchAll?: boolean; // Fetch all pages (uses pageSize: 250 for optimization)
 
   // M23: Dependency options
-  includeDependencies?: boolean;  // Fetch dependency relation counts
+  includeDependencies?: boolean; // Fetch dependency relation counts
 }
 
 /**
@@ -452,8 +467,8 @@ export interface ProjectListItem {
   url: string;
   createdAt: string;
   updatedAt: string;
-  dependsOnCount?: number;    // Count of "depends on" relations (M23)
-  blocksCount?: number;       // Count of "blocks" relations (M23)
+  dependsOnCount?: number; // Count of "depends on" relations (M23)
+  blocksCount?: number; // Count of "blocks" relations (M23)
 }
 
 /**
@@ -462,7 +477,7 @@ export interface ProjectListItem {
  */
 export interface ProjectRelation {
   id: string;
-  type: 'dependency';  // Only valid value in Linear API
+  type: 'dependency'; // Only valid value in Linear API
   project: {
     id: string;
     name: string;
@@ -471,7 +486,7 @@ export interface ProjectRelation {
     id: string;
     name: string;
   };
-  anchorType: 'start' | 'end';        // Which part of source project
+  anchorType: 'start' | 'end'; // Which part of source project
   relatedAnchorType: 'start' | 'end'; // Which part of target project
   createdAt: string;
   updatedAt: string;
@@ -482,7 +497,7 @@ export interface ProjectRelation {
  */
 export interface ProjectRelationCreateInput {
   id?: string;
-  type: 'dependency';  // Always this value
+  type: 'dependency'; // Always this value
   projectId: string;
   relatedProjectId: string;
   anchorType: 'start' | 'end';
@@ -608,9 +623,9 @@ export interface IssueListFilters {
   search?: string; // Full-text search in title and description
 
   // Date range filters
-  createdAfter?: string;  // ISO date string
+  createdAfter?: string; // ISO date string
   createdBefore?: string; // ISO date string
-  updatedAfter?: string;  // ISO date string
+  updatedAfter?: string; // ISO date string
   updatedBefore?: string; // ISO date string
 
   // Pagination
