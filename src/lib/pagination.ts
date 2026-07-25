@@ -137,6 +137,7 @@ export async function walkPages<T extends { id: string }>(
   }
 
   let after = startingAfter;
+  let boundedEndCursor: string | null = null;
 
   for (;;) {
     const currentPage = await options.fetchPage({ first: requestSize, after });
@@ -162,9 +163,23 @@ export async function walkPages<T extends { id: string }>(
         continue;
       }
 
+      // Once a filtered bounded result is full, keep scanning only far enough
+      // to prove that another matching node exists. The continuation remains
+      // anchored to the last returned node so the lookahead never skips data.
+      if (!fetchAll && boundedEndCursor !== null) {
+        return {
+          items,
+          pageInfo: incompletePageInfo(items.length, boundedEndCursor),
+        };
+      }
+
       items.push(edge.node);
 
       if (!fetchAll && items.length === limit) {
+        if (options.matches) {
+          boundedEndCursor = edgeCursor;
+          continue;
+        }
         const hasUnexaminedEdges = index < currentPage.edges.length - 1;
         const hasNextPage = hasUnexaminedEdges || currentPage.pageInfo.hasNextPage;
 

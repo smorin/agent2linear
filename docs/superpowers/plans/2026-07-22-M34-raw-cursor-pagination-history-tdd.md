@@ -462,7 +462,7 @@ with exit 0.
 | `CPH-API-PAGE-INFO` | shared `PageInfo` | returnedCount/hasNextPage/endCursor/fetchedAll | DONE | GREEN | PASS |
 | `CPH-API-PAGE-EDGE` | shared edge model | node plus exact edge cursor | DONE | GREEN | PASS |
 | `CPH-API-PAGE-WALKER` | traversal primitive | guarded sequential cursor loop with adapter callbacks | DONE | GREEN | PASS |
-| `CPH-API-PAGE-FILTER` | client-filter hook | counts matches without losing last-examined edge | DONE | GREEN | PASS |
+| `CPH-API-PAGE-FILTER` | client-filter hook | counts matches, proves a later match before advertising continuation, and keeps the cursor on the last returned edge | DONE | GREEN | PASS |
 | `CPH-API-PAGE-ORDER` | ordering declaration | adapter must provide stable provider order metadata | DONE | GREEN | PASS |
 | `CPH-API-HISTORY-ADAPTER` | history record adapter | safe structured context, never raw argv | DONE | GREEN | PASS |
 | `CPH-API-ADOPTER-CONTRACT` | public resource-adapter protocol | typed callbacks and normalized input/result/context without resource imports | DONE | GREEN | PASS |

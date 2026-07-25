@@ -97,6 +97,23 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
     if (mode === 'json') console.error(...values);
     else console.log(...values);
   };
+  const ancillaryFailures: Array<{
+    operation: string;
+    target: string;
+    message: string;
+  }> = [];
+  const recordAncillaryFailure = (
+    operation: string,
+    target: string,
+    error: unknown,
+    description: string
+  ): void => {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    ancillaryFailures.push({ operation, target, message });
+    if (mode === 'table') {
+      console.error(`   ✗ ${description}: ${message}`);
+    }
+  };
 
   // Validate mutual exclusivity of --content and --content-file
   if (options.content && options.contentFile) {
@@ -494,9 +511,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
         });
         log(`   ✓ Link added: ${label || url}`);
       } catch (error) {
-        console.error(
-          `   ✗ Failed to add link "${url}": ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
+        recordAncillaryFailure('link.add', url, error, `Failed to add link "${url}"`);
       }
     }
   }
@@ -524,9 +539,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           await deleteExternalLink(link.id);
           log(`   ✓ Removed link: ${link.label || url}`);
         } catch (error) {
-          console.error(
-            `   ✗ Failed to remove link "${url}": ${error instanceof Error ? error.message : 'Unknown error'}`
-          );
+          recordAncillaryFailure('link.remove', url, error, `Failed to remove link "${url}"`);
         }
       } else {
         console.warn(`   ⚠️  Link not found (skipped): ${url}`);
@@ -570,8 +583,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           });
         }
       } catch (error) {
-        console.error(
-          `\n❌ Error parsing --depends-on: ${error instanceof Error ? error.message : 'Unknown error'}`
+        recordAncillaryFailure(
+          'dependency.parse.depends-on',
+          options.dependsOn,
+          error,
+          'Error parsing --depends-on'
         );
       }
     }
@@ -593,8 +609,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           });
         }
       } catch (error) {
-        console.error(
-          `\n❌ Error parsing --blocks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        recordAncillaryFailure(
+          'dependency.parse.blocks',
+          options.blocks,
+          error,
+          'Error parsing --blocks'
         );
       }
     }
@@ -615,8 +634,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
             type: 'advanced',
           });
         } catch (error) {
-          console.error(
-            `\n❌ Error parsing --dependency "${depSpec}": ${error instanceof Error ? error.message : 'Unknown error'}`
+          recordAncillaryFailure(
+            'dependency.parse.advanced',
+            depSpec,
+            error,
+            `Error parsing --dependency "${depSpec}"`
           );
         }
       }
@@ -650,7 +672,12 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           if (errorMsg.includes('Relation exists') || errorMsg.includes('already exists')) {
             log(`   ⚠️  Dependency already exists with ${dep.relatedProjectId}`);
           } else {
-            console.error(`   ✗ Failed: ${errorMsg}`);
+            recordAncillaryFailure(
+              'dependency.add',
+              dep.relatedProjectId,
+              error,
+              'Failed to add dependency'
+            );
           }
         }
       }
@@ -692,8 +719,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           relationsToDelete.push(...matching.map(r => r.id));
         }
       } catch (error) {
-        console.error(
-          `\n❌ Error parsing --remove-depends-on: ${error instanceof Error ? error.message : 'Unknown error'}`
+        recordAncillaryFailure(
+          'dependency.parse.remove-depends-on',
+          options.removeDependsOn,
+          error,
+          'Error parsing --remove-depends-on'
         );
       }
     }
@@ -714,8 +744,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           relationsToDelete.push(...matching.map(r => r.id));
         }
       } catch (error) {
-        console.error(
-          `\n❌ Error parsing --remove-blocks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        recordAncillaryFailure(
+          'dependency.parse.remove-blocks',
+          options.removeBlocks,
+          error,
+          'Error parsing --remove-blocks'
         );
       }
     }
@@ -734,8 +767,11 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           relationsToDelete.push(...matching.map(r => r.id));
         }
       } catch (error) {
-        console.error(
-          `\n❌ Error parsing --remove-dependency: ${error instanceof Error ? error.message : 'Unknown error'}`
+        recordAncillaryFailure(
+          'dependency.parse.remove',
+          options.removeDependency.join(','),
+          error,
+          'Error parsing --remove-dependency'
         );
       }
     }
@@ -751,14 +787,29 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           await deleteProjectRelation(client, relationId);
           log(`   ✓ Removed dependency`);
         } catch (error) {
-          console.error(
-            `   ✗ Failed to remove: ${error instanceof Error ? error.message : 'Unknown error'}`
+          recordAncillaryFailure(
+            'dependency.remove',
+            relationId,
+            error,
+            'Failed to remove dependency'
           );
         }
       }
     } else {
       log(`\n⚠️  No matching dependencies found to remove`);
     }
+  }
+
+  if (ancillaryFailures.length > 0) {
+    throw new RuntimeError(
+      `Project '${projectId}' was updated, but ${ancillaryFailures.length} requested ancillary operation${ancillaryFailures.length === 1 ? '' : 's'} failed`,
+      {
+        details: {
+          projectId,
+          failures: ancillaryFailures,
+        },
+      }
+    );
   }
 
   log('');

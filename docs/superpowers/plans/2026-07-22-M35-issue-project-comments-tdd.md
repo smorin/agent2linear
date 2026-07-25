@@ -999,8 +999,8 @@ optional fields but stable within the selected major release.
 | `CMT-VIEW-LIMIT`               | summary bound              | Explicit first 50; do not expose comment-list options on view           | NS       | NS  | NS  |
 | `CMT-VIEW-HELP`                | help wording               | Replace “all comments” with “up to 50 comments”                         | NS       | NS  | NS  |
 | `CMT-VIEW-HUMAN-SHAPE`         | human rendering            | Preserve existing Comments section/thread presentation                  | BASELINE | NS  | NS  |
-| `CMT-VIEW-JSON-SHAPE`          | JSON rendering             | Preserve embedded `comments` array and existing comment field semantics | BASELINE | NS  | NS  |
-| `CMT-VIEW-TRUNCATION`          | more comments              | Human hint names `issue comment list <target> --all`                    | NS       | NS  | NS  |
+| `CMT-VIEW-JSON-SHAPE`          | JSON rendering             | Preserve embedded `comments` array and comment fields; add sibling `commentsTruncated` boolean when comments are requested | BASELINE | NS  | NS  |
+| `CMT-VIEW-TRUNCATION`          | more comments              | Human hint names `issue comment list <target> --all`; JSON reports `commentsTruncated: true` | NS       | NS  | NS  |
 | `CMT-VIEW-NO-HISTORY`          | embedded summary           | Never create an M34 cursor-history entry from `issue view`              | NS       | NS  | NS  |
 | `CMT-VIEW-ERROR`               | fetch failure              | Propagate normalized failure; never render false empty state            | NS       | NS  | NS  |
 | `CMT-VIEW-NO-PAGINATION-FLAGS` | view option isolation      | Reject `--after`, `--limit`, and `--all` on `issue view`                | BASELINE | NS  | NS  |

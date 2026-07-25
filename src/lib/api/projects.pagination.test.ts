@@ -175,7 +175,7 @@ describe('getProjectListPage', () => {
     });
   });
 
-  it('[CPH-API-PAGE-FILTER][CPH-PAG-LAST-EXAMINED] counts matches and stops at the last examined edge', async () => {
+  it('[CPH-API-PAGE-FILTER][CPH-PAG-LAST-EXAMINED] confirms a later match while preserving the returned cursor', async () => {
     const rawRequest = vi
       .fn()
       .mockResolvedValueOnce(
@@ -210,7 +210,7 @@ describe('getProjectListPage', () => {
       endCursor: 'edge-3',
       fetchedAll: false,
     });
-    expect(matches).toHaveBeenCalledTimes(3);
+    expect(matches).toHaveBeenCalledTimes(4);
     expect(rawRequest.mock.calls.map(([, variables]) => variables.after)).toEqual([null, 'edge-2']);
   });
 

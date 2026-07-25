@@ -74,4 +74,10 @@ describe('M35 ID-level traceability', () => {
     expect(plan).not.toContain('CMT-API-PROJECT-QUERY\x60 | \x60project(id){comments');
     expect(trace).toContain('projectUpdate: { null: true }');
   });
+
+  it('[CMT-VER-LIVE-CONCEPTM][PR17-R6] wires the guarded comment harness into live CI', () => {
+    expect(read('.github/workflows/live.yml')).toContain(
+      'npx tsx tests/scripts/test-comments-live.ts'
+    );
+  });
 });

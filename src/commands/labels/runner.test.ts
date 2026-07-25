@@ -138,6 +138,36 @@ describe('M33 label mutation runners', () => {
     expect(stdout.join('')).toContain('cancelled');
   });
 
+  it('[PR17-R7] emits valid JSON when label deletion is cancelled', async () => {
+    const { deps, stdout } = dependencies();
+    vi.mocked(deps.confirmDestructive).mockResolvedValue({ confirmed: false });
+
+    await runLabelDelete('issue', 'issue-label-1', { json: true }, deps);
+
+    expect(deps.delete).not.toHaveBeenCalled();
+    expect(JSON.parse(stdout.join(''))).toMatchObject({
+      ok: false,
+      cancelled: true,
+      operation: 'delete',
+      label: { type: 'issue', id: 'issue-label-1', name: 'Issue label' },
+    });
+  });
+
+  it('[PR17-R7] emits valid JSON when label retirement is cancelled', async () => {
+    const { deps, stdout } = dependencies();
+    vi.mocked(deps.confirmDestructive).mockResolvedValue({ confirmed: false });
+
+    await runLabelLifecycle('project', 'retire', 'project-label-1', { json: true }, deps);
+
+    expect(deps.lifecycle).not.toHaveBeenCalled();
+    expect(JSON.parse(stdout.join(''))).toMatchObject({
+      ok: false,
+      cancelled: true,
+      operation: 'retire',
+      label: { type: 'project', id: 'project-label-1', name: 'Project label' },
+    });
+  });
+
   it('[LPL-OUT-JSON-DELETE][LPL-API-DELETE-SUCCESS] rejects a false delete payload', async () => {
     const { deps } = dependencies();
     vi.mocked(deps.delete).mockResolvedValue(false);

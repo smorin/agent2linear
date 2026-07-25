@@ -8,6 +8,8 @@ import {
   restoreProjectLabel,
   retireIssueLabel,
   retireProjectLabel,
+  updateIssueLabel,
+  updateProjectLabel,
 } from './labels.js';
 
 vi.mock('./client.js', async () => {
@@ -102,7 +104,8 @@ describe('M33 label pagination API', () => {
           'backend-1'
         )
       )
-      .mockResolvedValueOnce(page('issueLabels', [rawLabel('active')], true, 'backend-2'));
+      .mockResolvedValueOnce(page('issueLabels', [rawLabel('active')], true, 'backend-2'))
+      .mockResolvedValueOnce(page('issueLabels', [rawLabel('active-2')], false, null));
     mockClient({ client: { rawRequest } });
 
     const result = await getIssueLabelListPage({}, { limit: 1 });
@@ -112,6 +115,7 @@ describe('M33 label pagination API', () => {
     expect(rawRequest.mock.calls.map(([, variables]) => variables.after)).toEqual([
       null,
       'backend-1',
+      'backend-2',
     ]);
   });
 
@@ -151,6 +155,36 @@ describe('M33 label pagination API', () => {
 });
 
 describe('M33 label lifecycle API', () => {
+  it.each([
+    ['issue', updateIssueLabel, 'updateIssueLabel', 'issueLabel'],
+    ['project', updateProjectLabel, 'updateProjectLabel', 'projectLabel'],
+  ] as const)(
+    '[PR17-R2] %s updates refetch lifecycle state instead of reporting an active label',
+    async (_kind, operation, method, resource) => {
+      const mutation = vi.fn().mockResolvedValue({
+        [resource]: rawLabel('label-1'),
+      });
+      const rawRequest = vi.fn().mockResolvedValue({
+        data: {
+          [resource]: rawLabel('label-1', {
+            retiredAt: '2026-07-25T00:00:00.000Z',
+            archivedAt: '2026-07-24T00:00:00.000Z',
+          }),
+        },
+      });
+      mockClient({ [method]: mutation, client: { rawRequest } });
+
+      const result = await operation('label-1', { name: 'Renamed' });
+
+      expect(mutation).toHaveBeenCalledWith('label-1', { name: 'Renamed' });
+      expect(rawRequest).toHaveBeenCalledOnce();
+      expect(result).toMatchObject({
+        retiredAt: '2026-07-25T00:00:00.000Z',
+        archivedAt: '2026-07-24T00:00:00.000Z',
+      });
+    }
+  );
+
   it.each([
     ['issue retire', retireIssueLabel, 'issueLabelRetire', 'issueLabels'],
     ['issue restore', restoreIssueLabel, 'issueLabelRestore', 'issueLabels'],

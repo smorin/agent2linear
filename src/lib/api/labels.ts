@@ -313,16 +313,7 @@ export async function updateIssueLabel(
     const payload = await client.updateIssueLabel(id, input);
     const label = await payload.issueLabel;
     if (!label) throw new Error('No label returned from API');
-    const team = await label.team;
-    return {
-      id: label.id,
-      name: label.name,
-      color: label.color,
-      description: label.description || undefined,
-      teamId: team?.id,
-      retiredAt: null,
-      archivedAt: null,
-    };
+    return requireIssueLabel(id);
   } catch (error) {
     if (error instanceof LinearClientError) throw error;
     throw new Error(
@@ -404,14 +395,7 @@ export async function updateProjectLabel(
     const payload = await client.updateProjectLabel(id, input);
     const label = await payload.projectLabel;
     if (!label) throw new Error('No label returned from API');
-    return {
-      id: label.id,
-      name: label.name,
-      color: label.color,
-      description: label.description || undefined,
-      retiredAt: null,
-      archivedAt: null,
-    };
+    return requireProjectLabel(id);
   } catch (error) {
     if (error instanceof LinearClientError) throw error;
     throw new Error(

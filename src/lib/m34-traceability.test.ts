@@ -83,4 +83,10 @@ describe('M34 ID-level traceability', () => {
       }
     }
   });
+
+  it('[CPH-TST-LIVE][PR17-R6] wires the guarded pagination harness into live CI', () => {
+    expect(read('.github/workflows/live.yml')).toContain(
+      'node tests/scripts/test-pagination-live.js'
+    );
+  });
 });

@@ -159,6 +159,23 @@ describe('comment raw GraphQL API', () => {
     );
   });
 
+  it('[PR17-R4] rejects a project-update comment as a direct project reply target', async () => {
+    const rawRequest = vi.fn(async (_query: string, _variables: Record<string, unknown>) => ({
+      data: {
+        comment: {
+          id: 'update-comment',
+          issueId: null,
+          projectId: 'project-1',
+          projectUpdateId: 'project-update-1',
+        },
+      },
+    }));
+
+    await expect(
+      validateReplyTarget(projectTarget, 'update-comment', { rawRequest })
+    ).rejects.toMatchObject({ code: 'conflict', exitCode: 5 });
+  });
+
   it('CMT-API-CREATE-SUCCESS requires success=true and a returned comment', async () => {
     for (const payload of [
       { success: false, comment: rawComment('x') },

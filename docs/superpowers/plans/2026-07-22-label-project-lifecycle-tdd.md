@@ -360,7 +360,8 @@ receive a stderr diagnostic directing machine callers to JSON or `cursor-history
 - `--include-retired` never changes `includeArchived: false`; rejected `--include-archived` input
   fails before any API call.
 - `retiredAt` and `archivedAt` survive mapping and serialization independently, including fixtures
-  where both are null, either is non-null, or both are non-null.
+  where both are null, either is non-null, or both are non-null; create/update output never invents
+  lifecycle values, and update mutations use the raw lifecycle-aware post-read before rendering.
 - A repeated or missing cursor under `hasNextPage=true` fails deterministically.
 - Color filtering fills the requested result count across pages and resumes from the last examined
   edge without skipped/duplicated matches.
@@ -754,10 +755,10 @@ reach `V=PASS` only after every listed M34 ID is `V=PASS`.
 | ID                      | Contract                                                                                                        | I    | T     | V    |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------- | ---- | ----- | ---- |
 | LPL-OUT-HUMAN           | Default `--output table` mode emits requested result to stdout and diagnostics/progress to stderr               | DONE | GREEN | PASS |
-| LPL-OUT-JSON-ENVELOPE   | Remote mutations under `--output json` or equivalent `--json` emit `{ok, workspace, <entity>}` with stable keys | DONE | GREEN | PASS |
+| LPL-OUT-JSON-ENVELOPE   | Successful remote mutations emit `{ok, workspace, <entity>}`; declined destructive operations emit `{ok:false,cancelled:true,...}` and never plain text | DONE | GREEN | PASS |
 | LPL-OUT-JSON-DRYRUN     | JSON dry-run adds stable operation/plan data and remains mutation-free                                          | DONE | GREEN | PASS |
 | LPL-OUT-JSON-DELETE     | Delete JSON identifies the deleted resource and propagates unsuccessful payloads                                | DONE | GREEN | PASS |
-| LPL-OUT-JSON-ERROR      | Under `--output json` or equivalent `--json`, ordinary failures emit one stable error object on stderr          | DONE | GREEN | PASS |
+| LPL-OUT-JSON-ERROR      | Under `--output json` or equivalent `--json`, ordinary and ancillary-operation failures emit a stable error instead of a false success envelope | DONE | GREEN | PASS |
 | LPL-OUT-QUIET-JSON      | JSON stdout contains no progress, alias-resolution, warning, or confirmation text                               | DONE | GREEN | PASS |
 | LPL-OUT-LIST-RETIREDAT  | Human output distinguishes retired state; JSON/TSV expose nullable `retiredAt` without inference                | DONE | GREEN | PASS |
 | LPL-OUT-LIST-ARCHIVEDAT | Human output distinguishes archived state; JSON/TSV expose nullable `archivedAt` independently                  | DONE | GREEN | PASS |

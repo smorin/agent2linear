@@ -283,6 +283,11 @@ export async function validateReplyTarget(
       `comment '${commentId}' does not belong to ${target.type} '${target.id}'`
     );
   }
+  if (target.type === 'project' && nullableString(comment.projectUpdateId) !== null) {
+    throw new ConflictError(
+      `comment '${commentId}' belongs to a project update, not the project's direct comment thread`
+    );
+  }
 }
 
 export async function createComment(

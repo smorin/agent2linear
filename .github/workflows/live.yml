@@ -38,6 +38,18 @@ jobs:
         run: npx tsx tests/scripts/test-label-lifecycle-live.ts
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # M34 is read-only and proves that raw cursor continuation reaches page two
+      # and all remaining records in the exact ConceptM workspace.
+      - name: M34 raw-cursor pagination
+        run: node tests/scripts/test-pagination-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # M35 creates disposable issue/project comments only after exact ConceptM
+      # identity checks and removes its fixtures in a finally block.
+      - name: M35 issue and project comments
+        run: npx tsx tests/scripts/test-comments-live.ts
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       # Full live integration suite — creates real TEST_* entities in the throwaway
       # workspace; exits non-zero if any test fails.
       - name: Live integration suite

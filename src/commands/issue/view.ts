@@ -20,6 +20,19 @@ interface ViewOptions {
   noDesc?: boolean;
 }
 
+export function buildIssueViewJson(
+  issue: object,
+  comments: unknown[] | undefined,
+  commentsTruncated: boolean | undefined,
+  history: unknown[] | undefined
+): Record<string, unknown> {
+  return {
+    ...issue,
+    ...(comments === undefined ? {} : { comments, commentsTruncated: commentsTruncated === true }),
+    ...(history === undefined ? {} : { history }),
+  };
+}
+
 /**
  * Format date in human-readable format
  */
@@ -103,10 +116,13 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
     if (options.json) {
       // Fetch comments and history if requested
       let comments;
+      let commentsTruncated;
       let history;
 
       if (options.showComments) {
-        comments = (await getIssueCommentSummary(issueId)).comments;
+        const commentSummary = await getIssueCommentSummary(issueId);
+        comments = commentSummary.comments;
+        commentsTruncated = commentSummary.pageInfo.hasNextPage;
       }
 
       if (options.showHistory) {
@@ -115,11 +131,7 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
 
       console.log(
         JSON.stringify(
-          {
-            ...issue,
-            ...(comments && { comments }),
-            ...(history && { history }),
-          },
+          buildIssueViewJson(issue, comments, commentsTruncated, history),
           null,
           2
         )

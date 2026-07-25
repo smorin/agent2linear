@@ -417,7 +417,17 @@ export async function runLabelDelete(
     { yes: options.yes === true, noInput: options.input === false }
   );
   if (confirmation?.confirmed === false) {
-    dependencies.writeStdout('Deletion cancelled.\n');
+    if (mode === 'json') {
+      writeJson(dependencies, {
+        ok: false,
+        cancelled: true,
+        workspace: workspaceForJson(workspace),
+        operation: 'delete',
+        label: { type: kind, id, name: label.name },
+      });
+    } else {
+      dependencies.writeStdout('Deletion cancelled.\n');
+    }
     return;
   }
 
@@ -467,7 +477,17 @@ export async function runLabelLifecycle(
       { yes: options.yes === true, noInput: options.input === false }
     );
     if (confirmation?.confirmed === false) {
-      dependencies.writeStdout('Retirement cancelled.\n');
+      if (mode === 'json') {
+        writeJson(dependencies, {
+          ok: false,
+          cancelled: true,
+          workspace: workspaceForJson(workspace),
+          operation: 'retire',
+          label: { type: kind, id, name: label.name },
+        });
+      } else {
+        dependencies.writeStdout('Retirement cancelled.\n');
+      }
       return;
     }
   }

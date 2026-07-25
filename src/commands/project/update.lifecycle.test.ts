@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { confirmDestructiveAction } from '../../lib/confirm-destructive.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
-import { updateProject } from '../../lib/linear-client.js';
+import { createExternalLink, updateProject } from '../../lib/linear-client.js';
 import { resolveProject } from '../../lib/project-resolver.js';
 import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
 import { registerProjectCommands } from './register.js';
@@ -22,7 +22,7 @@ vi.mock('../../lib/linear-client.js', async () => {
   const actual = await vi.importActual<typeof import('../../lib/linear-client.js')>(
     '../../lib/linear-client.js'
   );
-  return { ...actual, updateProject: vi.fn() };
+  return { ...actual, createExternalLink: vi.fn(), updateProject: vi.fn() };
 });
 vi.mock('../../lib/project-resolver.js', () => ({
   resolveProject: vi.fn(),
@@ -168,5 +168,21 @@ describe('M33 project lifecycle runner', () => {
         removeDependencies: ['project-2'],
       },
     });
+  });
+
+  it('[PR17-R5] rejects a partial JSON result when an ancillary link mutation fails', async () => {
+    const stdout = arrange();
+    vi.mocked(createExternalLink).mockRejectedValue(new Error('invalid link'));
+
+    await expect(
+      updateProjectCommand('project-1', {
+        link: ['not-a-url|Broken'],
+        json: true,
+        yes: true,
+      })
+    ).rejects.toMatchObject({ code: 'runtime', exitCode: 1 });
+
+    expect(updateProject).toHaveBeenCalledWith('project-1', {});
+    expect(stdout).toEqual([]);
   });
 });

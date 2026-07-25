@@ -138,6 +138,47 @@ describe('walkPages', () => {
     expect(result.pageInfo.hasNextPage).toBe(true);
   });
 
+  it('[PR17-R1] does not advertise a next page when later edges cannot match', async () => {
+    const fetchPage = vi.fn(async () =>
+      page([
+        ['c1', item('1', 'only-match', true)],
+        ['c2', item('2', 'no', false)],
+        ['c3', item('3', 'also-no', false)],
+      ])
+    );
+
+    const result = await walkPages<Item>({
+      limit: 1,
+      fetchPage,
+      matches: node => node.matches === true,
+    });
+
+    expect(result.items.map(({ id }) => id)).toEqual(['1']);
+    expect(result.pageInfo).toEqual({
+      returnedCount: 1,
+      hasNextPage: false,
+      endCursor: null,
+      fetchedAll: true,
+    });
+  });
+
+  it('[PR17-R1] exhausts backend pages before declaring filtered continuation', async () => {
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce(page([['c1', item('1', 'only-match', true)]], true, 'backend-1'))
+      .mockResolvedValueOnce(page([['c2', item('2', 'no', false)]]));
+
+    const result = await walkPages<Item>({
+      limit: 1,
+      fetchPage,
+      matches: node => node.matches === true,
+    });
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(result.pageInfo.hasNextPage).toBe(false);
+    expect(result.pageInfo.endCursor).toBeNull();
+  });
+
   it('walks additional bounded backend pages until enough matches are found', async () => {
     const fetchPage = vi
       .fn()
