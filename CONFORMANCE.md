@@ -53,6 +53,10 @@ interfaces:
 - Project list newly enforces the documented maximum limit of 250.
 - Pagination usage failures use exit 2 instead of the older generic exit 1.
 
+**Release decision (2026-07-25):** the project owner accepted `v1.0.0` or
+later for the coordinated M33-M35 changes. This resolves R9.3 version selection;
+it does not waive the separate MUST-level nonconformances documented below.
+
 ## Pre-existing repository blockers outside M34
 
 The repository must not claim complete publishable-tier conformance until older
@@ -99,17 +103,20 @@ pinned `@linear/sdk` 61.x dependency.
   established nested-resource verb in agent2linear.
 - R3.9 SHOULD waiver: `--body-file` is retained instead of generic `--file`
   because it preserves the existing comment vocabulary and names the field.
-- R9.2 blocker: the user-directed legacy `issue comment <identifier>` removal
-  has no deprecation window.
-- R9.3 release blocker: the grammar break requires a major release;
-  `v1.0.0` is recommended. No version bump is part of this implementation.
+- R9.2 accepted nonconformance: the user-directed legacy
+  `issue comment <identifier>` removal has no deprecation window. The project
+  owner accepted this explicit exception on 2026-07-25, but it cannot be
+  described as R9.2-conformant.
+- R9.3 resolved decision: the grammar break ships only in the accepted
+  coordinated `v1.0.0`-or-later release. No version bump is part of this
+  implementation.
 - R10.2/R10.3: M34 remains the sole owner of the existing `--all` pagination
   waiver; M35 is only an adopter.
 - R5.5 remains a pre-existing repository blocker because global
   `--api-key <key>` still permits a secret on argv.
 
-M35 does not claim whole-repository publishable conformance while these blockers
-remain. Its 318-ID status and evidence map is
+M35 does not claim whole-repository publishable conformance while the R9.2 and
+pre-existing R5.5 blockers remain. Its 318-ID status and evidence map is
 `docs/superpowers/plans/2026-07-24-M35-traceability.md`.
 
 ## M33 label lifecycle and project-trash conformance
@@ -127,7 +134,7 @@ Live ConceptM proof confirmed that project trash must use `projectArchive(id, { 
 - R2.1 SHOULD waiver: reversible project trash remains an option on `project update` rather than a standalone `delete` command. This matches existing issue lifecycle behavior and avoids implying permanent deletion.
 - R10.2/R10.3: M34 remains the sole owner of the established `--all` pagination waiver. M33 is an adopter and adds no synonym.
 - R9.2: `labels|lbl` emits a deprecation warning and names both canonical replacements, with removal targeted for v2.0.0.
-- R9.3 release blocker: corrected `project-labels --all` scope ships only on the coordinated major release; v1.0.0 remains the recommendation. No release action is part of M33.
+- R9.3 resolved decision: corrected `project-labels --all` scope ships only on the accepted coordinated `v1.0.0`-or-later release. No release action is part of M33.
 - R5.5 and the global config/debug/verbosity gaps listed above remain whole-repository blockers outside M33.
 
 M33's 317 atomic statuses and evidence are recorded in

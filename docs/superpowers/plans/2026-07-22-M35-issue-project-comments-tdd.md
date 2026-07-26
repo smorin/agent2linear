@@ -1,9 +1,9 @@
 # Issue and Project Comments — ID-Level TDD Project Plan
 
-> **Plan status:** Implemented and verified in the dedicated worktree; all 318 atomic IDs have published completion evidence. Release-only CLI Standard R9.2/R9.3 blockers remain open.
+> **Plan status:** Implemented and verified in the dedicated worktree; all 318 atomic IDs have published completion evidence. The project owner accepted the coordinated `v1.0.0`-or-later path on 2026-07-25, resolving R9.3 version selection while retaining the explicit R9.2 nonconformance.
 >
-> **Milestone:** M35 — First-class Issue and Project Comments (breaking release; version decision
-> required, with `v1.0.0` recommended by CLI Design Standard R9.3).
+> **Milestone:** M35 — First-class Issue and Project Comments (breaking release; `v1.0.0` or later
+> accepted under CLI Design Standard R9.3).
 >
 > **Authoritative artifact:** This file is the contract, status ledger, and evidence index for M35.
 >
@@ -408,13 +408,13 @@ try: a2l issue comment add ENG-123 --body "I reproduced this."
 ```
 
 This is intentionally incompatible with CLI Design Standard R9.2's deprecation-window MUST. It is
-also a breaking interface change under R9.3. Because this repository currently maps milestone M35
-to a likely `v0.35.0`, the release decision is a blocker rather than a waivable SHOULD:
+also a breaking interface change under R9.3. On 2026-07-25 the project owner accepted the
+coordinated `v1.0.0`-or-later release path. That resolves the R9.3 version decision but does not
+convert the R9.2 MUST-level nonconformance into a conforming waiver:
 
-- **Recommended enhancement:** ship M35 as `v1.0.0`, making the grammar break visible as a major
-  release.
-- If the project ships it as `v0.35.0`, record an unresolved R9.3 blocker; do not claim publishable
-  conformance.
+- Ship M35 only in `v1.0.0` or later, making the grammar break visible as a major release.
+- Do not ship it as `v0.35.0`; that would reopen the R9.3 blocker and invalidate the accepted
+  release decision.
 - Do not reintroduce the legacy syntax solely to avoid the version decision; the user explicitly
   chose removal.
 
@@ -993,17 +993,17 @@ optional fields but stable within the selected major release.
 
 ### 8.6 Existing `issue view --show-comments`
 
-| ID                             | Contract                   | Atomic behavior                                                         | I        | T   | V   |
-| ------------------------------ | -------------------------- | ----------------------------------------------------------------------- | -------- | --- | --- |
-| `CMT-VIEW-OPTION`              | existing `--show-comments` | Preserve spelling and opt-in behavior                                   | BASELINE | NS  | NS  |
-| `CMT-VIEW-LIMIT`               | summary bound              | Explicit first 50; do not expose comment-list options on view           | NS       | NS  | NS  |
-| `CMT-VIEW-HELP`                | help wording               | Replace “all comments” with “up to 50 comments”                         | NS       | NS  | NS  |
-| `CMT-VIEW-HUMAN-SHAPE`         | human rendering            | Preserve existing Comments section/thread presentation                  | BASELINE | NS  | NS  |
+| ID                             | Contract                   | Atomic behavior                                                                                                            | I        | T   | V   |
+| ------------------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- | --- | --- |
+| `CMT-VIEW-OPTION`              | existing `--show-comments` | Preserve spelling and opt-in behavior                                                                                      | BASELINE | NS  | NS  |
+| `CMT-VIEW-LIMIT`               | summary bound              | Explicit first 50; do not expose comment-list options on view                                                              | NS       | NS  | NS  |
+| `CMT-VIEW-HELP`                | help wording               | Replace “all comments” with “up to 50 comments”                                                                            | NS       | NS  | NS  |
+| `CMT-VIEW-HUMAN-SHAPE`         | human rendering            | Preserve existing Comments section/thread presentation                                                                     | BASELINE | NS  | NS  |
 | `CMT-VIEW-JSON-SHAPE`          | JSON rendering             | Preserve embedded `comments` array and comment fields; add sibling `commentsTruncated` boolean when comments are requested | BASELINE | NS  | NS  |
-| `CMT-VIEW-TRUNCATION`          | more comments              | Human hint names `issue comment list <target> --all`; JSON reports `commentsTruncated: true` | NS       | NS  | NS  |
-| `CMT-VIEW-NO-HISTORY`          | embedded summary           | Never create an M34 cursor-history entry from `issue view`              | NS       | NS  | NS  |
-| `CMT-VIEW-ERROR`               | fetch failure              | Propagate normalized failure; never render false empty state            | NS       | NS  | NS  |
-| `CMT-VIEW-NO-PAGINATION-FLAGS` | view option isolation      | Reject `--after`, `--limit`, and `--all` on `issue view`                | BASELINE | NS  | NS  |
+| `CMT-VIEW-TRUNCATION`          | more comments              | Human hint names `issue comment list <target> --all`; JSON reports `commentsTruncated: true`                               | NS       | NS  | NS  |
+| `CMT-VIEW-NO-HISTORY`          | embedded summary           | Never create an M34 cursor-history entry from `issue view`                                                                 | NS       | NS  | NS  |
+| `CMT-VIEW-ERROR`               | fetch failure              | Propagate normalized failure; never render false empty state                                                               | NS       | NS  | NS  |
+| `CMT-VIEW-NO-PAGINATION-FLAGS` | view option isolation      | Reject `--after`, `--limit`, and `--all` on `issue view`                                                                   | BASELINE | NS  | NS  |
 
 ---
 
@@ -1025,27 +1025,27 @@ optional fields but stable within the selected major release.
 
 ### 9.2 Decisions and deviations
 
-| Rule/convention                 | Standard or repository precedent                                               | M35 decision                                                     | Classification and recommendation                                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R2.1 canonical verb             | Standard SHOULD prefers `create`; local nested resources use `add/list/remove` | Use `comment add`                                                | SHOULD waiver. Local consistency and natural “add a comment” language outweigh a comment-only `create` island. Record owner/date in `CONFORMANCE.md`. |
-| R3.9 request-body file          | Standard SHOULD prefers `--file`; existing issue comment uses `--body-file`    | Keep `--body-file`, add `-`/implicit stdin                       | SHOULD waiver. Field-specific name preserves current user vocabulary and leaves room for future non-body files.                                       |
-| R3.4 short flags                | Standard reserves `-f` for force                                               | No short body-file flag; use `-o` and `-y` only                  | Conforming.                                                                                                                                           |
-| R4.2 output                     | Standard MUST uses `-o/--output`; `--json` equivalent                          | Use both on all four leaves                                      | Conforming to Standard; intentional deviation from older local `-f/--format` commands.                                                                |
-| R6.1 exits                      | Standard differentiates 0–5/130/143; current comment command uses 1            | New commands use differentiated exits                            | Conforming forward behavior; explicit local behavior change.                                                                                          |
-| R7.2 list JSON                  | Existing list commands usually emit bare arrays                                | Emit `{target,comments,pageInfo,cursorHistory}`                  | Stable new-command envelope; M34 coordinates existing-list major migration.                                                                           |
-| R7.11 ordering                  | Lists SHOULD document deterministic order                                      | Request `createdAt`; preserve returned order                     | Conforming. Do not claim ascending/descending beyond Linear's API contract unless verified.                                                           |
-| R8.6 dry-run                    | Dry-run SHOULD identify side effects and validation level                      | Emit resolved target/body/parent and `serverMutation:false`      | Conforming.                                                                                                                                           |
-| R8.5 noninteractive             | Every prompt needs explicit noninteractive control                             | Add `--no-input` to both add commands; it never implies consent  | Conforming; depends on M33 shared confirmation/workspace safety.                                                                                      |
-| R9.2 removal                    | MUST warn, retain hidden alias, and publish removal timeline                   | Remove legacy syntax immediately                                 | **MUST blocker by explicit user direction.** Cannot be waived. Release note exact migration and acknowledge nonconformance.                           |
-| R9.3 versioning                 | Breaking interface MUST be major version                                       | Recommend M35 ship as `v1.0.0`                                   | **Release blocker** if shipped as `v0.35.0`; resolve version before release.                                                                          |
-| R9.5 mutation retries           | Never blindly retry non-idempotent mutations                                   | No automatic comment-create retry                                | Conforming.                                                                                                                                           |
-| R10.2/R10.3 pagination spelling | Standard uses `--paginate`; local lists use `--all`                            | Adopt M34 raw `--after` and `-a/--all`                           | Shared SHOULD waiver retained for local parity; M34 owns it.                                                                                          |
-| R10.3 bounded default           | Bounded documented first page plus more-results hint                           | Default 50 and actionable cursor footer                          | Conforming.                                                                                                                                           |
-| R5.5 secret argv                | Standard forbids secrets in argv                                               | M35 inherits existing `--api-key <key>`                          | Pre-existing repository MUST blocker, outside comment implementation. M35 adds the two-stdin conflict but must not claim full conformance.            |
-| Human list default              | Existing lists are human-first                                                 | `table` default rendered as stacked thread records               | Consistent. No existing default changes.                                                                                                              |
-| Human cursor visibility         | Existing lists expose no cursor                                                | Show next/all-remaining commands, raw cursor, and history ID     | M34 addition necessary for human page two and later inspection.                                                                                       |
-| Cursor context                  | Raw Linear cursor carries no readable query context                            | Persist sanitized advisory M34 history by default; allow opt-out | Explicit user decision; history never validates or rewrites raw cursor.                                                                               |
-| Project comment scope           | Linear project updates have separate comments                                  | Direct project comments only                                     | Explicit scope guard; do not overload terms.                                                                                                          |
+| Rule/convention                 | Standard or repository precedent                                               | M35 decision                                                     | Classification and recommendation                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R2.1 canonical verb             | Standard SHOULD prefers `create`; local nested resources use `add/list/remove` | Use `comment add`                                                | SHOULD waiver. Local consistency and natural “add a comment” language outweigh a comment-only `create` island. Record owner/date in `CONFORMANCE.md`.       |
+| R3.9 request-body file          | Standard SHOULD prefers `--file`; existing issue comment uses `--body-file`    | Keep `--body-file`, add `-`/implicit stdin                       | SHOULD waiver. Field-specific name preserves current user vocabulary and leaves room for future non-body files.                                             |
+| R3.4 short flags                | Standard reserves `-f` for force                                               | No short body-file flag; use `-o` and `-y` only                  | Conforming.                                                                                                                                                 |
+| R4.2 output                     | Standard MUST uses `-o/--output`; `--json` equivalent                          | Use both on all four leaves                                      | Conforming to Standard; intentional deviation from older local `-f/--format` commands.                                                                      |
+| R6.1 exits                      | Standard differentiates 0–5/130/143; current comment command uses 1            | New commands use differentiated exits                            | Conforming forward behavior; explicit local behavior change.                                                                                                |
+| R7.2 list JSON                  | Existing list commands usually emit bare arrays                                | Emit `{target,comments,pageInfo,cursorHistory}`                  | Stable new-command envelope; M34 coordinates existing-list major migration.                                                                                 |
+| R7.11 ordering                  | Lists SHOULD document deterministic order                                      | Request `createdAt`; preserve returned order                     | Conforming. Do not claim ascending/descending beyond Linear's API contract unless verified.                                                                 |
+| R8.6 dry-run                    | Dry-run SHOULD identify side effects and validation level                      | Emit resolved target/body/parent and `serverMutation:false`      | Conforming.                                                                                                                                                 |
+| R8.5 noninteractive             | Every prompt needs explicit noninteractive control                             | Add `--no-input` to both add commands; it never implies consent  | Conforming; depends on M33 shared confirmation/workspace safety.                                                                                            |
+| R9.2 removal                    | MUST warn, retain hidden alias, and publish removal timeline                   | Remove legacy syntax immediately                                 | **Accepted nonconformance by explicit user direction (2026-07-25).** Cannot be claimed as a conforming waiver; release notes must give the exact migration. |
+| R9.3 versioning                 | Breaking interface MUST be major version                                       | Ship M35 only as `v1.0.0` or later                               | **Resolved 2026-07-25.** The project owner accepted the coordinated major-release path; a `v0.35.0` release remains prohibited.                             |
+| R9.5 mutation retries           | Never blindly retry non-idempotent mutations                                   | No automatic comment-create retry                                | Conforming.                                                                                                                                                 |
+| R10.2/R10.3 pagination spelling | Standard uses `--paginate`; local lists use `--all`                            | Adopt M34 raw `--after` and `-a/--all`                           | Shared SHOULD waiver retained for local parity; M34 owns it.                                                                                                |
+| R10.3 bounded default           | Bounded documented first page plus more-results hint                           | Default 50 and actionable cursor footer                          | Conforming.                                                                                                                                                 |
+| R5.5 secret argv                | Standard forbids secrets in argv                                               | M35 inherits existing `--api-key <key>`                          | Pre-existing repository MUST blocker, outside comment implementation. M35 adds the two-stdin conflict but must not claim full conformance.                  |
+| Human list default              | Existing lists are human-first                                                 | `table` default rendered as stacked thread records               | Consistent. No existing default changes.                                                                                                                    |
+| Human cursor visibility         | Existing lists expose no cursor                                                | Show next/all-remaining commands, raw cursor, and history ID     | M34 addition necessary for human page two and later inspection.                                                                                             |
+| Cursor context                  | Raw Linear cursor carries no readable query context                            | Persist sanitized advisory M34 history by default; allow opt-out | Explicit user decision; history never validates or rewrites raw cursor.                                                                                     |
+| Project comment scope           | Linear project updates have separate comments                                  | Direct project comments only                                     | Explicit scope guard; do not overload terms.                                                                                                                |
 
 ### 9.3 Proposed upstream standard amendment
 
@@ -1122,7 +1122,7 @@ list: output=table, limit=50, after=null, all=false, cursorHistory=true
 | `CMT-DOC-README-OUTPUT`       | `README.md`                    | human defaults, JSON envelopes, pageInfo, stream rules                        | NS   | NS  | NS   |
 | `CMT-DOC-README-ERRORS`       | `README.md` or error reference | stable codes and exits 0–5/130/143                                            | NS   | NS  | NS   |
 | `CMT-DOC-MIGRATION`           | migration/release note         | Exact old→new command examples; no claim of compatibility                     | NS   | NS  | NS   |
-| `CMT-DOC-BREAKING-VERSION`    | release metadata               | Resolve v1.0.0 recommendation or retain explicit R9.3 blocker                 | NS   | NS  | NS   |
+| `CMT-DOC-BREAKING-VERSION`    | release metadata               | Record accepted v1.0.0-or-later path and retain explicit R9.2 nonconformance  | DONE | N/A | PASS |
 | `CMT-DOC-CHANGELOG`           | `CHANGELOG.md`                 | Direct project support, pagination, issue-view correction, breaking route     | NS   | NS  | NS   |
 | `CMT-DOC-CONFORMANCE`         | `CONFORMANCE.md`               | Pin v1.4.14; M35 waivers/blockers; cite M34 as sole R10.2/R10.3 waiver owner  | NS   | NS  | NS   |
 | `CMT-DOC-M34-DEPENDENCIES`    | M35/M34 dependency record      | Preserve §3.3 exact adopter map and reject unknown/stale `CPH-*` references   | NS   | NS  | NS   |
@@ -1332,8 +1332,8 @@ traceability reports zero omissions.
 6. Recompute every command and milestone rollup from atomic rows.
 
 **Release gate:** any `NS`, `RED`, `FAIL`, or `BLOCKED` in scope prevents release. R9.2 remains an
-acknowledged user-directed blocker; R9.3 must be resolved by the chosen release version before
-claiming a passing release gate.
+acknowledged user-directed nonconformance, so the repository must not claim full R9.2 compliance.
+R9.3 version selection is resolved by the accepted `v1.0.0`-or-later release path.
 
 ### 11.1 Planned file structure
 
@@ -1422,6 +1422,7 @@ Implementation appends rows; existing rows must never be rewritten to hide a pri
 | 2026-07-24 | `CMT-TST-TRACE` | RED | Re-run traceability after Markdown formatting | Machine audit still recognizes all 318 ledger and completion rows | RED: strict single-space table regex recognized only 26 formatted plan rows | traceability checker and formatted plan | working-tree | Documentation-format regression; implementation evidence remained intact |
 | 2026-07-24 | `CMT-TST-TRACE` | IMPLEMENT | Make trace parser accept semantically equivalent aligned Markdown-table whitespace | Prettier alignment cannot hide tracked IDs or completion rows | Parser now tolerates column padding while preserving exact ID/status/evidence validation | `src/lib/m35-traceability.test.ts` | working-tree | No contract relaxation |
 | 2026-07-24 | `CMT-TST-TRACE` / `CMT-VER-TRACE` | GREEN | `npx vitest run src/lib/m35-traceability.test.ts` | Exactly 318 unique IDs remain auditable after formatting | PASS: 2 tests; exact 318-row equality and project-query contract | plan, trace report, checker | working-tree | Closeout regression resolved |
+| 2026-07-25 | `CMT-DOC-BREAKING-VERSION` | VERIFY | Record project-owner release decision | Resolve R9.3 version selection without obscuring R9.2 nonconformance | PASS: coordinated `v1.0.0`-or-later path accepted; `v0.35.0` prohibited; R9.2 exception remains explicit | MILESTONES.md, CONFORMANCE.md, this plan | decision worktree | No version bump, publish, or release action authorized |
 
 ---
 
@@ -1454,5 +1455,5 @@ M35 implementation is complete only when:
 8. issue-view compatibility assertions pass except for the explicit corrections;
 9. the traceability audit finds no missing, duplicate, unknown, or orphaned IDs;
 10. all deviations/blockers remain visible in conformance and release documentation;
-11. the release version resolves R9.3 or the handoff explicitly says release remains blocked; and
+11. the release remains on the accepted `v1.0.0`-or-later path that resolves R9.3; and
 12. the main checkout remains untouched by implementation work.
