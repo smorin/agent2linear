@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Complete `issue-labels|ilbl` and `project-labels|plbl` lifecycle management with create, view, update, delete, retire, restore, dry-run, guarded writes, human output, and stable JSON results.
+- Raw-cursor label pagination with a default of 50, strict 1–250 limits, `--after`, `-a/--all`, `--include-retired`, cursor history, and copyable page-two commands.
+- Reversible `project update --trash|--untrash` using Linear's supported project archive/unarchive lifecycle.
+- Fail-closed ConceptM live verification covering label catalogs, applied and unused definitions, raw cursor traversal, independent retirement/archive timestamps, project trash/untrash, and fixture cleanup.
+
+- First-class `issue comment add|list` and `project comment add|list` commands with replies, file/stdin body input, dry-run, human output, stable JSON envelopes, raw-cursor continuation, and cursor history.
+- Guarded ConceptM live verification for direct issue/project comments, replies, page-two traversal, all-remaining traversal, and fixture cleanup.
+- Shared raw-cursor pagination with `--after`, bounded `--limit`, and
+  `-a/--all` traversal for issue and project lists.
+- Local `cursor-history list|view|clear` commands backed by locked atomic XDG
+  state, a 1,000-entry retention cap, safe reconstructed commands, and
+  `--no-cursor-history` opt-out.
+- Human next-page/all-remaining commands and stable JSON `pageInfo` plus
+  `cursorHistory` metadata.
+- Offline cursor-history lifecycle and multiprocess writer verification.
+- Fail-closed ConceptM live pagination verification for issue/project page-two and all-remaining traversal.
+
+### Changed
+
+- **Breaking:** `project-labels list --all` now exhausts the same workspace catalog as bounded mode; it no longer implies archived scope. Use `--include-retired` independently.
+- Label lists preserve Linear's explicit `createdAt` order and return stable pagination envelopes in JSON.
+- `labels|lbl list|ls` is now a deprecation/help shim that names the canonical issue-label and project-label list commands.
+
+- **Breaking:** replace legacy `issue comment <identifier>` with `issue comment add <identifier>`; the removed route exits 2 with a migration suggestion.
+- `issue view --show-comments` now documents and enforces its 50-comment summary role, reports truncation, and propagates fetch failures instead of treating them as empty threads.
+- Direct project-comment reads use the live-proven top-level project-filtered comment connection; project-update comments remain excluded.
+- **Breaking:** issue/project list JSON results are resource envelopes rather than
+  bare arrays.
+- **Breaking:** issue/project list result selection uses `-o/--output` and
+  `--json`; legacy `-f/--format` is removed.
+- Limits use strict full-token integer parsing in the inclusive range 1–250.
+- Project `-l/--lead` remains unchanged; project `--limit` remains long-only.
+- Project traversal uses internal pages of 50 to remain below Linear GraphQL complexity limits while preserving the public 1–250 result bound.
+- Pagination/auth/usage failures use differentiated exits 1–5.
+
 ## [0.24.0] - 2025-11-03
 
 ### Changed - Package Rename

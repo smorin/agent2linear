@@ -174,15 +174,16 @@
 
   Test Output & Cleanup
 
-  Tests create real Linear projects but do not auto-delete them. After running tests:
+  Tests create real Linear projects but legacy suites do not automatically trash them. After running tests:
 
   # Cleanup scripts are auto-generated
   ./cleanup-create-projects.sh  # Lists projects to delete
   ./cleanup-update-projects.sh  # Lists updated projects
   ./cleanup-all-projects.sh     # Combined cleanup
 
-  # Note: Currently requires manual deletion via Linear UI
-  # (Waiting for 'project delete' command implementation)
+  # Reversible CLI cleanup for each listed ID:
+  a2l project update <project-id> --trash -y
+  # Restore when needed with: a2l project update <project-id> --untrash -y
 
   Verification Process
 

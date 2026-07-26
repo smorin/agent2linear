@@ -1,7 +1,7 @@
 import { Argument, Command } from 'commander';
 
 import { runPromptGet } from '../prompt/get.js';
-import { commentIssueCommand } from './comment.js';
+import { registerIssueCommentCommands } from './comment/register.js';
 import { createIssueCommand } from './create.js';
 import { registerIssueListCommand } from './list.js';
 import { updateIssueCommand } from './update.js';
@@ -20,13 +20,15 @@ export function registerIssueCommands(cli: Command): void {
     .description('View an issue by identifier (e.g., ENG-123) or UUID')
     .option('--json', 'Output in JSON format')
     .option('-w, --web', 'Open issue in web browser')
-    .option('--show-comments', 'Display issue comments')
+    .option('--show-comments', 'Display up to 50 issue comments')
     .option('--show-history', 'Display issue history')
     .option('--desc', 'Show truncated description preview (default 80 chars)')
     .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
     .option('--desc-full', 'Show full description (default behavior, explicit)')
     .option('--no-desc', 'Hide description from output')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   $ agent2linear issue view ENG-123                    # View issue by identifier
   $ agent2linear issue view <uuid>                     # View issue by UUID
@@ -46,9 +48,10 @@ The view command displays comprehensive issue information including:
   • Relationships: parent issue, sub-issues
   • Creator information
 
-Use --show-comments to see all comments on the issue.
+Use --show-comments to see up to 50 comments; use issue comment list for pagination.
 Use --show-history to see the change history.
-`)
+`
+    )
     .action(async (identifier, options) => {
       await viewIssue(identifier, options);
     });
@@ -59,12 +62,18 @@ Use --show-history to see the change history.
     .option('--title <string>', 'Issue title (required)')
     .option('--team <id|alias>', 'Team ID or alias (required unless defaultTeam configured)')
     .option('--description <string>', 'Issue description (markdown)')
-    .option('--description-file <path>', 'Read description from file (mutually exclusive with --description)')
+    .option(
+      '--description-file <path>',
+      'Read description from file (mutually exclusive with --description)'
+    )
     .option('--priority <0-4>', 'Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low')
     .option('--estimate <number>', 'Story points or time estimate')
     .option('--state <id|alias>', 'Workflow state ID or alias (must belong to team)')
     .option('--due-date <YYYY-MM-DD>', 'Due date in ISO format')
-    .option('--assignee <id|alias|email|name>', 'Assign to user (ID, alias, email, or display name)')
+    .option(
+      '--assignee <id|alias|email|name>',
+      'Assign to user (ID, alias, email, or display name)'
+    )
     .option('--no-assignee', 'Create unassigned (overrides default auto-assignment)')
     .option('--subscribers <list>', 'Comma-separated list of subscriber IDs, aliases, or emails')
     .option('--project <id|alias|name>', 'Project ID, alias, or name (must belong to same team)')
@@ -76,7 +85,9 @@ Use --show-history to see the change history.
     .option('--dry-run', 'Preview the payload without creating the issue')
     .option('--json', 'Output the created issue + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   # Minimal (uses defaultTeam, auto-assigns to you)
   $ agent2linear issue create --title "Fix login bug"
@@ -148,8 +159,9 @@ Config Defaults:
   Set defaults with:
     $ agent2linear config set defaultTeam <team-id>
     $ agent2linear config set defaultProject <project-id>
-`)
-    .action(async (options) => {
+`
+    )
+    .action(async options => {
       await createIssueCommand(options);
     });
 
@@ -158,8 +170,15 @@ Config Defaults:
     .description('Update an existing Linear issue by identifier (ENG-123) or UUID')
     .option('--title <string>', 'Update issue title')
     .option('--description <string>', 'Update description (markdown)')
-    .option('--description-file <path>', 'Read description from file (mutually exclusive with --description)')
-    .option('--priority <0-4>', 'Update priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low', parseInt)
+    .option(
+      '--description-file <path>',
+      'Read description from file (mutually exclusive with --description)'
+    )
+    .option(
+      '--priority <0-4>',
+      'Update priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low',
+      parseInt
+    )
     .option('--estimate <number>', 'Update estimate', parseFloat)
     .option('--no-estimate', 'Clear estimate')
     .option('--state <id|alias>', 'Update workflow state (must belong to team)')
@@ -184,10 +203,16 @@ Config Defaults:
     .option('--untrash', 'Restore issue from trash')
     .option('-w, --web', 'Open updated issue in browser')
     .option('--dry-run', 'Preview the payload without updating the issue')
-    .option('--bulk <identifiers>', 'Apply same update to multiple issues (comma-separated identifiers)')
+    .option(
+      '--bulk <identifiers>',
+      'Apply same update to multiple issues (comma-separated identifiers)'
+    )
     .option('--json', 'Output the updated issue + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
-    .addHelpText('after', `
+    .option('--no-input', 'Never prompt; fail if explicit consent is required')
+    .addHelpText(
+      'after',
+      `
 Examples:
   # Update single field
   $ agent2linear issue update ENG-123 --title "New title"
@@ -267,7 +292,8 @@ Member Resolution:
     • Alias: john (from aliases.json)
     • Email: john@company.com
     • Display name: "John Doe"
-`)
+`
+    )
     .action(async (identifier, options) => {
       await updateIssueCommand(identifier, options);
     });
@@ -283,9 +309,17 @@ Member Resolution:
     .addArgument(new Argument('[name]', 'Exact prompt name to fetch (highest precedence)'))
     .description('Print the applicable issue prompt (alias for `prompt get`)')
     .option('--team <id|alias>', 'Select the team layer (a promptRule for this team must exist)')
-    .option('--force', 'With an explicit --team, take the team prompt first (outranks a location override); error if no rule matches')
-    .option('--json', 'Output a machine-readable { name, source, selection, body, context } envelope')
-    .addHelpText('after', `
+    .option(
+      '--force',
+      'With an explicit --team, take the team prompt first (outranks a location override); error if no rule matches'
+    )
+    .option(
+      '--json',
+      'Output a machine-readable { name, source, selection, body, context } envelope'
+    )
+    .addHelpText(
+      'after',
+      `
 Alias for \`agent2linear prompt get\` — see that command for full selection precedence.
 
 Examples:
@@ -293,26 +327,16 @@ Examples:
   $ agent2linear issue prompt payments-issue        # an exact prompt by unique name
   $ agent2linear issue prompt --team payments       # the team-layer prompt for the payments team
   $ agent2linear issue prompt --json                # structured envelope (for agents)
-`)
-    .action(async (name: string | undefined, options: { json?: boolean; team?: string; force?: boolean }) => {
-      await runPromptGet(name, options);
-    });
+`
+    )
+    .action(
+      async (
+        name: string | undefined,
+        options: { json?: boolean; team?: string; force?: boolean }
+      ) => {
+        await runPromptGet(name, options);
+      }
+    );
 
-  // Issue comment subcommand
-  issue
-    .command('comment <identifier>')
-    .description('Add a comment to an issue')
-    .option('--body <text>', 'Comment body (markdown)')
-    .option('--body-file <path>', 'Read comment body from file')
-    .addHelpText('after', `
-Examples:
-  $ agent2linear issue comment ENG-123 --body "This is done"
-  $ agent2linear issue comment ENG-123 --body-file notes.md
-
-The identifier can be an issue identifier (ENG-123) or UUID.
-Comment body supports markdown formatting.
-`)
-    .action(async (identifier, options) => {
-      await commentIssueCommand(identifier, options);
-    });
+  registerIssueCommentCommands(issue);
 }

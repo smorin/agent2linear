@@ -1,7 +1,11 @@
 import { openInBrowser } from '../../lib/browser.js';
 import { handleLinearError, isLinearError } from '../../lib/error-handler.js';
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
-import { getFullIssueById, getIssueComments, getIssueHistory } from '../../lib/linear-client.js';
+import {
+  getFullIssueById,
+  getIssueCommentSummary,
+  getIssueHistory,
+} from '../../lib/linear-client.js';
 import { formatContentPreview } from '../../lib/output.js';
 
 interface ViewOptions {
@@ -14,6 +18,19 @@ interface ViewOptions {
   descLength?: string;
   descFull?: boolean;
   noDesc?: boolean;
+}
+
+export function buildIssueViewJson(
+  issue: object,
+  comments: unknown[] | undefined,
+  commentsTruncated: boolean | undefined,
+  history: unknown[] | undefined
+): Record<string, unknown> {
+  return {
+    ...issue,
+    ...(comments === undefined ? {} : { comments, commentsTruncated: commentsTruncated === true }),
+    ...(history === undefined ? {} : { history }),
+  };
 }
 
 /**
@@ -99,10 +116,13 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
     if (options.json) {
       // Fetch comments and history if requested
       let comments;
+      let commentsTruncated;
       let history;
 
       if (options.showComments) {
-        comments = await getIssueComments(issueId);
+        const commentSummary = await getIssueCommentSummary(issueId);
+        comments = commentSummary.comments;
+        commentsTruncated = commentSummary.pageInfo.hasNextPage;
       }
 
       if (options.showHistory) {
@@ -111,11 +131,7 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
 
       console.log(
         JSON.stringify(
-          {
-            ...issue,
-            ...(comments && { comments }),
-            ...(history && { history }),
-          },
+          buildIssueViewJson(issue, comments, commentsTruncated, history),
           null,
           2
         )
@@ -240,7 +256,8 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       console.log('💬 Comments:');
       console.log('─'.repeat(80));
 
-      const comments = await getIssueComments(issueId);
+      const commentSummary = await getIssueCommentSummary(issueId);
+      const comments = commentSummary.comments;
 
       if (comments.length === 0) {
         console.log('No comments yet.');
@@ -252,6 +269,11 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       }
 
       console.log('─'.repeat(80));
+      if (commentSummary.pageInfo.hasNextPage) {
+        console.log(
+          'More comments are available. Run: a2l issue comment list ' + identifier + ' --all'
+        );
+      }
       console.log('');
     }
 

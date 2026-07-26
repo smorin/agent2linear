@@ -1,6 +1,7 @@
 import { Command, Option } from 'commander';
 
 import { addMilestones } from './add-milestones.js';
+import { registerProjectCommentCommands } from './comment/register.js';
 import { createProjectCommand } from './create.js';
 import { listProjectsCommand } from './list.js';
 import { updateProjectCommand } from './update.js';
@@ -34,17 +35,32 @@ export function registerProjectCommands(cli: Command): void {
     .option('--lead <id>', 'Project lead user ID (format: user_xxx)')
     .option('--no-lead', 'Do not assign a project lead (overrides auto-assign)')
     .option('--labels <ids>', 'Comma-separated project label IDs (e.g., label_1,label_2)')
-    .option('--link <url-and-label>', 'External link as "URL" or "URL|Label" (can be specified multiple times)', (value, previous: string[] = []) => [...previous, value], [])
-    .option('--converted-from <id>', 'Issue ID this project was converted from (format: issue_xxx)')
-    .option('--start-date <date>', 'Planned start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
-    .addOption(
-      new Option('--start-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Only needed when date format doesn\'t match your intent. Example: --start-date 2025-01-15 --start-date-resolution quarter (mid-month date representing Q1)')
-        .choices(['month', 'quarter', 'halfYear', 'year'])
+    .option(
+      '--link <url-and-label>',
+      'External link as "URL" or "URL|Label" (can be specified multiple times)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
     )
-    .option('--target-date <date>', 'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
+    .option('--converted-from <id>', 'Issue ID this project was converted from (format: issue_xxx)')
+    .option(
+      '--start-date <date>',
+      'Planned start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.'
+    )
     .addOption(
-      new Option('--target-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Only needed when date format doesn\'t match your intent. Example: --target-date 2025-01-15 --target-date-resolution quarter (mid-month date representing Q1)')
-        .choices(['month', 'quarter', 'halfYear', 'year'])
+      new Option(
+        '--start-date-resolution <resolution>',
+        "Override auto-detected resolution (advanced). Only needed when date format doesn't match your intent. Example: --start-date 2025-01-15 --start-date-resolution quarter (mid-month date representing Q1)"
+      ).choices(['month', 'quarter', 'halfYear', 'year'])
+    )
+    .option(
+      '--target-date <date>',
+      'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.'
+    )
+    .addOption(
+      new Option(
+        '--target-date-resolution <resolution>',
+        "Override auto-detected resolution (advanced). Only needed when date format doesn't match your intent. Example: --target-date 2025-01-15 --target-date-resolution quarter (mid-month date representing Q1)"
+      ).choices(['month', 'quarter', 'halfYear', 'year'])
     )
     .addOption(
       new Option('--priority <priority>', 'Project priority')
@@ -52,13 +68,26 @@ export function registerProjectCommands(cli: Command): void {
         .argParser(parseInt)
     )
     .option('--members <ids>', 'Comma-separated member user IDs (e.g., user_1,user_2)')
-    .option('--depends-on <projects>', 'Projects this depends on (comma-separated IDs/aliases) - end→start anchor')
-    .option('--blocks <projects>', 'Projects this blocks (comma-separated IDs/aliases) - creates dependencies where other projects depend on this')
-    .option('--dependency <spec>', 'Advanced: "project:myAnchor:theirAnchor" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
+    .option(
+      '--depends-on <projects>',
+      'Projects this depends on (comma-separated IDs/aliases) - end→start anchor'
+    )
+    .option(
+      '--blocks <projects>',
+      'Projects this blocks (comma-separated IDs/aliases) - creates dependencies where other projects depend on this'
+    )
+    .option(
+      '--dependency <spec>',
+      'Advanced: "project:myAnchor:theirAnchor" (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
     .option('--dry-run', 'Preview the payload without creating the project')
     .option('--json', 'Output the created project + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   Basic (auto-assigns you as lead):
   $ agent2linear project create --title "My Project" --team team_xyz789
@@ -159,7 +188,8 @@ Note: Set defaults with config:
   $ agent2linear config set defaultAutoAssignLead true  # Enable auto-assign (default)
   $ agent2linear config set defaultAutoAssignLead false  # Disable auto-assign
   $ agent2linear teams select  # Set default team
-`)
+`
+    )
     .action(async options => {
       await createProjectCommand(options);
     });
@@ -173,7 +203,9 @@ Note: Set defaults with config:
     .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
     .option('--desc-full', 'Show full description (no truncation)')
     .option('--no-desc', 'Hide description')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   $ agent2linear project view PRJ-123                    # By ID
   $ agent2linear proj view "My Project Name"             # By exact name
@@ -182,7 +214,8 @@ Examples:
   $ agent2linear proj view "Project X" --auto-alias      # Create alias automatically
   $ agent2linear project view PRJ-123 --desc             # Show 80-char description preview
   $ agent2linear project view PRJ-123 --desc-full        # Show full description
-`)
+`
+    )
     .action(async (nameOrId: string, options) => {
       await viewProject(nameOrId, options);
     });
@@ -196,26 +229,73 @@ Examples:
     .option('--content <markdown>', 'Update content as markdown')
     .option('--content-file <path>', 'Path to file containing project content (markdown)')
     .option('--priority <0-4>', 'Priority level (0-4)', parseInt)
-    .option('--target-date <date>', 'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
-    .option('--start-date <date>', 'Estimated start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.')
+    .option(
+      '--target-date <date>',
+      'Target completion date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.'
+    )
+    .option(
+      '--start-date <date>',
+      'Estimated start date. Formats: YYYY-MM-DD, Quarter (2025-Q1, Q1 2025), Month (2025-01, Jan 2025), Half-year (2025-H1), Year (2025). Resolution auto-detected from format.'
+    )
     .option('--color <hex>', 'Project color (hex code like #FF6B6B)')
     .option('--icon <icon>', 'Project icon name (passed directly to Linear API)')
     .option('--lead <id>', 'Project lead (user ID, alias, or email)')
     .option('--members <ids>', 'Comma-separated member IDs, aliases, or emails')
     .option('--labels <ids>', 'Comma-separated project label IDs or aliases')
-    .addOption(new Option('--start-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --start-date 2025-01-15 --start-date-resolution quarter').choices(['month', 'quarter', 'halfYear', 'year']))
-    .addOption(new Option('--target-date-resolution <resolution>', 'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --target-date 2025-01-15 --target-date-resolution quarter').choices(['month', 'quarter', 'halfYear', 'year']))
-    .option('--link <url-and-label>', 'Add external link as "URL" or "URL|Label" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
-    .option('--remove-link <url>', 'Remove external link by exact URL match (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
+    .addOption(
+      new Option(
+        '--start-date-resolution <resolution>',
+        'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --start-date 2025-01-15 --start-date-resolution quarter'
+      ).choices(['month', 'quarter', 'halfYear', 'year'])
+    )
+    .addOption(
+      new Option(
+        '--target-date-resolution <resolution>',
+        'Override auto-detected resolution (advanced). Can be used alone to update resolution without changing date. Example: --target-date 2025-01-15 --target-date-resolution quarter'
+      ).choices(['month', 'quarter', 'halfYear', 'year'])
+    )
+    .option(
+      '--link <url-and-label>',
+      'Add external link as "URL" or "URL|Label" (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
+    .option(
+      '--remove-link <url>',
+      'Remove external link by exact URL match (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
     .option('--depends-on <projects>', 'Add "depends on" relations (comma-separated IDs/aliases)')
     .option('--blocks <projects>', 'Add "blocks" relations (comma-separated IDs/aliases)')
-    .option('--dependency <spec>', 'Add dependency: "project:myAnchor:theirAnchor" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
-    .option('--remove-depends-on <projects>', 'Remove "depends on" relations (comma-separated IDs/aliases)')
+    .option(
+      '--dependency <spec>',
+      'Add dependency: "project:myAnchor:theirAnchor" (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
+    .option(
+      '--remove-depends-on <projects>',
+      'Remove "depends on" relations (comma-separated IDs/aliases)'
+    )
     .option('--remove-blocks <projects>', 'Remove "blocks" relations (comma-separated IDs/aliases)')
-    .option('--remove-dependency <project>', 'Remove all dependencies with project (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
+    .option(
+      '--remove-dependency <project>',
+      'Remove all dependencies with project (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
     .option('-w, --web', 'Open project in browser after update')
     .option('--dry-run', 'Preview the payload without updating the project')
-    .addHelpText('after', `
+    .option('--trash', 'Move the project to Linear trash')
+    .option('--untrash', 'Restore a trashed project by UUID or retained alias')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
+    .option('--json', 'Equivalent to --output json')
+    .option('-y, --yes', 'Supply destructive and workspace confirmation consent')
+    .option('--no-input', 'Never prompt; fail if explicit consent is required')
+    .addHelpText(
+      'after',
+      `
 Examples:
   $ agent2linear project update "My Project" --status "In Progress"
   $ agent2linear proj update proj_abc --status done --priority 3
@@ -242,16 +322,22 @@ Examples:
 
   Open in browser after update:
   $ agent2linear proj update "My Project" --priority 1 --web
-`)
-    .action(async (nameOrId: string, options) => {
-      await updateProjectCommand(nameOrId, options);
+`
+    )
+    .action(async (nameOrId: string, options, command: Command) => {
+      await updateProjectCommand(nameOrId, {
+        ...options,
+        outputSource: command.getOptionValueSource('output') === 'cli' ? 'explicit' : 'default',
+      });
     });
 
   project
     .command('add-milestones <name-or-id>')
     .description('Add milestones to a project using a milestone template')
     .option('-t, --template <name>', 'Milestone template name')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   $ agent2linear project add-milestones PRJ-123 --template basic-sprint
   $ agent2linear proj add-milestones "My Project" --template product-launch
@@ -260,7 +346,8 @@ Examples:
 
 Note: Set default template with:
   $ agent2linear config set defaultMilestoneTemplate basic-sprint
-`)
+`
+    )
     .action(async (projectId: string, options) => {
       await addMilestones(projectId, options);
     });
@@ -277,10 +364,23 @@ Note: Set default template with:
   projectDeps
     .command('add <name-or-id>')
     .description('Add dependency relations to a project')
-    .option('--depends-on <projects>', 'Projects this depends on (comma-separated IDs/aliases) - end→start anchor')
-    .option('--blocks <projects>', 'Projects this blocks (comma-separated IDs/aliases) - start→end anchor')
-    .option('--dependency <spec>', 'Advanced: "project:myAnchor:theirAnchor" (repeatable)', (value, previous: string[] = []) => [...previous, value], [])
-    .addHelpText('after', `
+    .option(
+      '--depends-on <projects>',
+      'Projects this depends on (comma-separated IDs/aliases) - end→start anchor'
+    )
+    .option(
+      '--blocks <projects>',
+      'Projects this blocks (comma-separated IDs/aliases) - start→end anchor'
+    )
+    .option(
+      '--dependency <spec>',
+      'Advanced: "project:myAnchor:theirAnchor" (repeatable)',
+      (value, previous: string[] = []) => [...previous, value],
+      []
+    )
+    .addHelpText(
+      'after',
+      `
 Examples:
   Simple mode (default anchors):
   $ agent2linear project dependencies add "My Project" --depends-on "backend,database"
@@ -298,7 +398,8 @@ Note:
   - --dependency: Custom anchors (start|end)
   - Supports project IDs, names, and aliases
   - Self-referential dependencies are automatically skipped
-`)
+`
+    )
     .action(async (nameOrId: string, options) => {
       const { addProjectDependencies } = await import('./dependencies/add.js');
       await addProjectDependencies(nameOrId, options);
@@ -307,11 +408,16 @@ Note:
   projectDeps
     .command('remove <name-or-id>')
     .description('Remove dependency relations from a project')
-    .option('--depends-on <projects>', 'Remove "depends on" relations (comma-separated IDs/aliases)')
+    .option(
+      '--depends-on <projects>',
+      'Remove "depends on" relations (comma-separated IDs/aliases)'
+    )
     .option('--blocks <projects>', 'Remove "blocks" relations (comma-separated IDs/aliases)')
     .option('--relation-id <id>', 'Remove by specific relation ID')
     .option('--with <project>', 'Remove all relations with specified project')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   Remove by direction:
   $ agent2linear project dependencies remove "My Project" --depends-on "backend"
@@ -329,7 +435,8 @@ Examples:
 Note:
   - Provide at least one flag (--depends-on, --blocks, --relation-id, or --with)
   - Use "list" command to find relation IDs
-`)
+`
+    )
     .action(async (nameOrId: string, options) => {
       const { removeProjectDependencies } = await import('./dependencies/remove.js');
       await removeProjectDependencies(nameOrId, options);
@@ -340,7 +447,9 @@ Note:
     .alias('ls')
     .description('List all dependency relations for a project')
     .option('--direction <type>', 'Filter by direction: depends-on | blocks')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   List all dependencies:
   $ agent2linear project dependencies list "My Project"
@@ -356,7 +465,8 @@ Output:
   - Anchor types (start/end)
   - Semantic descriptions
   - Relation IDs (for removal)
-`)
+`
+    )
     .action(async (nameOrId: string, options) => {
       const { listProjectDependencies } = await import('./dependencies/list.js');
       await listProjectDependencies(nameOrId, options);
@@ -367,7 +477,9 @@ Output:
     .description('Remove all dependency relations from a project')
     .option('--direction <type>', 'Clear only specified direction: depends-on | blocks')
     .option('-y, --yes', 'Skip confirmation prompt')
-    .addHelpText('after', `
+    .addHelpText(
+      'after',
+      `
 Examples:
   Clear all dependencies (with confirmation):
   $ agent2linear project dependencies clear "My Project"
@@ -384,7 +496,8 @@ Examples:
 Warning:
   This permanently deletes dependency relations. Use with caution.
   Confirmation prompt shown unless --yes flag is provided.
-`)
+`
+    )
     .action(async (nameOrId: string, options) => {
       const { clearProjectDependencies } = await import('./dependencies/clear.js');
       await clearProjectDependencies(nameOrId, options);
@@ -392,4 +505,6 @@ Warning:
 
   // Register project list command (M20)
   listProjectsCommand(project);
+
+  registerProjectCommentCommands(project);
 }

@@ -10,6 +10,7 @@ import {
   projectConfigWriteDir,
   userCacheDir,
   userConfigDir,
+  userStateDir,
   workspaceCacheDir,
   workspaceCacheKey,
 } from './xdg-paths.js';
@@ -56,6 +57,26 @@ describe('userCacheDir', () => {
   it('falls back to ~/.cache when unset', () => {
     vi.stubEnv('XDG_CACHE_HOME', undefined as unknown as string);
     expect(userCacheDir()).toBe(join(homedir(), '.cache', 'agent2linear'));
+  });
+});
+
+describe('userStateDir', () => {
+  it('uses $XDG_STATE_HOME when set to an absolute path', () => {
+    vi.stubEnv('XDG_STATE_HOME', '/abs/state');
+    expect(userStateDir()).toBe(join('/abs/state', 'agent2linear'));
+  });
+
+  it('ignores relative and empty $XDG_STATE_HOME values', () => {
+    vi.stubEnv('XDG_STATE_HOME', 'relative/state');
+    expect(userStateDir()).toBe(join(homedir(), '.local', 'state', 'agent2linear'));
+
+    vi.stubEnv('XDG_STATE_HOME', '');
+    expect(userStateDir()).toBe(join(homedir(), '.local', 'state', 'agent2linear'));
+  });
+
+  it('falls back to ~/.local/state when unset', () => {
+    vi.stubEnv('XDG_STATE_HOME', undefined as unknown as string);
+    expect(userStateDir()).toBe(join(homedir(), '.local', 'state', 'agent2linear'));
   });
 });
 

@@ -35,11 +35,13 @@ a2l project create \
 ### Benefits
 
 **For Humans:**
+
 - 🧠 **Memorable**: `--team backend` vs `--team team_9b2e5f8a...`
 - 📖 **Self-documenting**: Commands are readable without looking up IDs
 - ⚡ **Faster**: Type less, work faster
 
 **For AI Agents (Why this tool exists!):**
+
 - 💭 **Context persistence**: AI remembers "backend" across conversations, not UUIDs
 - 🎯 **Fewer errors**: Less likely to corrupt "backend" than a 36-character UUID
 - 🪙 **Token efficient**: Aliases save tokens in AI context windows
@@ -86,11 +88,13 @@ Get up and running with agent2linear in 3 easy steps:
 ### Step 1: Install (or use with npx)
 
 **Option A: Global Install** (recommended for frequent use)
+
 ```bash
 npm install -g agent2linear
 ```
 
 **Option B: Use with npx** (no installation needed - great for trying it out!)
+
 ```bash
 npx agent2linear --version
 ```
@@ -104,11 +108,13 @@ agent2linear setup
 ```
 
 **Or with npx:**
+
 ```bash
 npx agent2linear setup
 ```
 
 The interactive setup wizard will:
+
 - ✅ Guide you to get your Linear API key → https://linear.app/settings/api
 - ✅ Validate your connection to Linear
 - ✅ Help you select your default team
@@ -168,6 +174,7 @@ npx agent2linear issue list
 ```
 
 **Which should you choose?**
+
 - Install globally if you'll use agent2linear frequently
 - Use npx for trying it out or one-off usage
 - Both methods provide identical functionality
@@ -192,6 +199,7 @@ agent2linear setup
 ```
 
 The wizard will:
+
 - Guide you to get your Linear API key from https://linear.app/settings/api
 - Let you choose between saving to config file or using an environment variable
 - Validate your API key by connecting to Linear
@@ -214,6 +222,7 @@ agent2linear config edit
 ```
 
 **Configuration files:**
+
 - Global: `$XDG_CONFIG_HOME/agent2linear/config.json` (default: `~/.config/agent2linear/config.json`)
 - Project: `.agent2linear/config.json`
 
@@ -227,19 +236,26 @@ Add an optional `overrides` array to any `config.json` (global or repo) to resol
 
 ```jsonc
 {
-  "defaultTeam": "platform",                 // catch-all (lowest precedence)
+  "defaultTeam": "platform", // catch-all (lowest precedence)
   "overrides": [
-    { "when": { "path": "cli/**" },          // repo-root-anchored path glob
+    {
+      "when": { "path": "cli/**" }, // repo-root-anchored path glob
       "defaultTeam": "cli-team",
-      "aliases": { "teams": { "default": "team_cli123" } } },  // per-rule alias remap
-    { "when": { "owner": "acme" },           // repo identity (reads `origin`)
-      "defaultTeam": "acme-eng" },
-    { "when": { "branch": "release/*" },     // current branch
-      "defaultInitiative": "hardening" },
-    { "when": { "anyOf": [ { "owner": "acme" },
-                           { "remote": "upstream", "owner": "acme" } ] },  // fork: base OR upstream
-      "defaultTeam": "acme-eng" }
-  ]
+      "aliases": { "teams": { "default": "team_cli123" } },
+    }, // per-rule alias remap
+    {
+      "when": { "owner": "acme" }, // repo identity (reads `origin`)
+      "defaultTeam": "acme-eng",
+    },
+    {
+      "when": { "branch": "release/*" }, // current branch
+      "defaultInitiative": "hardening",
+    },
+    {
+      "when": { "anyOf": [{ "owner": "acme" }, { "remote": "upstream", "owner": "acme" }] }, // fork: base OR upstream
+      "defaultTeam": "acme-eng",
+    },
+  ],
 }
 ```
 
@@ -270,7 +286,7 @@ a2l config ov remove release --project                                          
 
 `--set` accepts only the overridable defaults (`defaultTeam`, `defaultInitiative`, `defaultProject`, the templates, `defaultPrompt`, `defaultAutoAssignLead`) — `apiKey` can never be set via an override. Flag-sugar (`--when-*`) and the `--when-json` escape hatch are mutually exclusive; comma-lists or repeated `--when-<facet>` express OR **within** a facet, and `--when-json` is the escape hatch for arbitrary nested trees. Globs and label uniqueness are validated **before** writing, so a malformed or never-matching rule is rejected up front.
 
-**Targeting another directory — `-C, --cwd`:** a global, git-style flag makes *any* command resolve as if launched in `<dir>` (config discovery, override matching, and relative path args). Falls back to `$AGENT2LINEAR_CWD`, then the current directory.
+**Targeting another directory — `-C, --cwd`:** a global, git-style flag makes _any_ command resolve as if launched in `<dir>` (config discovery, override matching, and relative path args). Falls back to `$AGENT2LINEAR_CWD`, then the current directory.
 
 ```bash
 a2l -C ~/work/acme/web/apps/mobile issue create --title "Bug"   # resolves defaults as if in apps/mobile
@@ -303,12 +319,15 @@ A project prompt **overwrites** a global one of the same name. Each prompt sets 
 ```jsonc
 {
   "prompts": {
-    "general":         { "description": "Default issue prompt", "body": "## Title\nWrite a clear, scoped title.\n" },
-    "payments-issue":  { "description": "Payments convention",  "bodyFile": "prompts/payments.md" }
+    "general": {
+      "description": "Default issue prompt",
+      "body": "## Title\nWrite a clear, scoped title.\n",
+    },
+    "payments-issue": { "description": "Payments convention", "bodyFile": "prompts/payments.md" },
   },
   "promptRules": [
-    { "when": { "team": "payments" }, "prompt": "payments-issue" }   // team layer (see below)
-  ]
+    { "when": { "team": "payments" }, "prompt": "payments-issue" }, // team layer (see below)
+  ],
 }
 ```
 
@@ -329,10 +348,10 @@ a2l issue prompt                     # alias for `prompt get` (same flags) — h
 
 ```jsonc
 {
-  "defaultPrompt": "general",                                      // general default (a name in prompts.json)
+  "defaultPrompt": "general", // general default (a name in prompts.json)
   "overrides": [
-    { "when": { "path": "apps/mobile/**" }, "defaultPrompt": "mobile-issue" }  // location-specific prompt
-  ]
+    { "when": { "path": "apps/mobile/**" }, "defaultPrompt": "mobile-issue" }, // location-specific prompt
+  ],
 }
 ```
 
@@ -343,7 +362,7 @@ a2l -C apps/mobile prompt get                          # → the location prompt
 
 **Team layer (`promptRules`).** Authored **nested**, exactly like `overrides[]`: `{ "when": { "team": "<id|alias>", …location matchers }, "prompt": "<name>" }`. The resolved team is `--team` (if given) or your `defaultTeam`; both the rule's `team` and your team are normalized through team aliases, so `payments` matches whether expressed as the alias or the raw `team_*` id. (A `team` key is honored **only** here — it is ignored inside config `overrides[]`.)
 
-**Selection precedence:** explicit name → specific location override (`path`/`repo`/`owner`/`host`) → team (`promptRules`) → general `defaultPrompt` (top-level, or a branch-only / catch-all override) → error. An explicit `--team X` with no matching `promptRule` is a **hard error** (exit 1); a *derived* `defaultTeam` with no rule simply falls through to the general prompt. A branch-only override is general-tier (team outranks branch).
+**Selection precedence:** explicit name → specific location override (`path`/`repo`/`owner`/`host`) → team (`promptRules`) → general `defaultPrompt` (top-level, or a branch-only / catch-all override) → error. An explicit `--team X` with no matching `promptRule` is a **hard error** (exit 1); a _derived_ `defaultTeam` with no rule simply falls through to the general prompt. A branch-only override is general-tier (team outranks branch).
 
 **`--force` (team-first).** Scoped to an explicit `--team`: evaluate the team layer **first**, so a matching `promptRule` outranks any location override; if no rule matches it is a hard error even when a location override or general default would otherwise resolve. `--force` without `--team` is a no-op.
 
@@ -377,7 +396,7 @@ If you work across **multiple Linear workspaces** (e.g. personal + several compa
 ### Concepts: `global < profile < repo`
 
 - A **workspace** is a Linear workspace, addressed by one `lin_api_…` key. Keys live in a **secrets registry** that is never committed.
-- A **profile** is a named bundle of *settings* — which workspace to use, optional defaults (`defaultTeam`, `defaultInitiative`, …), and **detection rules**. Profiles live in committable config and **never contain a raw key**.
+- A **profile** is a named bundle of _settings_ — which workspace to use, optional defaults (`defaultTeam`, `defaultInitiative`, …), and **detection rules**. Profiles live in committable config and **never contain a raw key**.
 - Resolved configuration merges **`global < profile < repo`**, so a repo override beats a profile default beats a global default.
 
 ### Register workspaces and profiles
@@ -507,9 +526,9 @@ first-positive-wins picks it for those forks.
 A `match` rule can read **host**, **owner**, **repo** (`owner/name`), and choose **which remote** its identity criteria read:
 
 - All identity fields accept **glob patterns** — `github.com`, `*.gitlab.example.com`, `acme-*`, `my-org/secret-*`.
-- Within one rule, **present fields AND**; **each repeated field's list ORs**; a `linear: false` exclusion still wins. A rule matches only when *some selected remote* satisfies *every* present field.
+- Within one rule, **present fields AND**; **each repeated field's list ORs**; a `linear: false` exclusion still wins. A rule matches only when _some selected remote_ satisfies _every_ present field.
 - Matching is **case-insensitive by default** (forge-correct). Pass `--case-sensitive` for the rare GitLab `Foo` ≠ `foo` case; it is per-rule, so it does not flip your other (GitHub) rules. (Turning it back off is a hand-edit of `config.json` for now.)
-- `--remote <name>` selects which remote(s) the identity reads: default `origin`, a name (`upstream`), `"*"` (any remote), or *bare* `--remote upstream` with no identity fields = "a remote named `upstream` exists" (the fork predicate).
+- `--remote <name>` selects which remote(s) the identity reads: default `origin`, a name (`upstream`), `"*"` (any remote), or _bare_ `--remote upstream` with no identity fields = "a remote named `upstream` exists" (the fork predicate).
 
 **Worked example — two orgs to one workspace, two users to another, refuse everything else:**
 
@@ -539,18 +558,38 @@ Declare the `upstream` rule **first** so it wins for a fork (origin = `alice/wid
 
 > **Release note (v0.31.0) — nested-group owners.** Profile detection now uses the same git parser as `config` overrides, so for **nested** self-hosted groups (`git@gitlab.com:group/sub/repo.git`) the **owner** is now the all-but-last path (`group/sub`), not just the first segment (`group`). A rule written as `--git-remote-owner group` no longer matches such a repo — use `--git-remote-owner group/sub` or the glob `--git-remote-owner 'group/*'`. Flat `host/owner/name` repos (e.g. plain GitHub) are unaffected.
 
+### How you clone a fork affects routing
+
+Auto-detection reads your **local git remotes** — it never calls the forge. So whether a forked checkout routes correctly depends entirely on _how you obtained it_: for a fork rule (`--remote upstream --git-remote-owner ACMEORG`) to match, an `ACMEORG`-owned `origin` **or** `upstream` must actually be present. Verified behavior for a fork `USERNAME/repo` of `ACMEORG/repo`:
+
+| How you get the code                                                   | Resulting remotes                      | Auto-detect result                                                     |
+| ---------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| `gh repo fork --clone`                                                 | `origin=USERNAME` + `upstream=ACMEORG` | ✅ upstream rule matches → ACMEORG workspace                           |
+| `gh repo clone USERNAME/repo`                                          | `origin=USERNAME` + `upstream=ACMEORG` | ✅ upstream rule matches → ACMEORG workspace                           |
+| `gh repo clone USERNAME/repo` _(forge API unreachable / rate-limited)_ | clone **aborts**, exit 1               | ✅ fail-safe — no misrouted checkout is produced                       |
+| `git clone <fork-url>` (HTTPS **or** SSH)                              | `origin=USERNAME` only                 | ⚠️ upstream rule can't match → falls through to your origin-owner rule |
+| Tarball / ZIP / `git archive` (no `.git`)                              | _none_                                 | ⚠️ no remotes → `match-only` refuses; pass `--workspace`               |
+
+Only forge-aware tooling (`gh`) knows a repo's parent and adds `upstream`; plain `git` sets `origin` to the URL you gave it and nothing more (identical for HTTPS and SSH). `gh repo clone` discovers the parent via a forge API call — and if that call can't complete, it **errors out instead of producing an `upstream`-less clone**, so `gh` never silently routes you to the wrong workspace.
+
+**Rule of thumb:** obtain forks with `gh repo fork --clone` or `gh repo clone`. After a plain `git clone`, restore routing yourself:
+
+```bash
+git remote add upstream https://github.com/ACMEORG/repo.git
+```
+
 ### Selection precedence (which workspace?)
 
 Highest to lowest:
 
-| # | Source | Example |
-|---|---|---|
-| 1 | `--workspace <name>` / `--api-key <key>` (per-invocation) | `a2l --workspace acme issue create …` |
-| 2 | `AGENT2LINEAR_WORKSPACE` env declarator | `AGENT2LINEAR_WORKSPACE=acme a2l …` |
-| 3 | Repo config `profile`/`workspace` in `.agent2linear/config.json` | `{ "profile": "acme" }` |
-| 4 | Git-remote auto-detect (remote identity → `profile.match` host/owner/repo + `remote`) | (automatic) |
-| 5 | Global `defaultProfile` | `a2l config set defaultProfile acme` |
-| 6 | Legacy single key (`LINEAR_API_KEY` / config `apiKey`) | (the simple case) |
+| #   | Source                                                                                | Example                               |
+| --- | ------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1   | `--workspace <name>` / `--api-key <key>` (per-invocation)                             | `a2l --workspace acme issue create …` |
+| 2   | `AGENT2LINEAR_WORKSPACE` env declarator                                               | `AGENT2LINEAR_WORKSPACE=acme a2l …`   |
+| 3   | Repo config `profile`/`workspace` in `.agent2linear/config.json`                      | `{ "profile": "acme" }`               |
+| 4   | Git-remote auto-detect (remote identity → `profile.match` host/owner/repo + `remote`) | (automatic)                           |
+| 5   | Global `defaultProfile`                                                               | `a2l config set defaultProfile acme`  |
+| 6   | Legacy single key (`LINEAR_API_KEY` / config `apiKey`)                                | (the simple case)                     |
 
 ### Key-source precedence (commit-safe — where does the key come from?)
 
@@ -591,12 +630,13 @@ a2l issue create --title "Fix bug" -y                  # skip the auto-detected-
 ```
 
 - In an **auto-detected, multi-workspace** repo, a mutating command **confirms** on an interactive terminal and **fail-safe errors** (never hangs) when run non-interactively without `--workspace`/`-y`/`confirmAutoDetectedWrites=false`.
-- `--json` emits `workspace.source` so an agent can verify *which* workspace it wrote to.
+- `--json` emits `workspace.source` so an agent can verify _which_ workspace it wrote to.
 - `a2l whoami` and `a2l doctor` show the active workspace + source; `doctor` also warns if a secrets file is tracked by git or a raw `apiKey` sits in a project `config.json`.
 
 ## Usage
 
 The CLI provides two command names that work identically:
+
 - `agent2linear` - Full command name
 - `a2l` - Short alias (used in most examples for brevity)
 
@@ -637,6 +677,7 @@ Create and manage Linear issues with comprehensive options and smart defaults.
 Create issues with auto-assignment, full field support, and intelligent validation.
 
 **Basic Examples:**
+
 ```bash
 # Minimal (auto-assigns to you, uses defaultTeam if configured)
 agent2linear issue create --title "Fix login bug"
@@ -661,6 +702,7 @@ agent2linear issue create \
 ```
 
 **Key Features:**
+
 - **Auto-assignment**: Issues are assigned to you by default (use `--no-assignee` to override)
 - **Member resolution**: Supports ID, alias, email, or display name
 - **Project resolution**: Supports ID, alias, or name lookup
@@ -684,11 +726,57 @@ agent2linear issue view ENG-123 --json
 agent2linear issue view ENG-123 --web
 ```
 
+### Issue and Project Comments
+
+Comments use the same command shape for issues and projects:
+
+```bash
+# Add a top-level comment
+a2l issue comment add ENG-123 --body "I reproduced this."
+a2l project comment add backend-migration --body-file status.md
+
+# Read from stdin or create a reply
+printf '%s\n' "Reproduced twice" | a2l issue comment add ENG-123
+a2l project comment add backend-migration \
+  --reply-to <comment-id> --body "That matches my result."
+
+# Resolve and validate without writing
+a2l issue comment add ENG-123 --body-file notes.md --dry-run --json
+```
+
+Use exactly one body source: `--body`, `--body-file <path>`, `--body-file -`, or implicit non-TTY stdin. Empty bodies and multiple explicit sources are usage errors. `--api-key -` cannot share stdin with a comment body. Add commands use the normal workspace mutation guard; `-y/--yes` supplies confirmation, `--no-input` forbids prompting, and `--dry-run` never prompts or mutates.
+
+Comment lists are human-readable stacked threads by default and use the shared raw-cursor contract:
+
+```bash
+# First 50 comments
+a2l issue comment list ENG-123
+
+# Page two: copy endCursor from page one exactly
+a2l issue comment list ENG-123 --limit 50 --after 'opaque-linear-cursor'
+
+# Every remaining project comment after a cursor
+a2l project comment list backend-migration \
+  --after 'opaque-linear-cursor' --all
+
+# Stable {target,comments,pageInfo,cursorHistory} envelope
+a2l project comment list backend-migration --json
+```
+
+Limits are 1 through 250. There is no numeric `--page` or direct page-N jump: use page one's raw `pageInfo.endCursor` with `--after` to reach page two, then continue sequentially. Human truncated output prints copyable next-page and all-remaining commands plus a cursor-history entry ID. Use `--no-cursor-history` when the target or query context should not be retained locally.
+
+Direct project comments are distinct from project-update comments. The CLI creates them with `projectId` and reads the top-level comment connection filtered by the resolved project ID and a null project-update relation.
+
+The former `a2l issue comment ENG-123 --body ...` grammar is removed. Use `a2l issue comment add ENG-123 --body ...`; the old route exits 2 with that migration suggestion.
+
+Both add and list commands default to human `table` output. `-o/--output json` and `--json` are equivalent; combining `--json --output table` is a usage error. Run `a2l issue comment --help` or `a2l project comment --help` for the complete contract.
+
 ### Issue Update
 
 Update existing issues with comprehensive field support and smart validation.
 
 **Basic Examples:**
+
 ```bash
 # Update single field
 agent2linear issue update ENG-123 --title "New title"
@@ -704,6 +792,7 @@ agent2linear issue update ENG-123 \
 ```
 
 **Advanced Examples:**
+
 ```bash
 # Change assignment
 agent2linear issue update ENG-123 --assignee john@company.com
@@ -737,6 +826,7 @@ agent2linear issue update ENG-123 --untrash            # Restore from trash
 ```
 
 **Key Features:**
+
 - **33+ update options**: Comprehensive field coverage including add/remove patterns
 - **Smart validation**: Team-aware state validation, compatibility checks
 - **Flexible updates**: Update one field or many at once
@@ -748,69 +838,130 @@ For full documentation: `agent2linear issue update --help`
 
 ### Issue List
 
-List and filter issues with smart defaults, extensive filtering, sorting, and multiple output formats.
+List and filter issues with smart defaults, raw-cursor pagination, stable machine output, and the existing filters and sorting controls.
 
-**Basic Examples:**
+**Basic examples:**
+
 ```bash
-# Smart defaults: your assigned issues
-agent2linear issue list
+# Smart defaults: your assigned active issues
+a2l issue list
 
-# Limit results
-agent2linear issue list --limit 10
+# Return one page containing at most 10 issues
+a2l issue list --limit 10
 
-# Filter by team
-agent2linear issue list --team backend
-
-# Filter by state
-agent2linear issue list --state "in progress"
+# Filter and sort
+a2l issue list --team backend --state "in progress"
+a2l issue list --sort updated --order desc
 ```
 
-**Advanced Filtering:**
+**Pagination:**
+
 ```bash
-# Multiple filters
-agent2linear issue list \
+# Continue from the exact cursor printed by the previous result
+a2l issue list --limit 10 --after 'opaque-linear-cursor'
+
+# Fetch every remaining issue, optionally starting after a cursor
+a2l issue list --all
+a2l issue list --after 'opaque-linear-cursor' --all
+```
+
+The default is one page of 50. Limits must be from 1 through 250. Linear cursors are opaque: copy them exactly; there is no numeric `--page` option. When another page exists, table output prints copyable next-page and all-remaining commands. See [Pagination and Cursor History](#pagination-and-cursor-history).
+
+**Filtering:**
+
+```bash
+a2l issue list \
   --team backend \
   --priority 1 \
   --state "in progress" \
   --assignee steve@company.com
 
-# Project and labels
-agent2linear issue list \
-  --project "Q1 Goals" \
-  --labels "bug,urgent"
-
-# Date filters
-agent2linear issue list --due-before 2025-12-31
-agent2linear issue list --created-after 2025-01-01
-
-# Parent/sub-issue filters
-agent2linear issue list --has-parent        # Only sub-issues
-agent2linear issue list --no-parent         # Only root issues
+a2l issue list --project "Q1 Goals" --label bug --label urgent
+a2l issue list --created-after 2025-01-01 --due-before 2025-12-31
+a2l issue list --parent ENG-100
+a2l issue list --root-only
 ```
 
-**Sorting and Output:**
+**Output:**
+
 ```bash
-# Sort options
-agent2linear issue list --sort priority     # By priority (high to low)
-agent2linear issue list --sort created      # By creation date (newest first)
-agent2linear issue list --sort updated      # By update date
-agent2linear issue list --sort identifier   # By identifier (ENG-1, ENG-2...)
-
-# Output formats
-agent2linear issue list --format table      # Table view (default)
-agent2linear issue list --format compact    # Compact view
-agent2linear issue list --format json       # JSON output
-agent2linear issue list --format urls       # URLs only (for scripting)
+a2l issue list --output table       # Human-readable default
+a2l issue list --output json        # Stable pagination envelope
+a2l issue list --json               # Exact equivalent of --output json
+a2l issue list --output tsv         # Row-only TSV; continuation warning is stderr
 ```
 
-**Key Features:**
-- **Smart defaults**: Shows your assigned issues by default
-- **Extensive filters**: Team, state, priority, assignee, labels, project, dates, parent, and more
-- **Flexible sorting**: By priority, dates, identifier, or other fields
-- **Multiple formats**: Table, compact, JSON, or URLs for scripting
-- **Performance optimized**: Batch fetching eliminates N+1 queries (11x+ API call reduction)
+JSON uses this envelope:
 
-For full documentation: `agent2linear issue list --help`
+```json
+{
+  "issues": [],
+  "pageInfo": {
+    "returnedCount": 0,
+    "hasNextPage": false,
+    "endCursor": null,
+    "fetchedAll": true
+  },
+  "cursorHistory": {
+    "status": "not_applicable",
+    "entryId": null
+  }
+}
+```
+
+The former `-f/--format` interface is removed. Use `-o/--output`; `-f` remains reserved for force operations under the CLI Design Standard. Existing table, column, description, web, default-filter, and sort behavior remains available.
+
+For the complete option set, run `a2l issue list --help`.
+
+## Label Lifecycle and Project Trash
+
+### Issue and project labels
+
+The canonical label families remain plural for compatibility:
+
+```bash
+# Issue-label lifecycle
+a2l issue-labels list --team <team-id-or-alias>
+a2l issue-labels create --name bug --color '#d73a4a' --team <team-id-or-alias>
+a2l issue-labels view <label-id>
+a2l issue-labels update <label-id> --description ''
+a2l issue-labels retire <label-id>
+a2l issue-labels restore <label-id>
+a2l issue-labels delete <label-id>
+
+# Project-label lifecycle
+a2l project-labels list
+a2l project-labels create --name roadmap --color '#0366d6'
+a2l project-labels view <label-id>
+a2l project-labels update <label-id> --name planning
+a2l project-labels retire <label-id>
+a2l project-labels restore <label-id>
+a2l project-labels delete <label-id>
+```
+
+The aliases `ilbl` and `plbl` expose the same commands. `labels|lbl list|ls` is only a deprecated compatibility shim that prints the canonical replacements; it does not provide a third CRUD path.
+
+Label lists return one page of 50 active labels by default. `--limit` accepts 1–250, `--after` accepts the exact opaque cursor printed by the preceding result, and `-a/--all` exhausts every remaining page. Use `--include-retired` to widen lifecycle scope and `--no-cursor-history` to prevent local history recording.
+
+`--all` changes traversal only: it does not include retired labels unless `--include-retired` is also present. There is no numeric `--page`, backward `--before`, or `--cursor` synonym. To reach page two, copy `pageInfo.endCursor` into `--after`; human output prints the copyable command and cursor-history entry ID. Pages preserve Linear's explicit `createdAt` provider order.
+
+Existing label lists retain `-f, --format default|json|tsv`. Changed label mutations use `-o, --output table|json`, and `--json` is exactly equivalent to `--output json`. All changed mutations also support `--dry-run`, `-y/--yes`, and `--no-input`.
+
+Retirement and archival are independent Linear states. M33 exposes nullable `retiredAt` and `archivedAt`, filters active results only by `retiredAt`, and always excludes generically archived labels. It intentionally provides no `--include-archived` or label archive command.
+
+Project-label listing is the workspace catalog: both labels currently applied to projects and unused definitions are in the same bounded or exhaustive result. `--all` never switches endpoints, and historical `lastAppliedAt` is not treated as current usage.
+
+### Reversible project trash
+
+Projects use the existing update surface:
+
+```bash
+a2l project update <name-or-id> --trash
+a2l project update <name-or-id> --untrash
+a2l project update <name-or-id> --trash --dry-run --json
+```
+
+`--trash` and `--untrash` are mutually exclusive. Trash requires the normal workspace guard and destructive consent; `--yes` permits the write and `--no-input` prevents prompting. The CLI uses Linear's dedicated `projectArchive(id, { trash: true })` operation and `unarchiveProject(id)`, because live verification showed that sending `trashed` through `projectUpdate` fails. There is no permanent project-delete command or separate project trash/archive command.
 
 ## Project List & Search
 
@@ -849,6 +1000,7 @@ agent2linear project list --all-leads --all-teams --all-initiatives
 ### Filter Options
 
 **Core Filters:**
+
 ```bash
 # Filter by team
 agent2linear project list --team backend
@@ -884,6 +1036,7 @@ agent2linear project list --search "mobile redesign"
 ```
 
 **Date Range Filters:**
+
 ```bash
 # Projects starting in Q1 2025
 agent2linear project list --start-after 2025-01-01 --start-before 2025-03-31
@@ -898,10 +1051,13 @@ agent2linear project list --target-before 2025-12-31
 ### Output Formats
 
 **Table Format (default):**
+
 ```bash
 agent2linear project list
 ```
+
 Output:
+
 ```
 ID           Title                          Status      Team           Lead                 Preview
 -----------------------------------------------------------------------------------------------------------------------
@@ -912,24 +1068,24 @@ c1d2e3f4g5   Customer Dashboard             Completed   Frontend       Carol Dav
 Total: 3 projects
 ```
 
-**JSON Format:**
+**Machine-readable formats:**
+
 ```bash
-# Machine-readable format for scripting
-agent2linear project list --format json
-agent2linear project list -f json
+# Stable JSON envelope: { projects, pageInfo, cursorHistory }
+a2l project list --output json
+a2l project list --json
 
 # Example with filtering
-agent2linear project list --team backend --status started --format json
+a2l project list --team backend --status started --json
+
+# Row-only TSV; any continuation warning is written to stderr
+a2l project list --output tsv > projects.tsv
 ```
 
-**TSV Format:**
-```bash
-# Tab-separated values for data processing
-agent2linear project list --format tsv
-agent2linear project list -f tsv > projects.tsv
-```
+The former `-f/--format` interface is removed. Project list preserves `-l/--lead`, so its pagination limit is deliberately long-only: `--limit <number>`. `-a/--all`, `--after <cursor>`, `-o/--output`, and `--json` otherwise match issue-list behavior.
 
 **Interactive Mode:**
+
 ```bash
 # Ink UI with rich formatting
 agent2linear project list --interactive
@@ -963,7 +1119,7 @@ agent2linear project list \
   --label critical
 
 # Export all projects to JSON
-agent2linear project list --all-teams --all-leads --all-initiatives --format json > all-projects.json
+a2l project list --all-teams --all-leads --all-initiatives --json > all-projects.json
 ```
 
 ### Alias Support
@@ -1000,6 +1156,93 @@ agent2linear project list
 # Shows: projects you lead in 'backend' team within 'q1-goals' initiative
 ```
 
+## Pagination and Cursor History
+
+Issue, project, and issue/project comment lists use Linear's forward-only raw cursors. They do not invent numeric pages or custom cursor tokens.
+
+### Getting the next page
+
+A default invocation fetches at most 50 matching records:
+
+```bash
+a2l issue list
+a2l project list
+```
+
+When more results exist, human output prints an opaque `endCursor` and a shell-safe command such as:
+
+```bash
+a2l issue list --limit 50 --after 'opaque-linear-cursor'
+```
+
+That command gets the next page for the same effective filters and sort. Project list uses the same form, but its limit is long-only because `-l` remains `--lead`. JSON clients read `pageInfo.endCursor` and pass it unchanged to `--after`:
+
+```bash
+a2l project list --limit 50 --after 'opaque-linear-cursor' --json
+```
+
+You can get page two by using page one's `endCursor`. You cannot jump directly to page 7: Linear cursors are sequential positions, not stable numeric offsets. Use `--all` when you need the full remaining collection:
+
+```bash
+a2l issue list --all
+a2l issue list --after 'opaque-linear-cursor' --all
+```
+
+With `--all`, the CLI follows sequential internal pages of up to 250 and buffers the complete result before rendering. A supplied `--limit` does not cap `--all`. It deduplicates repeated objects, preserves provider order, rejects malformed or repeated continuation cursors, and never renders a misleading partial result after a later-page failure.
+
+### Cursor history
+
+When a one-page issue, project, or comment-list result has another page, the CLI stores a local advisory history entry and prints its entry ID. The entry records the raw cursor, effective safe filters, order, limit, source command, next-page command, and all-remaining command.
+
+```bash
+a2l cursor-history list
+a2l cursor-history list --cursor 'opaque-linear-cursor'
+a2l cursor-history view <entry-id>
+a2l cursor-history clear --dry-run
+a2l cursor-history clear --yes
+```
+
+History commands are local and do not authenticate with Linear. `cursor-history list` is newest-first and supports `--limit 1..1000`, `-o/--output table|json`, and `--json`. An entry ID identifies a local history record; it is not a Linear cursor and cannot be passed to `--after`.
+
+History is stored at `$XDG_STATE_HOME/agent2linear/cursor-history.json`, or `~/.local/state/agent2linear/cursor-history.json` when `XDG_STATE_HOME` is unset or invalid. The CLI retains the newest 1000 entries, creates the directory with mode `0700`, and writes the file with mode `0600`. It stores reconstructed safe commands rather than raw argv and never stores API keys. Workspace keys derived from credentials are hashed.
+
+Use `--no-cursor-history` on an issue, project, or comment-list invocation to opt out. History-write failure is non-fatal: the list result still succeeds and a warning goes to stderr. History is advisory because the remote collection can change and Linear may reject an old or expired raw cursor.
+
+Ordinary targets, search strings, and filter literals are stored because they are needed to reconstruct the originating query. They are not treated as credentials, but they may still be sensitive. Use `--no-cursor-history` whenever a query contains information you do not want retained locally. The history layer rejects API-key, token, authorization, header, credential, password, secret, and environment-file fields and never reads raw process argv.
+
+### JSON migration and pagination errors
+
+Issue and project JSON lists now use envelopes. Scripts that previously iterated the root array must select the resource key:
+
+```bash
+# Before
+a2l issue list --json | jq '.[]'
+a2l project list --json | jq '.[]'
+
+# M34
+a2l issue list --json | jq '.issues[]'
+a2l project list --json | jq '.projects[]'
+
+# Read and reuse the next raw cursor
+a2l issue list --json | jq -r '.pageInfo.endCursor'
+```
+
+Machine errors are one JSON object on stderr when `--json` or `--output json` is requested:
+
+```json
+{ "error": { "code": "usage", "message": "Limit must be a whole number between 1 and 250" } }
+```
+
+| Exit | Stable code                    | Meaning                                                                       |
+| ---: | ------------------------------ | ----------------------------------------------------------------------------- |
+|    1 | `runtime`                      | Network, malformed provider page, corrupt local history, or unclassified I/O  |
+|    2 | `usage`                        | Invalid option/value, output conflict, or missing destructive consent         |
+|    3 | `not_found`                    | A well-formed issue, project, reply parent, or cursor-history entry is absent |
+|    4 | `auth`                         | Linear authentication or authorization failed                                 |
+|    5 | `invalid_cursor` or `conflict` | Linear rejected the cursor or a precondition failed                           |
+
+The CLI never silently restarts from page one after a rejected cursor.
+
 ## Milestone Templates
 
 Milestone templates allow you to quickly set up project milestones using predefined templates. Templates are stored locally in JSON files and can be customized for your workflows.
@@ -1009,6 +1252,7 @@ Milestone templates allow you to quickly set up project milestones using predefi
 You can create milestone templates using the CLI (recommended) or by manually editing JSON files.
 
 **Using the CLI (Interactive):**
+
 ```bash
 # Interactive mode - guided wizard
 agent2linear milestone-templates create --interactive
@@ -1019,6 +1263,7 @@ agent2linear milestone-templates create --project --interactive
 ```
 
 **Using the CLI (Non-Interactive):**
+
 ```bash
 # Create a template with milestones
 agent2linear milestone-templates create my-sprint \
@@ -1036,6 +1281,7 @@ agent2linear milestone-templates create team-workflow \
 ```
 
 **Milestone Spec Format:** `name:targetDate:description`
+
 - `name` - Required
 - `targetDate` - Optional (+7d, +2w, +1m, or ISO date)
 - `description` - Optional (supports markdown)
@@ -1043,10 +1289,12 @@ agent2linear milestone-templates create team-workflow \
 **Manual Template File Creation:**
 
 Templates are stored at:
+
 - **Global**: `$XDG_CONFIG_HOME/agent2linear/milestone-templates.json` (default: `~/.config/agent2linear/milestone-templates.json`) - Available across all projects
 - **Project**: `.agent2linear/milestone-templates.json` - Project-specific templates
 
 **Example Template File:**
+
 ```json
 {
   "templates": {
@@ -1076,6 +1324,7 @@ Templates are stored at:
 ```
 
 **Managing Templates:**
+
 ```bash
 # Edit a template (interactive)
 agent2linear milestone-templates edit basic-sprint
@@ -1108,6 +1357,7 @@ agent2linear project add-milestones PRJ-123  # Uses default template
 ### Date Offset Format
 
 Target dates support relative formats:
+
 - `+7d` - 7 days from now
 - `+2w` - 2 weeks from now
 - `+1m` - 1 month from now
@@ -1235,6 +1485,7 @@ agent2linear supports flexible date formats for project `--start-date` and `--ta
 ### Supported Formats
 
 **Quarters:**
+
 ```bash
 agent2linear project create --title "Q1 Initiative" --start-date "2025-Q1"
 agent2linear project create --title "Q2 Goals" --start-date "Q2 2025"
@@ -1242,12 +1493,14 @@ agent2linear project create --title "Q3 Project" --start-date "q3-2025"  # Case-
 ```
 
 **Half-Years:**
+
 ```bash
 agent2linear project create --title "H1 Strategy" --start-date "2025-H1"
 agent2linear project create --title "H2 Plan" --start-date "H2 2025"
 ```
 
 **Months:**
+
 ```bash
 # Numeric format
 agent2linear project create --title "January Sprint" --start-date "2025-01"
@@ -1260,11 +1513,13 @@ agent2linear project create --title "March Update" --start-date "March 2025"
 ```
 
 **Years:**
+
 ```bash
 agent2linear project create --title "2025 Roadmap" --start-date "2025"
 ```
 
 **ISO Dates (specific dates):**
+
 ```bash
 agent2linear project create --title "Sprint 1" --start-date "2025-01-15"
 ```
@@ -1272,11 +1527,13 @@ agent2linear project create --title "Sprint 1" --start-date "2025-01-15"
 ### How It Works
 
 The date parser automatically:
+
 - Converts flexible formats to ISO dates (YYYY-MM-DD)
 - Detects and sets the appropriate resolution (quarter, month, year)
 - Shows confirmation messages with the parsed format
 
 **Example output:**
+
 ```bash
 $ agent2linear project create --title "Q1 Initiative" --start-date "2025-Q1"
 📅 Start date: Q1 2025 (2025-01-01, resolution: quarter)
@@ -1286,15 +1543,17 @@ $ agent2linear project create --title "Q1 Initiative" --start-date "2025-Q1"
 ### Date Resolution
 
 Linear projects support date resolutions to indicate time granularity:
+
 - **quarter**: Project spans a quarter (Q1-Q4)
 - **month**: Project spans a month
 - **halfYear**: Project spans half a year (H1 or H2)
 - **year**: Project spans an entire year
-- *(none)*: Specific date without resolution
+- _(none)_: Specific date without resolution
 
 #### Auto-Detection (Recommended)
 
 The parser **automatically sets the resolution** based on your input format:
+
 ```bash
 # ✅ Recommended: Let the parser auto-detect resolution
 agent2linear project create --start-date "2025-Q1"      # Auto: resolution = quarter
@@ -1308,6 +1567,7 @@ agent2linear project create --start-date "2025-01-15"   # Auto: no resolution (s
 For advanced use cases, you can explicitly override the resolution with `--start-date-resolution` or `--target-date-resolution`:
 
 **When to use explicit override:**
+
 - Mid-period dates with specific resolution (e.g., mid-month representing a quarter)
 - Resolution-only updates (update command only)
 
@@ -1321,6 +1581,7 @@ agent2linear project update myproject --start-date-resolution quarter
 ```
 
 **Validation warnings:**
+
 ```bash
 # ⚠️ Conflicting format and explicit flag
 $ agent2linear project create --start-date "2025-Q1" --start-date-resolution month
@@ -1382,20 +1643,23 @@ This project uses [Vitest](https://vitest.dev/) for unit testing with comprehens
 
 **Two test suites — different runners, different concurrency models:**
 
-| Suite | Location | Runner | Concurrency | Isolation |
-|-------|----------|--------|-------------|-----------|
-| **Unit tests** | `src/**/*.test.ts` | Vitest (`npm run test`) | **Parallel** — files run concurrently in a worker pool | Each file owns its own `mktemp` sandbox + `vi.stubEnv('XDG_CONFIG_HOME', …)` per `beforeEach`, with `afterEach` cleanup |
-| **Integration / E2E** | `tests/scripts/*.sh` | Bash (`./run-all-tests.sh`) | **Sequential** — one process, no backgrounding | Each script uses a fresh `mktemp` sandbox (`HOME`/`XDG`); the override-CLI suite is a stateful lifecycle (see below) |
+| Suite                 | Location             | Runner                      | Concurrency                                            | Isolation                                                                                                                                  |
+| --------------------- | -------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Unit tests**        | `src/**/*.test.ts`   | Vitest (`npm run test`)     | **Parallel** — files run concurrently in a worker pool | State/config tests own a `mktemp` sandbox and stub the relevant `XDG_CONFIG_HOME`, `XDG_CACHE_HOME`, and/or `XDG_STATE_HOME`, with cleanup |
+| **Integration / E2E** | `tests/scripts/*.sh` | Bash (`./run-all-tests.sh`) | **Sequential** — one process, no backgrounding         | Each script uses a fresh `mktemp` sandbox (`HOME`/`XDG`); the override-CLI suite is a stateful lifecycle (see below)                       |
 
 **What must stay sequential — and why:**
+
 - **`tests/scripts/*.sh` are sequential by design.** `run-all-tests.sh` runs each suite as a single blocking foreground process (no `&`/`wait`), and the bash suites shell out to the built `dist/index.js`. They are **not** run by Vitest and must not be parallelized.
 - **`tests/scripts/test-config-override-cli.sh` is a stateful lifecycle suite**: its numbered cases (`add → list → get → edit → move → remove → explain`) execute in source order against **one shared sandbox** — case 1 creates the rule that later cases build on. Run the **full** suite, or use `--range` **starting at 1** (e.g. `--range 1-7`) to stop early. A non-prefix slice (`--test 14`, `--range 10-14`) reports false failures because the earlier fixtures never ran — expected, not a bug.
+- **`tests/scripts/test-cursor-history-cli.sh` is an offline state lifecycle suite**: it isolates `HOME` and all XDG roots, unsets credentials/workspace variables, seeds a versioned history file, and verifies list/view/clear/help/error behavior against the built CLI.
 
-**Parallelism is safe for the Vitest suite** because every test file is self-isolated (its own temp `XDG_CONFIG_HOME`) and there are no `.concurrent` tests. **New unit tests must follow that pattern** (own `mktemp` sandbox + `stubEnv` in `beforeEach`) so they stay parallel-safe.
+**Parallelism is safe for the Vitest suite** because mutable filesystem tests are self-isolated and there are no `.concurrent` tests. Cursor-history also has a real multi-process lock test with six child writers. **New stateful unit tests must follow the same pattern**: own temporary roots, stub the relevant XDG variables in `beforeEach`, and clean up in `afterEach`.
 
-**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 18 + 20), build, and the offline `test-config-override-cli.sh` E2E (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they create real `TEST_*` entities in a throwaway Linear workspace.
+**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 18 + 20), build, and the offline config-override, cursor-history, and comment CLI E2E suites (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they create real `TEST_*` entities in a throwaway Linear workspace.
 
 **Running Tests:**
+
 ```bash
 # Run all unit tests once (recommended for CI/CD and verification)
 npm run test
@@ -1411,6 +1675,7 @@ npm run test:coverage
 ```
 
 **Running Specific Tests:**
+
 ```bash
 # Run only date parser tests (104 tests)
 npx vitest run src/lib/date-parser.test.ts
@@ -1423,10 +1688,12 @@ npx vitest run --reporter=verbose
 ```
 
 **Test Files:**
+
 - `src/lib/smoke.test.ts` - 4 basic sanity tests
 - `src/lib/date-parser.test.ts` - 104 comprehensive date parser tests
 
 **Date Parser Test Coverage (104 tests):**
+
 - Quarter formats (15 tests) - All Q1-Q4 variants, case sensitivity, validation
 - Half-year formats (10 tests) - H1/H2 variants, edge cases
 - Month formats - Numeric (10 tests) - YYYY-MM format with validation
@@ -1439,12 +1706,14 @@ npx vitest run --reporter=verbose
 - Edge cases (4 tests) - Whitespace, mixed case, boundaries
 
 **Helper Function Tests (20 tests):**
+
 - `getQuarterStartDate()` - 6 tests
 - `getHalfYearStartDate()` - 4 tests
 - `getMonthStartDate()` - 5 tests
 - `parseMonthName()` - 5 tests
 
 **Coverage:**
+
 - Target: 95%+ coverage for core utilities
 - Current: `date-parser.ts` has **99.10%** coverage
   - Statements: 99.10%
@@ -1458,6 +1727,7 @@ npx vitest run --reporter=verbose
 This project uses [np](https://github.com/sindresorhus/np) for automated publishing to npm.
 
 **Prerequisites:**
+
 - npm account with publish access
 - Logged in: `npm whoami`
 - Clean git working directory
@@ -1512,6 +1782,7 @@ npx a2l --version
 Delete commands are **intentionally omitted** for data safety. This is a deliberate design choice — not a missing feature. Destructive operations like deleting projects or permanently removing issues should be done through the Linear web UI where you can visually confirm what you're deleting.
 
 For issues, you can use the trash/restore workflow:
+
 ```bash
 agent2linear issue update ENG-123 --trash     # Move to trash (reversible)
 agent2linear issue update ENG-123 --untrash   # Restore from trash

@@ -2,6 +2,7 @@
 // This file aggregates all domain-specific API modules for convenient importing
 
 export * from './client.js';
+export * from './comments.js';
 export * from './cycles.js';
 export * from './initiatives.js';
 export * from './issues.js';

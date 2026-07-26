@@ -1,48 +1,20 @@
-import { Command } from 'commander';
-import * as readline from 'readline';
+import type { Command } from 'commander';
 
-import { resolveAlias } from '../../lib/aliases.js';
-import { deleteProjectLabel,getProjectLabelById } from '../../lib/linear-client.js';
+import { type LabelDeleteOptions,runLabelDelete } from '../labels/runner.js';
 
-async function confirm(message: string): Promise<boolean> {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(`${message} (y/N): `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
-    });
-  });
-}
-
-export function deleteProjectLabelCommand(program: Command) {
+export function deleteProjectLabelCommand(program: Command): void {
   program
     .command('delete <id>')
-    .description('Delete a project label')
-    .option('-y, --yes', 'Skip confirmation prompt')
-    .action(async (id: string, options) => {
-      try {
-        const resolvedId = resolveAlias('project-label', id);
-        const label = await getProjectLabelById(resolvedId);
-
-        if (!label) {
-          const { formatEntityNotFoundError } = await import('../../lib/validators.js');
-          console.error(formatEntityNotFoundError('project label', id, 'project-labels list'));
-          process.exit(1);
-        }
-
-        if (!options.yes) {
-          const confirmed = await confirm(`Delete label ${label.name}?`);
-          if (!confirmed) {
-            console.log('❌ Deletion cancelled');
-            process.exit(0);
-          }
-        }
-
-        await deleteProjectLabel(resolvedId);
-        console.log(`✅ Label deleted: ${label.name}`);
-      } catch (error) {
-        console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
-        process.exit(1);
-      }
+    .description('Permanently delete a project label')
+    .option('-y, --yes', 'Supply destructive and workspace confirmation consent')
+    .option('--dry-run', 'Preview the deletion without mutating Linear')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
+    .option('--json', 'Equivalent to --output json')
+    .option('--no-input', 'Never prompt; require --yes when consent is needed')
+    .action(async (id: string, options: LabelDeleteOptions, command: Command) => {
+      await runLabelDelete('project', id, {
+        ...options,
+        outputSource: command.getOptionValueSource('output') === 'cli' ? 'explicit' : 'default',
+      });
     });
 }

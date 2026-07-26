@@ -1,5 +1,14 @@
 import type { LinearClient as SDKClient } from '@linear/sdk';
 
+import {
+  type ConnectionPage,
+  type PageInput,
+  type PageMatchPredicate,
+  type PageResult,
+  PaginationInputError,
+  PaginationRuntimeError,
+  walkPages,
+} from '../pagination.js';
 import { getRelationDirection } from '../parsers.js';
 import type {
   ProjectListFilters,
@@ -85,6 +94,7 @@ export interface ProjectUpdateInput {
   // M15 Phase 3: Date Resolutions
   startDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year';
   targetDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year';
+  trashed?: boolean;
 }
 
 /**
@@ -135,117 +145,138 @@ export interface ExternalLinkCreateInput {
 }
 
 /**
- * Get all projects with optional filtering
- *
- * Performance Optimization (M21 Extended):
- * - Conditional fetching: Only fetch labels/members if used for filtering
- * - Two-query approach: Minimal query + optional batch query for labels/members
- * - In-code join to combine results
- * - API call reduction:
- *   - No filters: 1 call (was 1+N)
- *   - With label/member filters: 2 calls (was 1+N)
- *   - Overall: 92-98% reduction in API calls
- *
- * @param filters - Optional filters for projects
- * @returns Array of project list items
+ * Shared cursor-page adapter for project lists (M34).
  */
-export async function getAllProjects(filters?: ProjectListFilters): Promise<ProjectListItem[]> {
-  try {
-    const client = getLinearClient();
+export const PROJECT_LIST_ORDER = 'updatedAt:desc' as const;
+/**
+ * Linear rejects the project selection above this size for query complexity.
+ * This internal cap does not change the public --limit range.
+ */
+export const PROJECT_LIST_PAGE_SIZE = 50;
 
-    // Build GraphQL filter object
-    interface DateRangeFilter { gte?: string; lte?: string }
-    const graphqlFilter: Record<string, unknown> & { startDate?: DateRangeFilter; targetDate?: DateRangeFilter } = {};
+interface ProjectDateRangeFilter {
+  gte?: string;
+  lte?: string;
+}
 
-    if (filters?.teamId) {
-      graphqlFilter.accessibleTeams = { some: { id: { eq: filters.teamId } } };
-    }
+interface RawProjectRelation {
+  id: string;
+  type: 'dependency';
+  anchorType: 'start' | 'end';
+  relatedAnchorType: 'start' | 'end';
+  project: { id: string; name?: string };
+  relatedProject: { id: string; name?: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-    if (filters?.initiativeId) {
-      graphqlFilter.initiatives = { some: { id: { eq: filters.initiativeId } } };
-    }
+interface RawProject {
+  id: string;
+  name: string;
+  description?: string | null;
+  content?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  state: string;
+  priority?: number | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+  completedAt?: string | null;
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  teams?: { nodes?: Array<{ id: string; name: string; key: string }> };
+  lead?: { id: string; name: string; email: string } | null;
+  relations?: { nodes?: RawProjectRelation[] };
+}
 
-    if (filters?.statusId) {
-      graphqlFilter.status = { id: { eq: filters.statusId } };
-    }
+interface RawProjectEdge {
+  cursor?: string;
+  node?: RawProject;
+}
 
-    if (filters?.priority !== undefined) {
-      graphqlFilter.priority = { eq: filters.priority };
-    }
+interface RawProjectConnection {
+  edges?: Array<RawProjectEdge | null>;
+  pageInfo?: {
+    hasNextPage?: boolean;
+    endCursor?: string | null;
+  };
+}
 
-    if (filters?.leadId) {
-      graphqlFilter.lead = { id: { eq: filters.leadId } };
-    }
+interface RawLabel {
+  id: string;
+  name: string;
+  color?: string | null;
+}
 
-    if (filters?.memberIds && filters.memberIds.length > 0) {
-      graphqlFilter.members = { some: { id: { in: filters.memberIds } } };
-    }
+interface RawMember {
+  id: string;
+  name: string;
+  email: string;
+}
 
-    if (filters?.labelIds && filters.labelIds.length > 0) {
-      graphqlFilter.labels = { some: { id: { in: filters.labelIds } } };
-    }
+interface ProjectAdditionalData {
+  labels: Map<string, RawLabel[]>;
+  members: Map<string, RawMember[]>;
+}
 
-    // Date range filters
-    if (filters?.startDateAfter || filters?.startDateBefore) {
-      graphqlFilter.startDate = {};
-      if (filters.startDateAfter) {
-        graphqlFilter.startDate.gte = filters.startDateAfter;
-      }
-      if (filters.startDateBefore) {
-        graphqlFilter.startDate.lte = filters.startDateBefore;
-      }
-    }
+function buildProjectGraphqlFilter(filters?: ProjectListFilters): Record<string, unknown> & {
+  startDate?: ProjectDateRangeFilter;
+  targetDate?: ProjectDateRangeFilter;
+} {
+  const graphqlFilter: Record<string, unknown> & {
+    startDate?: ProjectDateRangeFilter;
+    targetDate?: ProjectDateRangeFilter;
+  } = {};
 
-    if (filters?.targetDateAfter || filters?.targetDateBefore) {
-      graphqlFilter.targetDate = {};
-      if (filters.targetDateAfter) {
-        graphqlFilter.targetDate.gte = filters.targetDateAfter;
-      }
-      if (filters.targetDateBefore) {
-        graphqlFilter.targetDate.lte = filters.targetDateBefore;
-      }
-    }
+  if (filters?.teamId) {
+    graphqlFilter.accessibleTeams = { some: { id: { eq: filters.teamId } } };
+  }
+  if (filters?.initiativeId) {
+    graphqlFilter.initiatives = { some: { id: { eq: filters.initiativeId } } };
+  }
+  if (filters?.statusId) {
+    graphqlFilter.status = { id: { eq: filters.statusId } };
+  }
+  if (filters?.priority !== undefined) {
+    graphqlFilter.priority = { eq: filters.priority };
+  }
+  if (filters?.leadId) {
+    graphqlFilter.lead = { id: { eq: filters.leadId } };
+  }
+  if (filters?.memberIds?.length) {
+    graphqlFilter.members = { some: { id: { in: filters.memberIds } } };
+  }
+  if (filters?.labelIds?.length) {
+    graphqlFilter.labels = { some: { id: { in: filters.labelIds } } };
+  }
 
-    // Text search (search in name, description, content)
-    if (filters?.search) {
-      const searchTerm = filters.search.trim();
-      if (searchTerm.length > 0) {
-        graphqlFilter.or = [
-          { name: { containsIgnoreCase: searchTerm } },
-          { slugId: { containsIgnoreCase: searchTerm } },
-          { searchableContent: { contains: searchTerm } }
-        ];
-      }
-    }
+  if (filters?.startDateAfter || filters?.startDateBefore) {
+    graphqlFilter.startDate = {};
+    if (filters.startDateAfter) graphqlFilter.startDate.gte = filters.startDateAfter;
+    if (filters.startDateBefore) graphqlFilter.startDate.lte = filters.startDateBefore;
+  }
+  if (filters?.targetDateAfter || filters?.targetDateBefore) {
+    graphqlFilter.targetDate = {};
+    if (filters.targetDateAfter) graphqlFilter.targetDate.gte = filters.targetDateAfter;
+    if (filters.targetDateBefore) graphqlFilter.targetDate.lte = filters.targetDateBefore;
+  }
 
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Project filter:', JSON.stringify(graphqlFilter, null, 2));
-    }
+  const searchTerm = filters?.search?.trim();
+  if (searchTerm) {
+    graphqlFilter.or = [
+      { name: { containsIgnoreCase: searchTerm } },
+      { slugId: { containsIgnoreCase: searchTerm } },
+      { searchableContent: { contains: searchTerm } },
+    ];
+  }
 
-    // Determine what data needs to be fetched based on filters
-    const needsLabels = !!filters?.labelIds && filters.labelIds.length > 0;
-    const needsMembers = !!filters?.memberIds && filters.memberIds.length > 0;
-    const needsDependencies = !!filters?.includeDependencies; // M23
-    const needsAdditionalData = needsLabels || needsMembers;
+  return graphqlFilter;
+}
 
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Conditional fetch:', { needsLabels, needsMembers, needsAdditionalData });
-    }
-
-    // ========================================
-    // PAGINATION SETUP (M21.1)
-    // ========================================
-    const pageSize = filters?.fetchAll ? 250 : Math.min(filters?.limit || 50, 250);
-    const fetchAll = filters?.fetchAll || false;
-    const targetLimit = filters?.limit || 50;
-
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Pagination:', { pageSize, fetchAll, targetLimit });
-    }
-
-    // QUERY 1: Minimal - Always fetch core project data (projects, teams, leads)
-    // M23: Conditionally include relations if dependencies are requested
-    const relationsFragment = needsDependencies ? `
+function buildProjectListQuery(needsDependencies: boolean): string {
+  const relationsFragment = needsDependencies
+    ? `
             relations {
               nodes {
                 id
@@ -255,12 +286,26 @@ export async function getAllProjects(filters?: ProjectListFilters): Promise<Proj
                 project { id }
                 relatedProject { id }
               }
-            }` : '';
+            }`
+    : '';
 
-    const minimalQuery = `
-      query GetMinimalProjects($filter: ProjectFilter, $includeArchived: Boolean, $first: Int, $after: String) {
-        projects(filter: $filter, includeArchived: $includeArchived, first: $first, after: $after) {
-          nodes {
+  return `
+    query GetMinimalProjects(
+      $filter: ProjectFilter
+      $includeArchived: Boolean
+      $first: Int
+      $after: String
+    ) {
+      projects(
+        filter: $filter
+        includeArchived: $includeArchived
+        first: $first
+        after: $after
+        sort: [{ updatedAt: { order: Descending } }]
+      ) {
+        edges {
+          cursor
+          node {
             id
             name
             description
@@ -275,7 +320,6 @@ export async function getAllProjects(filters?: ProjectListFilters): Promise<Proj
             url
             createdAt
             updatedAt
-
             teams {
               nodes {
                 id
@@ -283,7 +327,6 @@ export async function getAllProjects(filters?: ProjectListFilters): Promise<Proj
                 key
               }
             }
-
             lead {
               id
               name
@@ -291,245 +334,205 @@ export async function getAllProjects(filters?: ProjectListFilters): Promise<Proj
             }
 ${relationsFragment}
           }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
-    `;
-
-    // ========================================
-    // PAGINATION LOOP (M21.1)
-    // ========================================
-    interface RawProjectRelation {
-      id: string;
-      type: 'dependency';
-      anchorType: 'start' | 'end';
-      relatedAnchorType: 'start' | 'end';
-      project: { id: string; name: string };
-      relatedProject: { id: string; name: string };
-      createdAt: string;
-      updatedAt: string;
     }
+  `;
+}
 
-    interface RawProject {
-      id: string;
-      name: string;
-      description?: string;
-      content?: string;
-      icon?: string;
-      color?: string;
-      state: string;
-      priority?: number;
-      startDate?: string;
-      targetDate?: string;
-      completedAt?: string;
-      url: string;
-      createdAt: string;
-      updatedAt: string;
-      teams?: { nodes: Array<{ id: string; name: string; key: string }> };
-      lead?: { id: string; name: string; email: string };
-      relations?: { nodes: RawProjectRelation[] };
+async function fetchAdditionalProjectData(
+  client: ReturnType<typeof getLinearClient>,
+  rawProjects: RawProject[],
+  needed: boolean
+): Promise<ProjectAdditionalData> {
+  const labels = new Map<string, RawLabel[]>();
+  const members = new Map<string, RawMember[]>();
+  if (!needed || rawProjects.length === 0) {
+    return { labels, members };
+  }
+
+  const batchQuery = `
+    query GetProjectsLabelsAndMembers {
+      ${rawProjects
+        .map(
+          (project, index) => `
+        project${index}: project(id: "${project.id}") {
+          id
+          labels { nodes { id name color } }
+          members { nodes { id name email } }
+        }`
+        )
+        .join('\n')}
     }
-
-    let rawProjects: RawProject[] = [];
-    let cursor: string | null = null;
-    let hasNextPage = true;
-    let pageCount = 0;
-
-    while (hasNextPage && (fetchAll || rawProjects.length < targetLimit)) {
-      pageCount++;
-
-      const variables = {
-        filter: Object.keys(graphqlFilter).length > 0 ? graphqlFilter : null,
-        includeArchived: false,
-        first: pageSize,
-        after: cursor
-      };
-
-      const minimalResponse = await client.client.rawRequest(minimalQuery, variables) as { data?: { projects?: { nodes?: RawProject[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } } } };
-
-      const nodes = minimalResponse.data?.projects?.nodes || [];
-      const pageInfo = minimalResponse.data?.projects?.pageInfo;
-
-      rawProjects.push(...nodes);
-
-      hasNextPage = pageInfo?.hasNextPage || false;
-      cursor = pageInfo?.endCursor || null;
-
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error(`[agent2linear] Page ${pageCount}: fetched ${nodes.length} projects (total: ${rawProjects.length}, hasNextPage: ${hasNextPage})`);
+  `;
+  const response = (await client.client.rawRequest(batchQuery, {})) as {
+    data?: Record<
+      string,
+      {
+        id: string;
+        labels?: { nodes?: RawLabel[] };
+        members?: { nodes?: RawMember[] };
       }
-
-      // If not fetching all, stop when we have enough
-      if (!fetchAll && rawProjects.length >= targetLimit) {
-        break;
-      }
+    >;
+  };
+  rawProjects.forEach((project, index) => {
+    const data = response.data?.[`project${index}`];
+    if (data) {
+      labels.set(project.id, data.labels?.nodes ?? []);
+      members.set(project.id, data.members?.nodes ?? []);
     }
+  });
+  return { labels, members };
+}
 
-    // ========================================
-    // QUERY 2: CONDITIONAL - Batch fetch labels+members IF filters use them
-    // ========================================
-    interface RawLabel { id: string; name: string; color?: string }
-    interface RawMember { id: string; name: string; email: string }
-
-    const labelsMap: Map<string, RawLabel[]> = new Map();
-    const membersMap: Map<string, RawMember[]> = new Map();
-
-    if (needsAdditionalData && rawProjects.length > 0) {
-      const projectIds = rawProjects.map((p: RawProject) => p.id);
-
-      const batchQuery = `
-        query GetProjectsLabelsAndMembers($ids: [String!]!) {
-          ${projectIds.map((id: string, index: number) => `
-            project${index}: project(id: "${id}") {
-              id
-              labels {
-                nodes {
-                  id
-                  name
-                  color
-                }
-              }
-              members {
-                nodes {
-                  id
-                  name
-                  email
-                }
-              }
-            }
-          `).join('\n')}
-        }
-      `;
-
-      const batchResponse = await client.client.rawRequest(batchQuery, {}) as { data?: Record<string, { id: string; labels?: { nodes: RawLabel[] }; members?: { nodes: RawMember[] } }> };
-
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error('[agent2linear] Batch query fetched labels+members for', projectIds.length, 'projects');
+function mapProjectListItem(
+  project: RawProject,
+  additional: ProjectAdditionalData,
+  needsDependencies: boolean
+): ProjectListItem {
+  let dependsOnCount: number | undefined;
+  let blocksCount: number | undefined;
+  if (needsDependencies) {
+    const relations = project.relations?.nodes ?? [];
+    dependsOnCount = relations.filter(relation => {
+      try {
+        return getRelationDirection(relation as never, project.id) === 'depends-on';
+      } catch {
+        return false;
       }
-
-      // Parse batch response and build maps for in-code join
-      projectIds.forEach((projectId: string, index: number) => {
-        const projectData = batchResponse.data?.[`project${index}`];
-        if (projectData) {
-          labelsMap.set(projectId, projectData.labels?.nodes || []);
-          membersMap.set(projectId, projectData.members?.nodes || []);
-        }
-      });
-    }
-
-    // ========================================
-    // TRUNCATION (M21.1)
-    // ========================================
-    if (!fetchAll && rawProjects.length > targetLimit) {
-      if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-        console.error(`[agent2linear] Truncating from ${rawProjects.length} to ${targetLimit} projects`);
+    }).length;
+    blocksCount = relations.filter(relation => {
+      try {
+        return getRelationDirection(relation as never, project.id) === 'blocks';
+      } catch {
+        return false;
       }
-      rawProjects = rawProjects.slice(0, targetLimit);
-    }
+    }).length;
+  }
 
-    // ========================================
-    // BUILD FINAL PROJECT LIST (IN-CODE JOIN)
-    // ========================================
-    const projectList: ProjectListItem[] = rawProjects.map((project: RawProject) => {
-      const labels = labelsMap.get(project.id) || [];
-      const members = membersMap.get(project.id) || [];
-
-      // M23: Calculate dependency counts if relations were fetched
-      let dependsOnCount: number | undefined = undefined;
-      let blocksCount: number | undefined = undefined;
-
-      if (needsDependencies) {
-        // Initialize to 0 when fetching dependencies
-        dependsOnCount = 0;
-        blocksCount = 0;
-
-        // Count relations if present
-        if (project.relations?.nodes) {
-          const relations = project.relations.nodes;
-
-          dependsOnCount = relations.filter((rel: RawProjectRelation) => {
-            try {
-              return getRelationDirection(rel, project.id) === 'depends-on';
-            } catch {
-              return false;
-            }
-          }).length;
-
-          blocksCount = relations.filter((rel: RawProjectRelation) => {
-            try {
-              return getRelationDirection(rel, project.id) === 'blocks';
-            } catch {
-              return false;
-            }
-          }).length;
-        }
-      }
-
-      return {
-        id: project.id,
-        name: project.name,
-        description: project.description || undefined,
-        content: project.content || undefined,
-        icon: project.icon || undefined,
-        color: project.color || undefined,
-        state: project.state,
-        priority: project.priority !== undefined ? project.priority : undefined,
-
-        status: undefined, // Project status is not available in Linear SDK v27+
-
-        lead: project.lead ? {
-          id: project.lead.id,
-          name: project.lead.name,
-          email: project.lead.email
-        } : undefined,
-
-        team: project.teams?.nodes?.[0] ? {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description || undefined,
+    content: project.content || undefined,
+    icon: project.icon || undefined,
+    color: project.color || undefined,
+    state: project.state,
+    priority: project.priority ?? undefined,
+    status: undefined,
+    lead: project.lead
+      ? { id: project.lead.id, name: project.lead.name, email: project.lead.email }
+      : undefined,
+    team: project.teams?.nodes?.[0]
+      ? {
           id: project.teams.nodes[0].id,
           name: project.teams.nodes[0].name,
-          key: project.teams.nodes[0].key
-        } : undefined,
+          key: project.teams.nodes[0].key,
+        }
+      : undefined,
+    initiative: undefined,
+    labels: (additional.labels.get(project.id) ?? []).map(label => ({
+      id: label.id,
+      name: label.name,
+      color: label.color || undefined,
+    })),
+    members: (additional.members.get(project.id) ?? []).map(member => ({
+      id: member.id,
+      name: member.name,
+      email: member.email,
+    })),
+    startDate: project.startDate || undefined,
+    targetDate: project.targetDate || undefined,
+    completedAt: project.completedAt || undefined,
+    url: project.url,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    dependsOnCount,
+    blocksCount,
+  };
+}
 
-        initiative: undefined, // Initiative relationship needs to be fetched differently
+export async function getProjectListPage(
+  filters: ProjectListFilters | undefined = undefined,
+  pageInput: PageInput = {},
+  matches?: PageMatchPredicate<ProjectListItem>
+): Promise<PageResult<ProjectListItem>> {
+  try {
+    const client = getLinearClient();
+    const graphqlFilter = buildProjectGraphqlFilter(filters);
+    const needsAdditionalData = Boolean(filters?.labelIds?.length || filters?.memberIds?.length);
+    const needsDependencies = filters?.includeDependencies === true;
+    const query = buildProjectListQuery(needsDependencies);
 
-        labels: labels.map((label: RawLabel) => ({
-          id: label.id,
-          name: label.name,
-          color: label.color || undefined
+    const fetchPage = async ({
+      first,
+      after,
+    }: {
+      first: number;
+      after: string | null;
+    }): Promise<ConnectionPage<ProjectListItem>> => {
+      const response = (await client.client.rawRequest(query, {
+        filter: Object.keys(graphqlFilter).length > 0 ? graphqlFilter : null,
+        includeArchived: false,
+        first,
+        after,
+      })) as { data?: { projects?: RawProjectConnection } };
+      const connection = response.data?.projects;
+      if (!connection || !Array.isArray(connection.edges)) {
+        return connection as unknown as ConnectionPage<ProjectListItem>;
+      }
+
+      const rawProjects = connection.edges.flatMap(edge =>
+        edge?.node && typeof edge.node.id === 'string' ? [edge.node] : []
+      );
+      const additional = await fetchAdditionalProjectData(client, rawProjects, needsAdditionalData);
+
+      return {
+        edges: connection.edges.map(edge => ({
+          cursor: edge?.cursor as string,
+          node: edge?.node
+            ? mapProjectListItem(edge.node, additional, needsDependencies)
+            : ({ id: undefined } as unknown as ProjectListItem),
         })),
-
-        members: members.map((member: RawMember) => ({
-          id: member.id,
-          name: member.name,
-          email: member.email
-        })),
-
-        startDate: project.startDate || undefined,
-        targetDate: project.targetDate || undefined,
-        completedAt: project.completedAt || undefined,
-
-        url: project.url,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-
-        // M23: Include dependency counts if fetched
-        dependsOnCount,
-        blocksCount
+        pageInfo: connection.pageInfo as ConnectionPage<ProjectListItem>['pageInfo'],
       };
-    });
+    };
 
-    return projectList;
+    return await walkPages({
+      limit: pageInput.limit ?? filters?.limit,
+      after: pageInput.after,
+      fetchAll: pageInput.fetchAll ?? filters?.fetchAll,
+      fetchPage,
+      matches,
+      requestPageSize: PROJECT_LIST_PAGE_SIZE,
+    });
   } catch (error) {
-    if (error instanceof LinearClientError) {
+    if (
+      error instanceof LinearClientError ||
+      error instanceof PaginationInputError ||
+      error instanceof PaginationRuntimeError
+    ) {
       throw error;
     }
-
     throw new Error(
       `Failed to fetch projects: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
   }
+}
+
+/**
+ * Backward-compatible array helper for internal callers.
+ */
+export async function getAllProjects(filters?: ProjectListFilters): Promise<ProjectListItem[]> {
+  const result = await getProjectListPage(filters, {
+    limit: filters?.limit,
+    fetchAll: filters?.fetchAll,
+  });
+  return result.items;
 }
 
 /**
@@ -644,7 +647,9 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
     }
 
     // Create the project
-    const projectPayload = await client.createProject(createInput as Parameters<typeof client.createProject>[0]);
+    const projectPayload = await client.createProject(
+      createInput as Parameters<typeof client.createProject>[0]
+    );
 
     const project = await projectPayload.project;
 
@@ -655,14 +660,21 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
     // Debug: Check if template was applied
     if (process.env.DEBUG && input.templateId) {
       try {
-        const lastAppliedTemplate = await (project as { lastAppliedTemplate?: { id: string; name: string } }).lastAppliedTemplate;
+        const lastAppliedTemplate = await (
+          project as { lastAppliedTemplate?: { id: string; name: string } }
+        ).lastAppliedTemplate;
         if (lastAppliedTemplate) {
-          console.log(`DEBUG: Template applied - ID: ${lastAppliedTemplate.id}, Name: ${lastAppliedTemplate.name}`);
+          console.log(
+            `DEBUG: Template applied - ID: ${lastAppliedTemplate.id}, Name: ${lastAppliedTemplate.name}`
+          );
         } else {
           console.log('DEBUG: No template was applied to the project');
         }
       } catch (err) {
-        console.log('DEBUG: Could not check lastAppliedTemplate:', err instanceof Error ? err.message : err);
+        console.log(
+          'DEBUG: Could not check lastAppliedTemplate:',
+          err instanceof Error ? err.message : err
+        );
       }
     }
 
@@ -684,7 +696,9 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
         });
 
         if (process.env.DEBUG) {
-          console.log(`DEBUG: Successfully linked project ${project.id} to initiative ${input.initiativeId}`);
+          console.log(
+            `DEBUG: Successfully linked project ${project.id} to initiative ${input.initiativeId}`
+          );
         }
       } catch (err) {
         // Initiative link failed - log in debug mode
@@ -801,10 +815,40 @@ export async function updateProject(
     if (updates.targetDateResolution !== undefined) {
       updateInput.targetDateResolution = updates.targetDateResolution;
     }
+    // Linear's supported trash lifecycle uses projectArchive({ trash: true }) and
+    // unarchiveProject. Although the pinned schema still declares ProjectUpdateInput.trashed,
+    // Linear returns an internal server error when that field is sent through projectUpdate.
+    // Apply untrash before ordinary field updates and trash after them so combined invocations
+    // operate on an active project while preserving a single command transaction boundary.
+    let project: Awaited<ReturnType<typeof client.project>> | undefined;
 
-    // Update the project
-    const projectPayload = await client.updateProject(projectId, updateInput as Parameters<typeof client.updateProject>[1]);
-    const project = await projectPayload.project;
+    if (updates.trashed === false) {
+      const lifecyclePayload = await client.unarchiveProject(projectId);
+      project = await lifecyclePayload.entity;
+      if (!lifecyclePayload.success || !project) {
+        throw new Error('Failed to untrash project: No project returned from API');
+      }
+    }
+
+    const hasFieldUpdates = Object.keys(updateInput).length > 0;
+    if (hasFieldUpdates || updates.trashed === undefined) {
+      const projectPayload = await client.updateProject(
+        projectId,
+        updateInput as Parameters<typeof client.updateProject>[1]
+      );
+      project = await projectPayload.project;
+      if (!project) {
+        throw new Error('Failed to update project: No project returned from API');
+      }
+    }
+
+    if (updates.trashed === true) {
+      const lifecyclePayload = await client.archiveProject(projectId, { trash: true });
+      project = await lifecyclePayload.entity;
+      if (!lifecyclePayload.success || !project) {
+        throw new Error('Failed to trash project: No project returned from API');
+      }
+    }
 
     if (!project) {
       throw new Error('Failed to update project: No project returned from API');
@@ -868,9 +912,7 @@ export async function updateProject(
  * Uses custom GraphQL query to avoid N+1 pattern (3 API calls -> 1 call)
  * Fetches project with initiatives and teams upfront instead of lazy loading via SDK
  */
-export async function getProjectById(
-  projectId: string
-): Promise<ProjectResult | null> {
+export async function getProjectById(projectId: string): Promise<ProjectResult | null> {
   try {
     const client = getLinearClient();
 
@@ -911,7 +953,9 @@ export async function getProjectById(
       teams?: { nodes?: Array<{ id: string; name: string }> };
     }
 
-    const response = await client.client.rawRequest(projectQuery, { projectId }) as { data?: { project?: RawProjectById } };
+    const response = (await client.client.rawRequest(projectQuery, { projectId })) as {
+      data?: { project?: RawProjectById };
+    };
     const project = response.data?.project;
 
     if (!project) {
@@ -979,7 +1023,8 @@ export async function getProjectDetails(projectId: string): Promise<{
     // Get last applied template
     let lastAppliedTemplate;
     try {
-      const template = await (project as { lastAppliedTemplate?: { id: string; name: string } }).lastAppliedTemplate;
+      const template = await (project as { lastAppliedTemplate?: { id: string; name: string } })
+        .lastAppliedTemplate;
       if (template) {
         lastAppliedTemplate = {
           id: template.id,
@@ -1121,7 +1166,9 @@ export async function getFullProjectDetails(projectId: string): Promise<{
       issues?: { nodes?: Array<{ id: string; identifier: string; title: string }> };
     }
 
-    const response = await client.client.rawRequest(projectQuery, { projectId }) as { data?: { project?: RawProjectDetails } };
+    const response = (await client.client.rawRequest(projectQuery, { projectId })) as {
+      data?: { project?: RawProjectDetails };
+    };
     const projectData = response.data?.project;
 
     if (!projectData) {
@@ -1150,16 +1197,20 @@ export async function getFullProjectDetails(projectId: string): Promise<{
         }
       : undefined;
 
-    const milestones = (projectData.projectMilestones?.nodes || []).map((milestone: { id: string; name: string }) => ({
-      id: milestone.id,
-      name: milestone.name,
-    }));
+    const milestones = (projectData.projectMilestones?.nodes || []).map(
+      (milestone: { id: string; name: string }) => ({
+        id: milestone.id,
+        name: milestone.name,
+      })
+    );
 
-    const issues = (projectData.issues?.nodes || []).map((issue: { id: string; identifier: string; title: string }) => ({
-      id: issue.id,
-      identifier: issue.identifier,
-      title: issue.title,
-    }));
+    const issues = (projectData.issues?.nodes || []).map(
+      (issue: { id: string; identifier: string; title: string }) => ({
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+      })
+    );
 
     return {
       project: {
@@ -1196,14 +1247,23 @@ export async function getAllProjectStatuses(): Promise<ProjectStatus[]> {
     const organization = await client.organization;
     const statuses = await organization.projectStatuses;
 
-    return statuses.map((status: { id: string; name: string; type: string; color: string; description?: string; position: number }) => ({
-      id: status.id,
-      name: status.name,
-      type: status.type as 'planned' | 'started' | 'paused' | 'completed' | 'canceled',
-      color: status.color,
-      description: status.description || undefined,
-      position: status.position,
-    }));
+    return statuses.map(
+      (status: {
+        id: string;
+        name: string;
+        type: string;
+        color: string;
+        description?: string;
+        position: number;
+      }) => ({
+        id: status.id,
+        name: status.name,
+        type: status.type as 'planned' | 'started' | 'paused' | 'completed' | 'canceled',
+        color: status.color,
+        description: status.description || undefined,
+        position: status.position,
+      })
+    );
   } catch (error) {
     if (error instanceof LinearClientError) {
       throw error;
