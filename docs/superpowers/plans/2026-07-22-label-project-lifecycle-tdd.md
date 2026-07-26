@@ -59,8 +59,9 @@ the three requested status columns while requiring recorded RED evidence before 
 ### 1.3 Enhancement: semantic IDs instead of release-number IDs
 
 IDs use the stable `LPL-*` prefix (Label and Project Lifecycle), not the assigned milestone number.
-This plan remains project M33 while joining the coordinated M33–M35 major-release train. `v1.0.0`
-is recommended because M34 changes existing list JSON and M33 corrects existing `--all` scope.
+This plan remains project M33 while joining the accepted coordinated M33–M35 major-release train.
+`v1.0.0` or later is required because M34 changes existing list JSON and M33 corrects existing
+`--all` scope.
 Its semantic IDs remain stable if release scheduling changes.
 
 ### 1.4 Enhancement: status is computed from evidence
@@ -1073,7 +1074,7 @@ Names may be refined during Phase 1, but changes must remain within these respon
 - Custom cursor tokens or label-local cursor-history persistence; both contracts are owned by M34.
 - New remote-result cache, async, streaming, or plugin behavior.
 - Release, version bump, publish, push, or PR creation unless separately authorized. This plan
-  recommends but does not perform the coordinated `v1.0.0` release.
+  records but does not perform the accepted coordinated `v1.0.0`-or-later release.
 
 ---
 

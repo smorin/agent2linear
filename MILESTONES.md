@@ -15,15 +15,19 @@
 
 ---
 
-## [x] Milestone M35: First-class Issue and Project Comments (breaking release; v1.0.0 recommended)
+## [x] Milestone M35: First-class Issue and Project Comments (breaking release; v1.0.0-or-later accepted)
 
-> **Status:** Implemented and verified in the dedicated combined M34/M35 worktree; 318-ID evidence is published. Release remains blocked on the documented CLI Standard R9.2/R9.3 decision.
+> **Status:** Complete — implemented and verified in the dedicated combined M34/M35 worktree; 318-ID evidence is published. On 2026-07-25 the project owner accepted the coordinated `v1.0.0`-or-later release path, resolving R9.3 version selection while retaining the explicit R9.2 nonconformance.
 >
-> **Authoritative plan and ID ledger:**
+> **Authoritative plan and ID registry:**
 > [docs/superpowers/plans/2026-07-22-M35-issue-project-comments-tdd.md](docs/superpowers/plans/2026-07-22-M35-issue-project-comments-tdd.md)
 >
+> **318-ID completion map and evidence ledger:**
+> [docs/superpowers/plans/2026-07-24-M35-traceability.md](docs/superpowers/plans/2026-07-24-M35-traceability.md)
+>
 > **Tracking rule:** The milestone tasks below are rollups, not substitutes for the plan's 318
-> stable `CMT-*` atomic IDs. A rollup completes only when every child ID has
+> stable `CMT-*` atomic IDs. Current child status is read from the completion map; a rollup completes
+> only when every child ID has
 > `I=DONE|BASELINE|N/A`, `T=GREEN|N/A` with prior RED evidence for changed behavior, and
 > `V=PASS|N/A`.
 
@@ -43,8 +47,8 @@ an atomic TDD-tracked ID.
   introduced.
 - Remove the legacy `issue comment <identifier>` execution path immediately and return a usage
   error naming `issue comment add`. This is an explicit CLI Standard R9.2 incompatibility. Because
-  the interface break is major under R9.3, `v1.0.0` is recommended; release remains blocked if the
-  project tries to claim publishable conformance while shipping the break as `v0.35.0`.
+  the interface break is major under R9.3, the project owner accepted a coordinated `v1.0.0`-or-later
+  release on 2026-07-25; shipping the break as `v0.35.0` remains prohibited.
 - Both add commands have identical `--body`, `--body-file <path|->`, `--reply-to`, `--dry-run`,
   `-o/--output table|json`, `--json`, `-y/--yes`, and `--no-input` contracts. With no explicit body
   source, non-TTY stdin is read automatically; empty input and two-source conflicts fail before
@@ -91,8 +95,10 @@ an atomic TDD-tracked ID.
   implicit stdin behavior.
 - **R4.2 local divergence:** use Standard-compliant `-o/--output` plus equivalent `--json` instead
   of copying older a2l `-f/--format` list spelling.
-- **R9.2 blocker:** user-directed immediate legacy removal omits the mandated deprecation window.
-- **R9.3 release blocker:** breaking grammar requires a major version; `v1.0.0` is recommended.
+- **R9.2 accepted nonconformance:** user-directed immediate legacy removal omits the mandated
+  deprecation window. This exception is explicit but does not claim R9.2 conformance.
+- **R9.3 decision:** breaking grammar requires a major version; the project owner accepted the
+  coordinated `v1.0.0`-or-later path on 2026-07-25.
 - **R10.2/R10.3 dependency:** M34 solely owns the retained a2l `--all` pagination waiver; M35
   cites it and adds no comment-specific waiver or alternate `--paginate` spelling.
 - **R5.5 pre-existing blocker:** inherited `--api-key <key>` accepts secrets on argv; M35 does not
@@ -243,8 +249,8 @@ context; M34 is a one-way dependency and never waits on M33 or M35.
   `--paginate` island. Record the SHOULD deviation in `CONFORMANCE.md`.
 - **R6.1/R9.3:** corrected pagination usage failures exit 2; because exit codes are public, the
   existing issue/project change ships only in the coordinated major release.
-- **R9.3:** existing JSON-array-to-envelope changes require a major release. M34 must not be released
-  as an ordinary additive `v0.34.0` while claiming publishable conformance.
+- **R9.3:** existing JSON-array-to-envelope changes require a major release. The accepted
+  coordinated `v1.0.0`-or-later path resolves version selection; M34 must not ship as `v0.34.0`.
 
 ### Out of Scope
 
@@ -331,8 +337,9 @@ and consistently paginated, fix known label correctness defects, and add reversi
 trash/untrash through the existing project update command. Preserve the established
 `issue-labels`/`ilbl` and `project-labels`/`plbl` families, existing scripts, and workspace-routing
 safety while bringing the changed surface to the CLI Design Standard v1.4.14 publishable tier. M33
-retains its project number but ships on the coordinated M33–M35 major-release train; `v1.0.0` is
-recommended because M34 changes existing JSON and M33 corrects existing `--all` semantics.
+retains its project number but ships on the accepted coordinated M33–M35 major-release train;
+`v1.0.0` or later is required because M34 changes existing JSON and M33 corrects existing `--all`
+semantics.
 
 ### Requirements
 
@@ -396,8 +403,9 @@ recommended because M34 changes existing JSON and M33 corrects existing `--all` 
   because Linear exposes reversible trash state and this matches the existing issue lifecycle.
 - **R10.2/R10.3 dependency:** M34 solely owns the retained a2l `--all` pagination waiver. M33
   cites it for cross-command compatibility and does not publish a second label-specific waiver.
-- **R9.3 release blocker:** the M34 JSON envelope and M33 `project-labels --all` scope correction are
-  breaking. Do not ship this integrated plan as `v0.33.0`; use the coordinated major release.
+- **R9.3 decision:** the M34 JSON envelope and M33 `project-labels --all` scope correction are
+  breaking. The project owner accepted the coordinated `v1.0.0`-or-later release on 2026-07-25;
+  do not ship this integrated plan as `v0.33.0`.
 
 ### Out of Scope
 
@@ -408,8 +416,8 @@ recommended because M34 changes existing JSON and M33 corrects existing `--all` 
   migrations.
 - New remote-result caching, async, streaming, plugin, or configuration behavior. Cursor history is
   the M34 XDG-state dependency, not an M33 cache.
-- Version bump, release, publish, push, or PR creation. The plan recommends but does not perform the
-  coordinated `v1.0.0` release.
+- Version bump, release, publish, push, or PR creation. The plan records but does not perform the
+  accepted coordinated `v1.0.0`-or-later release.
 
 ### Tasks
 
