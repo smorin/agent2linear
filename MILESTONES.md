@@ -19,11 +19,15 @@
 
 > **Status:** Complete — implemented and verified in the dedicated combined M34/M35 worktree; 318-ID evidence is published. On 2026-07-25 the project owner accepted the coordinated `v1.0.0`-or-later release path, resolving R9.3 version selection while retaining the explicit R9.2 nonconformance.
 >
-> **Authoritative plan and ID ledger:**
+> **Authoritative plan and ID registry:**
 > [docs/superpowers/plans/2026-07-22-M35-issue-project-comments-tdd.md](docs/superpowers/plans/2026-07-22-M35-issue-project-comments-tdd.md)
 >
+> **318-ID completion map and evidence ledger:**
+> [docs/superpowers/plans/2026-07-24-M35-traceability.md](docs/superpowers/plans/2026-07-24-M35-traceability.md)
+>
 > **Tracking rule:** The milestone tasks below are rollups, not substitutes for the plan's 318
-> stable `CMT-*` atomic IDs. A rollup completes only when every child ID has
+> stable `CMT-*` atomic IDs. Current child status is read from the completion map; a rollup completes
+> only when every child ID has
 > `I=DONE|BASELINE|N/A`, `T=GREEN|N/A` with prior RED evidence for changed behavior, and
 > `V=PASS|N/A`.
 
@@ -333,8 +337,9 @@ and consistently paginated, fix known label correctness defects, and add reversi
 trash/untrash through the existing project update command. Preserve the established
 `issue-labels`/`ilbl` and `project-labels`/`plbl` families, existing scripts, and workspace-routing
 safety while bringing the changed surface to the CLI Design Standard v1.4.14 publishable tier. M33
-retains its project number but ships on the coordinated M33–M35 major-release train; `v1.0.0` is
-recommended because M34 changes existing JSON and M33 corrects existing `--all` semantics.
+retains its project number but ships on the accepted coordinated M33–M35 major-release train;
+`v1.0.0` or later is required because M34 changes existing JSON and M33 corrects existing `--all`
+semantics.
 
 ### Requirements
 
@@ -411,8 +416,8 @@ recommended because M34 changes existing JSON and M33 corrects existing `--all` 
   migrations.
 - New remote-result caching, async, streaming, plugin, or configuration behavior. Cursor history is
   the M34 XDG-state dependency, not an M33 cache.
-- Version bump, release, publish, push, or PR creation. The plan recommends but does not perform the
-  coordinated `v1.0.0` release.
+- Version bump, release, publish, push, or PR creation. The plan records but does not perform the
+  accepted coordinated `v1.0.0`-or-later release.
 
 ### Tasks
 

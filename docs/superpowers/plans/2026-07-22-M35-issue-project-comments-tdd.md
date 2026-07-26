@@ -5,15 +5,19 @@
 > **Milestone:** M35 — First-class Issue and Project Comments (breaking release; `v1.0.0` or later
 > accepted under CLI Design Standard R9.3).
 >
-> **Authoritative artifact:** This file is the contract, status ledger, and evidence index for M35.
+> **Authoritative contract and ID registry:** This file defines the M35 contract and its 318 stable
+> atomic IDs. Its per-command tables retain their plan-time baseline states.
 >
-> **Completion map:** [2026-07-24-M35-traceability.md](2026-07-24-M35-traceability.md) records one I/T/V and evidence row for every unique atomic ID.
+> **Authoritative completion map and evidence ledger:**
+> [2026-07-24-M35-traceability.md](2026-07-24-M35-traceability.md) records the current I/T/V status
+> and evidence for every unique atomic ID; it is the sole source for completion rollups.
 >
 > **Implementation rule:** Work only in the consolidated worktree
 > `/Users/stevemorin/wt/agent2linear/label-project-lifecycle-tdd-plan` on
-> `plan/label-project-lifecycle-tdd`; never implement from the main checkout. Every atomic ID below
-> must complete its own
-> RED → IMPLEMENT → GREEN → VERIFY lifecycle before it can be marked complete.
+> `plan/label-project-lifecycle-tdd`; never implement from the main checkout. Every changed-behavior
+> ID must complete its own RED → IMPLEMENT → GREEN → VERIFY lifecycle before it can be marked
+> complete. Baseline, documentation, aggregate, and decision IDs use their applicable phases and
+> explicit `N/A` statuses; they must not fabricate RED/GREEN evidence for behavior they do not change.
 
 **Goal:** Give humans and agents symmetrical, independently listable and creatable comments on
 Linear issues and projects, with explicit cursor pagination, safe workspace-targeted writes,
@@ -1331,9 +1335,11 @@ traceability reports zero omissions.
 5. Inspect dependency/lock diffs and the entire scoped source diff.
 6. Recompute every command and milestone rollup from atomic rows.
 
-**Release gate:** any `NS`, `RED`, `FAIL`, or `BLOCKED` in scope prevents release. R9.2 remains an
-acknowledged user-directed nonconformance, so the repository must not claim full R9.2 compliance.
-R9.3 version selection is resolved by the accepted `v1.0.0`-or-later release path.
+**Release gate:** any `NS`, `RED`, `FAIL`, or `BLOCKED` in the authoritative completion map prevents
+release. The plan-time baseline cells in the contract tables are historical inputs, not current
+status. R9.2 remains an acknowledged user-directed nonconformance, so the repository must not claim
+full R9.2 compliance. R9.3 version selection is resolved by the accepted `v1.0.0`-or-later release
+path.
 
 ### 11.1 Planned file structure
 
@@ -1423,6 +1429,7 @@ Implementation appends rows; existing rows must never be rewritten to hide a pri
 | 2026-07-24 | `CMT-TST-TRACE` | IMPLEMENT | Make trace parser accept semantically equivalent aligned Markdown-table whitespace | Prettier alignment cannot hide tracked IDs or completion rows | Parser now tolerates column padding while preserving exact ID/status/evidence validation | `src/lib/m35-traceability.test.ts` | working-tree | No contract relaxation |
 | 2026-07-24 | `CMT-TST-TRACE` / `CMT-VER-TRACE` | GREEN | `npx vitest run src/lib/m35-traceability.test.ts` | Exactly 318 unique IDs remain auditable after formatting | PASS: 2 tests; exact 318-row equality and project-query contract | plan, trace report, checker | working-tree | Closeout regression resolved |
 | 2026-07-25 | `CMT-DOC-BREAKING-VERSION` | VERIFY | Record project-owner release decision | Resolve R9.3 version selection without obscuring R9.2 nonconformance | PASS: coordinated `v1.0.0`-or-later path accepted; `v0.35.0` prohibited; R9.2 exception remains explicit | MILESTONES.md, CONFORMANCE.md, this plan | decision worktree | No version bump, publish, or release action authorized |
+| 2026-07-26 | `CMT-DOC-BREAKING-VERSION` | IMPLEMENT | Record the accepted release decision's implementation provenance | The decision is applied consistently to M33–M35 release documentation | PASS: commit `df38cd6` records the accepted `v1.0.0`-or-later path while preserving the R9.2 nonconformance | MILESTONES.md, CONFORMANCE.md, M33/M35 plans | `df38cd6` | Retrospective evidence correction; `T=N/A`, and this owner decision changes no CLI behavior, so RED/GREEN do not apply |
 
 ---
 
@@ -1445,7 +1452,8 @@ Implementation appends rows; existing rows must never be rewritten to hide a pri
 
 M35 implementation is complete only when:
 
-1. every in-scope atomic ledger row has `I=DONE|BASELINE|N/A`, `T=GREEN|N/A`, and `V=PASS|N/A`;
+1. every row in the authoritative completion map has `I=DONE|BASELINE|N/A`, `T=GREEN|N/A`, and
+   `V=PASS|N/A`;
 2. every changed behavior has recorded RED evidence before implementation evidence;
 3. the four canonical commands work from the built CLI and all rejected routes fail as specified;
 4. direct project-comment behavior is proven against a self-created live project;
