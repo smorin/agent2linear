@@ -1,3 +1,4 @@
+import { AuthError } from '../lib/cli-error.js';
 import { getApiKey, maskApiKey } from '../lib/config.js';
 import { getCurrentUser, getOrganization,testConnection } from '../lib/linear-client.js';
 import { showError } from '../lib/output.js';
@@ -10,8 +11,7 @@ export async function whoamiCommand() {
   try {
     const result = await testConnection();
     if (!result.success) {
-      showError('Not authenticated', result.error);
-      process.exit(1);
+      throw new AuthError(`Not authenticated: ${result.error ?? 'Linear API key is required'}`);
     }
 
     const user = await getCurrentUser();
@@ -29,6 +29,7 @@ export async function whoamiCommand() {
     console.log(`API Key:      ${masked}`);
     console.log();
   } catch (error) {
+    if (error instanceof AuthError) throw error;
     showError(error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

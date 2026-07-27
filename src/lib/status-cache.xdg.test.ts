@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { withCacheWritesSuppressed } from './cache-write-policy.js';
 import { resetInvocationContext, setInvocationContext } from './invocation-context.js';
 import { saveTeamsCache } from './status-cache.js';
 import { workspaceCacheKey } from './xdg-paths.js';
@@ -39,5 +40,18 @@ describe('status-cache.ts writes to the keyed XDG cache dir', () => {
     ]);
     const key = workspaceCacheKey('lin_api_testkey');
     expect(existsSync(join(tmp, 'agent2linear', key, 'cache.json'))).toBe(true);
+  });
+
+  it('[RLS-SAFE-DRYRUN] does not write cache state while writes are suppressed', async () => {
+    process.chdir(tmp);
+    vi.stubEnv('XDG_CACHE_HOME', tmp);
+    vi.stubEnv('LINEAR_API_KEY', 'lin_api_testkey');
+
+    await withCacheWritesSuppressed(true, async () => {
+      saveTeamsCache([{ id: 'team_1', name: 'Team', key: 'T', timestamp: Date.now() } as never]);
+    });
+
+    const key = workspaceCacheKey('lin_api_testkey');
+    expect(existsSync(join(tmp, 'agent2linear', key, 'cache.json'))).toBe(false);
   });
 });

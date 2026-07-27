@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { CliError, isAuthenticationError, UsageError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllInitiatives, getInitiativeById, type Initiative } from '../../lib/linear-client.js';
 import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
 import { InitiativeList } from '../../ui/components/InitiativeList.js';
@@ -88,6 +90,9 @@ function App({ options }: { options: ViewOptions }) {
 }
 
 export async function viewInitiative(id?: string, options: ViewOptions = {}) {
+  if (options.interactive) {
+    requireInteractiveInput('initiatives view');
+  }
   try {
     // Handle interactive mode
     if (options.interactive) {
@@ -98,12 +103,9 @@ export async function viewInitiative(id?: string, options: ViewOptions = {}) {
 
     // Non-interactive mode: require ID
     if (!id) {
-      console.error('❌ Error: Initiative ID or alias is required when not using --interactive mode');
-      console.error('\nUsage:');
-      console.error('  agent2linear init view <id>              # View specific initiative');
-      console.error('  agent2linear init view --interactive     # Select from list');
-      console.error('  agent2linear init view -I --web          # Select and open in browser');
-      process.exit(1);
+      throw new UsageError(
+        'Initiative ID or alias is required when not using --interactive mode'
+      );
     }
 
     // Resolve alias to ID if needed
@@ -141,6 +143,8 @@ export async function viewInitiative(id?: string, options: ViewOptions = {}) {
     console.log(`   URL: ${initiative.url}`);
     console.log();
   } catch (error) {
+    if (error instanceof CliError) throw error;
+    if (isAuthenticationError(error)) throw error;
     console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

@@ -3,6 +3,7 @@
  * Resolves issue identifiers (ENG-123 format) or UUIDs to Linear issue IDs
  */
 
+import { isAuthenticationError } from './cli-error.js';
 import { getLinearClient } from './linear-client.js';
 
 /**
@@ -114,7 +115,7 @@ async function resolveIdentifierToUUID(identifier: string): Promise<string | nul
 
     return null;
   } catch (error) {
-    // If API call fails, return null (resolver will handle error messaging)
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }
@@ -130,6 +131,7 @@ async function fetchIssueByUUID(uuid: string): Promise<unknown> {
     const issue = await client.issue(uuid);
     return issue || null;
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }

@@ -12,10 +12,10 @@
 
 import * as readline from 'readline';
 
-import { UsageError } from './cli-error.js';
+import { RuntimeError, UsageError } from './cli-error.js';
 import { getConfig } from './config.js';
+import { noInputRequested } from './interaction-policy.js';
 import { getLogLevel } from './logger.js';
-import { showError } from './output.js';
 import type { Config, WorkspaceResolution } from './types.js';
 import { printWorkspaceBanner } from './workspace-banner.js';
 import { configuredWorkspaceCount, resolveActiveWorkspace } from './workspace-resolver.js';
@@ -76,7 +76,7 @@ export async function confirmWorkspaceWrite(
     return;
   }
 
-  if (options.noInput) {
+  if (noInputRequested(options.noInput)) {
     throw new UsageError(
       `workspace confirmation is required for "${resolution.name}", but --no-input forbids prompting — pass --workspace <name> or -y/--yes`
     );
@@ -109,8 +109,7 @@ export async function guardWorkspaceForMutation(
   const resolution = resolveActiveWorkspace();
 
   if (resolution.denied) {
-    showError(resolution.denied.reason, resolution.denied.hint);
-    process.exit(1);
+    throw new RuntimeError(`${resolution.denied.reason} — ${resolution.denied.hint}`);
   }
 
   const silent = options.json || getLogLevel() === 'quiet';

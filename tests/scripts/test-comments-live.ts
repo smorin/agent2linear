@@ -6,8 +6,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { getLinearClient } from '../../src/lib/api/client.js';
+import { assertLiveOrganizationIdentity } from './live-identity.js';
 
 const EXPECTED_ORGANIZATION = 'ConceptM';
+const EXPECTED_ORGANIZATION_URL_KEY = 'conceptm';
 const repo = resolve(process.cwd());
 const cli = join(repo, 'dist/index.js');
 const tempRoot = mkdtempSync(join(tmpdir(), 'a2l-m35-live-'));
@@ -124,15 +126,15 @@ let primaryError: unknown = null;
 try {
   const organization = await client.organization;
   const identity = run(['whoami']);
-  if (
-    organization.name !== EXPECTED_ORGANIZATION ||
-    !identity.includes('Organization: ' + EXPECTED_ORGANIZATION) ||
-    !identity.includes('Active:       ' + EXPECTED_ORGANIZATION)
-  ) {
+  assertLiveOrganizationIdentity(identity, {
+    organizationName: EXPECTED_ORGANIZATION,
+    organizationUrlKey: EXPECTED_ORGANIZATION_URL_KEY,
+  });
+  if (organization.name !== EXPECTED_ORGANIZATION) {
     throw new Error(
       'Fail-closed: M35 live writes require the exact ' +
         EXPECTED_ORGANIZATION +
-        ' organization and active workspace'
+        ' organization'
     );
   }
 

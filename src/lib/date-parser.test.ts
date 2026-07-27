@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { UsageError } from './cli-error.js';
 import {
   getHalfYearStartDate,
   getMonthStartDate,
@@ -815,31 +816,15 @@ describe('parseDateForCommand', () => {
     expect(result.displayText).toBe('2025-01-15');
   });
 
-  it('should throw and exit on invalid input', () => {
-    // Mock process.exit and console.error
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined) => {
-      throw new Error(`process.exit(${code})`);
-    });
-    const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('[RLS-OUT-JSON-ERROR] throws a usage error instead of exiting on invalid input', () => {
+    const exit = vi.spyOn(process, 'exit');
 
-    expect(() => parseDateForCommand('invalid', 'start date')).toThrow('process.exit(1)');
-    expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('Invalid start date'));
-    expect(mockExit).toHaveBeenCalledWith(1);
-
-    mockExit.mockRestore();
-    mockConsoleError.mockRestore();
+    expect(() => parseDateForCommand('invalid', 'start date')).toThrow(UsageError);
+    expect(() => parseDateForCommand('invalid', 'start date')).toThrow(/Invalid start date/);
+    expect(exit).not.toHaveBeenCalled();
   });
 
   it('should use fieldName in error messages', () => {
-    const mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined) => {
-      throw new Error(`process.exit(${code})`);
-    });
-    const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    expect(() => parseDateForCommand('2025-Q5', 'target date')).toThrow();
-    expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('Invalid target date'));
-
-    mockExit.mockRestore();
-    mockConsoleError.mockRestore();
+    expect(() => parseDateForCommand('2025-Q5', 'target date')).toThrow(/Invalid target date/);
   });
 });

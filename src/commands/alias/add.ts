@@ -2,6 +2,9 @@ import { render } from 'ink';
 import React from 'react';
 
 import { addAlias, normalizeEntityType } from '../../lib/aliases.js';
+import { UsageError } from '../../lib/cli-error.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getMemberByEmail, type Member,searchMembers } from '../../lib/linear-client.js';
 import { showError, showInfo,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
@@ -76,6 +79,7 @@ export async function addAliasCommand(
             process.exit(1);
           } else {
             // Interactive selection
+            requireInteractiveInput('alias add member selection');
             console.log(`   Found ${matches.length} matches:\n`);
             memberId = await selectMemberInteractive(matches);
           }
@@ -105,6 +109,7 @@ export async function addAliasCommand(
           process.exit(1);
         } else {
           // Interactive selection
+          requireInteractiveInput('alias add member selection');
           console.log(`   Found ${matches.length} matches:\n`);
           memberId = await selectMemberInteractive(matches);
         }
@@ -116,11 +121,9 @@ export async function addAliasCommand(
 
   // Validate ID is provided
   if (!id) {
-    showError('Missing identifier. Provide one of:\n' +
-      '   - ID: agent2linear alias add <type> <alias> <id>\n' +
-      '   - Email (member only): agent2linear alias add member <alias> --email <email>\n' +
-      '   - Name (member only): agent2linear alias add member <alias> --name "<name>"');
-    process.exit(1);
+    throw new UsageError(
+      'Missing identifier; provide an ID, or use --email/--name for a member alias'
+    );
   }
 
   // Determine scope
@@ -156,6 +159,7 @@ export async function addAliasCommand(
     showSuccess('Alias added successfully!', details);
     showInfo(`Use this alias in place of the ${normalizedType} ID in any command`);
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

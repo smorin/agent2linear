@@ -10,10 +10,7 @@ export function registerTeamsCommands(cli: Command): void {
   const teams = cli
     .command('teams')
     .alias('team')
-    .description('Manage Linear teams')
-    .action(() => {
-      teams.help();
-    });
+    .description('Manage Linear teams');
 
   teams
     .command('list')

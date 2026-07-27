@@ -346,6 +346,42 @@ describe('runIssueList pagination and output', () => {
     expect(test.stderr.join('')).toContain('cursor-history');
   });
 
+  it('[RLS-OUT-ISSUE-LIST-TSV] replaces every tab, CR, and LF in standard and custom TSV cells', async () => {
+    const dirty = issue('issue\r1', 'ENG\t101');
+    dirty.title = 'Title\rrow';
+    dirty.state.name = 'In\nProgress';
+    dirty.assignee.email = 'user\t@example.com';
+    dirty.assignee.name = 'User\rName';
+    dirty.team.key = 'E\rNG';
+    dirty.url = 'https://linear.app/issue\n/ENG-101';
+    dirty.description = 'first\tsecond\rthird\nfourth';
+    dirty.dueDate = '2026-08-01\r';
+
+    const standard = harness(page({ items: [dirty] }));
+    await runIssueList(
+      { allAssignees: true, output: 'tsv', descFull: true },
+      standard.dependencies
+    );
+    expect(standard.stdout.join('')).toBe(
+      'identifier\ttitle\tstate\tpriority\tassignee\tteam\turl\tdescription\n' +
+        'ENG 101\tTitle row\tIn Progress\t2\tuser @example.com\tE NG\thttps://linear.app/issue /ENG-101\tfirst second third fourth\n'
+    );
+
+    const custom = harness(page({ items: [dirty] }));
+    await runIssueList(
+      {
+        allAssignees: true,
+        output: 'tsv',
+        columns: 'id,identifier,title,state,assignee,team,url,description,dueDate',
+      },
+      custom.dependencies
+    );
+    expect(custom.stdout.join('')).toBe(
+      'id\tidentifier\ttitle\tstate\tassignee\tteam\turl\tdescription\tdueDate\n' +
+        'issue 1\tENG 101\tTitle row\tIn Progress\tUser Name\tE NG\thttps://linear.app/issue /ENG-101\tfirst second third fourth\t2026-08-01 \n'
+    );
+  });
+
   it('[CPH-HIS-WRITE-FAILURE] warns but returns a valid JSON result when recording fails', async () => {
     const test = harness(
       page({

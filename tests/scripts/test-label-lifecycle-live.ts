@@ -9,8 +9,10 @@ import { join, resolve } from 'node:path';
 
 import { getLinearClient } from '../../src/lib/api/client.js';
 import { getApiKey } from '../../src/lib/config.js';
+import { assertLiveOrganizationIdentity } from './live-identity.js';
 
 const EXPECTED_ORGANIZATION = 'ConceptM';
+const EXPECTED_ORGANIZATION_URL_KEY = 'conceptm';
 const repo = resolve(process.cwd());
 const cli = join(repo, 'dist/index.js');
 const tempRoot = mkdtempSync(join(tmpdir(), 'a2l-m33-live-'));
@@ -88,7 +90,7 @@ function verifyLabelTraversal(
     color,
     '--include-retired',
   ];
-  const first = runJson([...base, '--limit', '1', '--format', 'json']);
+  const first = runJson([...base, '--limit', '1', '--json']);
   if (
     first.labels?.length !== 1 ||
     first.pageInfo?.hasNextPage !== true ||
@@ -107,8 +109,7 @@ function verifyLabelTraversal(
     '1',
     '--after',
     cursor,
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   const remaining = runJson([
@@ -116,8 +117,7 @@ function verifyLabelTraversal(
     '--after',
     cursor,
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   const traversedIds = [
@@ -183,17 +183,15 @@ const cleanupErrors: string[] = [];
 try {
   const organization = await client.organization;
   const identity = run(['whoami']);
-  if (
-    organization.name !== EXPECTED_ORGANIZATION ||
-    !identity.includes('Organization: ' + EXPECTED_ORGANIZATION) ||
-    !identity.includes('Active:       ' + EXPECTED_ORGANIZATION)
-  ) {
+  if (organization.name !== EXPECTED_ORGANIZATION) {
     throw new Error(
-      'Fail-closed: M33 live writes require the exact ' +
-        EXPECTED_ORGANIZATION +
-        ' organization and active workspace'
+      'Fail-closed: M33 live writes require the exact ' + EXPECTED_ORGANIZATION + ' organization'
     );
   }
+  assertLiveOrganizationIdentity(identity, {
+    organizationName: EXPECTED_ORGANIZATION,
+    organizationUrlKey: EXPECTED_ORGANIZATION_URL_KEY,
+  });
   process.stderr.write('M33 live: ConceptM identity confirmed\n');
 
   const teams = await client.teams({ first: 50 });
@@ -271,8 +269,7 @@ try {
     '--color',
     projectColor,
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   if (fixtureIds.projectLabels.some(id => !includesId(projectCatalog, id))) {
@@ -298,8 +295,7 @@ try {
     '--color',
     issueColor,
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   const allIssueLabels = runJson([
@@ -311,8 +307,7 @@ try {
     issueColor,
     '--include-retired',
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   if (
@@ -352,8 +347,7 @@ try {
     '--color',
     projectColor,
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   const allProjectLabels = runJson([
@@ -363,8 +357,7 @@ try {
     projectColor,
     '--include-retired',
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   if (

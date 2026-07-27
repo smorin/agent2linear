@@ -7,6 +7,7 @@ import {
   listComments,
   validateReplyTarget,
 } from '../../lib/api/comments.js';
+import { withCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
 import { RuntimeError, UsageError } from '../../lib/cli-error.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import {
@@ -17,7 +18,7 @@ import {
 } from '../../lib/cursor-history-adapter.js';
 import { getInvocationContext } from '../../lib/invocation-context.js';
 import { logger } from '../../lib/logger.js';
-import { type OutputValueSource,resolveOutputMode } from '../../lib/output-mode.js';
+import { type OutputValueSource, resolveOutputMode } from '../../lib/output-mode.js';
 import {
   type PageInput,
   PaginationInputError,
@@ -28,7 +29,7 @@ import type { WorkspaceResolution } from '../../lib/types.js';
 import { workspaceForJson } from '../../lib/workspace-banner.js';
 import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
 import { workspaceCacheKey } from '../../lib/xdg-paths.js';
-import { type CommentBodyOptions,readCommentBody } from './input.js';
+import { type CommentBodyOptions, readCommentBody } from './input.js';
 import {
   buildCommentCursorCommands,
   commentTargetJson,
@@ -66,10 +67,7 @@ export interface CommentListOptions {
 }
 
 export interface CommentRunnerDependencies {
-  resolveTarget(
-    kind: CommentTargetKind,
-    input: string
-  ): Promise<ResolvedCommentTarget>;
+  resolveTarget(kind: CommentTargetKind, input: string): Promise<ResolvedCommentTarget>;
   readBody(options: CommentBodyOptions): Promise<string>;
   validateReply(target: CommentTargetRef, commentId: string): Promise<void>;
   create(target: CommentTargetRef, options: CommentCreateOptions): Promise<LinearComment>;
@@ -107,14 +105,15 @@ function outputMode(options: {
   outputSource?: OutputValueSource;
   json?: boolean;
 }): 'table' | 'json' {
-  const resolved = options.output === undefined
-    ? resolveOutputMode({ allowedModes: ['table', 'json'], json: options.json })
-    : resolveOutputMode({
-        allowedModes: ['table', 'json'],
-        output: options.output,
-        outputSource: options.outputSource ?? 'default',
-        json: options.json,
-      });
+  const resolved =
+    options.output === undefined
+      ? resolveOutputMode({ allowedModes: ['table', 'json'], json: options.json })
+      : resolveOutputMode({
+          allowedModes: ['table', 'json'],
+          output: options.output,
+          outputSource: options.outputSource ?? 'default',
+          json: options.json,
+        });
   if (resolved === 'tsv') {
     throw new UsageError('TSV output is not supported by comment commands');
   }
@@ -127,9 +126,7 @@ function apiTarget(target: ResolvedCommentTarget): CommentTargetRef {
 
 function requireWorkspace(resolution: WorkspaceResolution): WorkspaceResolution {
   if (resolution.denied) {
-    throw new RuntimeError(
-      `${resolution.denied.reason} — ${resolution.denied.hint}`
-    );
+    throw new RuntimeError(`${resolution.denied.reason} — ${resolution.denied.hint}`);
   }
   return resolution;
 }
@@ -171,7 +168,7 @@ function commentCommands(
   });
 }
 
-export async function runCommentAdd(
+async function runCommentAddInternal(
   kind: CommentTargetKind,
   input: string,
   options: CommentAddOptions,
@@ -193,19 +190,26 @@ export async function runCommentAdd(
   if (options.dryRun) {
     const workspace = requireWorkspace(dependencies.resolveWorkspace());
     if (mode === 'json') {
-      dependencies.writeStdout(`${JSON.stringify({
-        dryRun: true,
-        workspace: workspaceForJson(workspace),
-        target: commentTargetJson(target),
-        comment: {
-          body,
-          parentId: options.replyTo ?? null,
-        },
-        validation: {
-          targetResolved: true,
-          serverMutation: false,
-        },
-      }, null, 2)}\n`);
+      dependencies.writeStdout(
+        `${JSON.stringify(
+          {
+            dryRun: true,
+            workspace: workspaceForJson(workspace),
+            target: commentTargetJson(target),
+            comment: {
+              body,
+              parentId: options.replyTo ?? null,
+            },
+            validation: {
+              localWrites: false,
+              targetResolved: true,
+              serverMutation: false,
+            },
+          },
+          null,
+          2
+        )}\n`
+      );
     } else {
       dependencies.writeStdout(
         `Dry run: comment would be added to ${targetLabel(target)}\nNo server mutation performed.\n`
@@ -230,15 +234,32 @@ export async function runCommentAdd(
   });
 
   if (mode === 'json') {
-    dependencies.writeStdout(`${JSON.stringify({
-      ok: true,
-      workspace: workspaceForJson(workspace),
-      target: commentTargetJson(target),
-      comment: created,
-    }, null, 2)}\n`);
+    dependencies.writeStdout(
+      `${JSON.stringify(
+        {
+          ok: true,
+          workspace: workspaceForJson(workspace),
+          target: commentTargetJson(target),
+          comment: created,
+        },
+        null,
+        2
+      )}\n`
+    );
   } else {
     dependencies.writeStdout(`${renderCommentAdded(target, created)}\n`);
   }
+}
+
+export async function runCommentAdd(
+  kind: CommentTargetKind,
+  input: string,
+  options: CommentAddOptions,
+  dependencies: CommentRunnerDependencies = defaultDependencies
+): Promise<void> {
+  return withCacheWritesSuppressed(options.dryRun === true, () =>
+    runCommentAddInternal(kind, input, options, dependencies)
+  );
 }
 
 export async function runCommentList(

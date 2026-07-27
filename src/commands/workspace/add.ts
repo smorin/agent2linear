@@ -1,3 +1,4 @@
+import { AuthError, CliError, UsageError } from '../../lib/cli-error.js';
 import { maskApiKey } from '../../lib/config.js';
 import { getInvocationContext } from '../../lib/invocation-context.js';
 import { showError, showSuccess } from '../../lib/output.js';
@@ -12,27 +13,25 @@ interface AddWorkspaceOptions {
 /**
  * Register a named workspace (name -> { apiKey }) in the secrets registry.
  *
- * The API key comes from the program-level `--api-key` option (the root option
- * shadows any same-named subcommand option, and the CLI preAction hook already
- * resolved `--api-key -` from stdin into the invocation context). Global scope
+ * The API key comes from the program-level `--api-key-file` option, and the CLI
+ * preAction hook already resolved the file or stdin into the invocation context. Global scope
  * writes workspaces.json; project scope writes the gitignored workspaces.local.json.
  */
 export async function addWorkspaceCommand(name: string, options: AddWorkspaceOptions = {}) {
   try {
     const workspaceName = name?.trim();
     if (!workspaceName) {
-      showError('Workspace name cannot be empty');
-      process.exit(1);
+      throw new UsageError('Workspace name cannot be empty');
     }
     if (/\s/.test(workspaceName)) {
-      showError('Workspace name cannot contain whitespace');
-      process.exit(1);
+      throw new UsageError('Workspace name cannot contain whitespace');
     }
 
     const apiKey = getInvocationContext().apiKey;
     if (apiKey === undefined || apiKey.trim() === '') {
-      showError('An API key is required', 'Pass --api-key <key> or --api-key - to read from stdin');
-      process.exit(1);
+      throw new AuthError(
+        'An API key is required; pass --api-key-file <path> or --api-key-file - to read from stdin'
+      );
     }
     const key = apiKey.trim();
 
@@ -49,6 +48,7 @@ export async function addWorkspaceCommand(name: string, options: AddWorkspaceOpt
       'API Key': maskApiKey(key),
     });
   } catch (error) {
+    if (error instanceof CliError) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

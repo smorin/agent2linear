@@ -70,7 +70,10 @@ for flag in '--limit <number>' '--after <cursor>' '--include-retired' '-a, --all
   contains "issue list help $flag" "$ISSUE_HELP" "$flag"
   contains "project list help $flag" "$PROJECT_HELP" "$flag"
 done
-contains 'issue list keeps format' "$ISSUE_HELP" '-f, --format <type>'
+contains 'issue list canonical output' "$ISSUE_HELP" '-o, --output <table|json|tsv>'
+contains 'issue list JSON shorthand' "$ISSUE_HELP" '--json'
+contains 'project list canonical output' "$PROJECT_HELP" '-o, --output <table|json|tsv>'
+contains 'project list JSON shorthand' "$PROJECT_HELP" '--json'
 contains 'issue alias routes' "$ISSUE_ALIAS_HELP" 'issue-labels list|ls'
 contains 'project alias routes' "$PROJECT_ALIAS_HELP" 'project-labels list|ls'
 contains 'issue mutation output' "$ISSUE_MUTATION_HELP" '-o, --output <table|json>'
@@ -80,8 +83,11 @@ contains 'project update trash' "$PROJECT_UPDATE_HELP" '--trash'
 contains 'project update untrash' "$PROJECT_UPDATE_HELP" '--untrash'
 contains 'project update no-input' "$PROJECT_UPDATE_HELP" '--no-input'
 
-status_is 'issue rejects zero limit before API access' 2 "${CLI[@]}" issue-labels list --limit 0 --format json
-status_is 'project rejects fractional limit before API access' 2 "${CLI[@]}" project-labels list --limit 1.5 --format json
+status_is 'issue rejects zero limit before API access' 2 "${CLI[@]}" issue-labels list --limit 0 --json
+status_is 'project rejects fractional limit before API access' 2 "${CLI[@]}" project-labels list --limit 1.5 --json
+status_is 'issue rejects removed format selector' 2 "${CLI[@]}" issue-labels list --format json
+status_is 'project rejects removed format selector' 2 "${CLI[@]}" project-labels list -f json
+status_is 'issue rejects conflicting JSON output' 2 "${CLI[@]}" issue-labels list --json --output table
 status_is 'issue rejects numeric pages' 2 "${CLI[@]}" issue-labels list --page 2
 status_is 'project rejects cursor alias' 2 "${CLI[@]}" project-labels list --cursor raw
 status_is 'issue rejects archived scope' 2 "${CLI[@]}" issue-labels list --include-archived

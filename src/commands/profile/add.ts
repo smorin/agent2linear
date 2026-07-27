@@ -22,7 +22,7 @@ interface AddProfileOptions {
  *
  * The target workspace comes from the PROGRAM-LEVEL `--workspace` global (which
  * shadows any same-named subcommand option), read via the invocation context —
- * mirroring how `workspace add` reads the global `--api-key`.
+ * mirroring how `workspace add` reads the global `--api-key-file`.
  */
 export function addProfileCommand(name: string, options: AddProfileOptions = {}): void {
   try {

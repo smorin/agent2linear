@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 
+import { UsageError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { createTemplate } from './create.js';
 import { createTemplateInteractive } from './create-interactive.js';
 import { editTemplateInteractive } from './edit-interactive.js';
@@ -11,10 +13,7 @@ export function registerMilestoneTemplatesCommands(cli: Command): void {
   const milestoneTemplates = cli
     .command('milestone-templates')
     .alias('mtmpl')
-    .description('Manage milestone templates for projects')
-    .action(() => {
-      milestoneTemplates.help();
-    });
+    .description('Manage milestone templates for projects');
 
   milestoneTemplates
     .command('list')
@@ -76,16 +75,14 @@ Note: Milestone spec format is "name:targetDate:description"
 `)
     .action(async (name: string | undefined, options) => {
       if (options.interactive) {
+        requireInteractiveInput('milestone-templates create');
         // In interactive mode, name is collected interactively
         await createTemplateInteractive(options);
       } else {
         if (!name) {
-          console.error('❌ Error: Template name is required in non-interactive mode\n');
-          console.error('Provide a name:');
-          console.error('  $ agent2linear milestone-templates create my-template --milestone ...\n');
-          console.error('Or use interactive mode:');
-          console.error('  $ agent2linear milestone-templates create --interactive\n');
-          process.exit(1);
+          throw new UsageError(
+            'Template name is required in non-interactive mode; provide a name or use --interactive'
+          );
         }
         await createTemplate(name, options);
       }

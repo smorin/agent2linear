@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { extractIconsFromEntities } from '../../lib/icons.js';
 import { validateTeamExists } from '../../lib/linear-client.js';
@@ -69,6 +70,7 @@ export function extractIcons(program: Command) {
         }
         console.log('');
       } catch (error) {
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

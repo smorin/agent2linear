@@ -76,7 +76,7 @@ export async function readCommentBody(
   const usesStdin = options.bodyFile === '-' || (!hasInline && !hasFile && !dependencies.stdinIsTTY);
   if (usesStdin && options.stdinReservedForApiKey) {
     throw new UsageError(
-      'stdin cannot supply both --api-key - and a comment body — use --body or a body file path'
+      'stdin cannot supply both --api-key-file - and a comment body — use --body or a body file path'
     );
   }
 

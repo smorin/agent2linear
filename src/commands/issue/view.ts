@@ -1,4 +1,5 @@
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError, NotFoundError, RuntimeError, UsageError } from '../../lib/cli-error.js';
 import { handleLinearError, isLinearError } from '../../lib/error-handler.js';
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import {
@@ -74,21 +75,14 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
   try {
     // Validate conflicting output modes
     if (options.json && options.web) {
-      console.error('❌ Error: Cannot use --json and --web together');
-      console.error('   Use either --json (for JSON output) or --web (open in browser)');
-      process.exit(1);
+      throw new UsageError('Cannot use --json and --web together');
     }
 
     // Resolve identifier to UUID (handles both ENG-123 and UUID formats)
     const resolveResult = await resolveIssueIdentifier(identifier);
 
     if (!resolveResult) {
-      console.error(`\n❌ Issue not found: ${identifier}`);
-      console.error('\nPlease check:');
-      console.error('  - The identifier is correct (e.g., ENG-123 or UUID)');
-      console.error('  - You have access to the issue');
-      console.error('  - The issue hasn\'t been deleted\n');
-      process.exit(1);
+      throw new NotFoundError(`Issue not found: ${identifier}`);
     }
 
     const { issueId, resolvedBy, originalInput } = resolveResult;
@@ -108,8 +102,7 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
     const issue = await getFullIssueById(issueId);
 
     if (!issue) {
-      console.error(`\n❌ Could not retrieve issue details for ${identifier}\n`);
-      process.exit(1);
+      throw new NotFoundError(`Could not retrieve issue details for ${identifier}`);
     }
 
     // Handle --json flag
@@ -331,6 +324,13 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
       console.log('');
     }
   } catch (error) {
+    if (options.json) {
+      throw error instanceof Error
+        ? error
+        : new RuntimeError('Unknown error while viewing issue', { cause: error });
+    }
+    if (error instanceof NotFoundError) throw error;
+    if (isAuthenticationError(error)) throw error;
     if (isLinearError(error)) {
       console.error(`\n${handleLinearError(error, 'issue')}\n`);
     } else {

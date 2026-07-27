@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { configureDiagnostics, resetDiagnostics } from '../logger.js';
 import { PaginationInputError, PaginationRuntimeError } from '../pagination.js';
 import { getLinearClient } from './client.js';
 import { getAllIssues, getIssueListPage } from './issues.js';
@@ -63,10 +64,67 @@ function mockClient(rawRequest: RawRequest): void {
 }
 
 afterEach(() => {
+  resetDiagnostics();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('getIssueListPage', () => {
+  it('emits only allowlisted level-two request/page metadata', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    configureDiagnostics({ verbosity: 2 });
+    const rawRequest = vi.fn().mockResolvedValue({
+      ...issuePage([], false, null),
+      headers: new Headers({ 'x-request-id': 'req-success' }),
+      status: 207,
+    });
+    mockClient(rawRequest);
+
+    await getIssueListPage(
+      { search: 'private-filter-value' },
+      { after: 'private-cursor-value', limit: 1 }
+    );
+
+    const rendered = stderr.mock.calls.flat().join(' ');
+    expect(rendered).toContain('[request] method=POST');
+    expect(rendered).toContain('status=207');
+    expect(rendered).toContain('requestId=req-success');
+    expect(rendered).toContain('pageCount=1');
+    expect(rendered).not.toContain('private-filter-value');
+    expect(rendered).not.toContain('private-cursor-value');
+  });
+
+  it('emits allowlisted request metadata when transport rejects', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => {});
+    configureDiagnostics({ verbosity: 2 });
+    const failure = Object.assign(new Error('private-provider-message'), {
+      status: 503,
+      raw: {
+        response: {
+          headers: new Headers({ 'x-request-id': 'req-failure' }),
+          status: 503,
+        },
+      },
+      query: 'private-query-value',
+      variables: { secret: 'private-variable-value' },
+    });
+    const rawRequest = vi.fn().mockRejectedValue(failure);
+    mockClient(rawRequest);
+
+    await expect(
+      getIssueListPage({ search: 'private-filter-value' }, { after: 'private-cursor-value' })
+    ).rejects.toThrow();
+
+    const rendered = stderr.mock.calls.flat().join(' ');
+    expect(rendered).toContain('status=503');
+    expect(rendered).toContain('requestId=req-failure');
+    expect(rendered).not.toContain('private-provider-message');
+    expect(rendered).not.toContain('private-query-value');
+    expect(rendered).not.toContain('private-variable-value');
+    expect(rendered).not.toContain('private-filter-value');
+    expect(rendered).not.toContain('private-cursor-value');
+  });
+
   it('[CPH-API-ISSUE-ADAPTER] uses edges, preserves filters and raw after, and maps relations', async () => {
     const rawRequest = vi
       .fn()

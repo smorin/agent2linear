@@ -13,6 +13,7 @@ const COMMAND_TOKEN_RE = /^[a-z][a-z0-9-]*$/;
 const OPTION_FLAG_RE = /^--[a-z][a-z0-9-]*$/;
 const SENSITIVE_OPTION_FLAGS = new Set([
   '--api-key',
+  '--api-key-file',
   '--authorization',
   '--credential',
   '--credentials',
@@ -162,7 +163,7 @@ function assertSafeHistoryEntry(entry: CursorHistoryRecordEntry): void {
     entry.commands.nextCommand,
     entry.commands.allRemainingCommand,
   ]) {
-    if (LINEAR_API_KEY_RE.test(command) || /--api-key(?:=|\s)/i.test(command)) {
+    if (LINEAR_API_KEY_RE.test(command) || /--api-key(?:-file)?(?:=|\s)/i.test(command)) {
       throw new TypeError('sensitive command material is not allowed in cursor history');
     }
   }

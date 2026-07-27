@@ -1,5 +1,6 @@
 import { Command, Option } from 'commander';
 
+import { resolveOutputMode } from '../../lib/output-mode.js';
 import { addMilestones } from './add-milestones.js';
 import { registerProjectCommentCommands } from './comment/register.js';
 import { createProjectCommand } from './create.js';
@@ -7,14 +8,28 @@ import { listProjectsCommand } from './list.js';
 import { updateProjectCommand } from './update.js';
 import { viewProject } from './view.js';
 
+function withJsonResultMode<T extends { json?: boolean; output?: string }>(
+  options: T,
+  command: Command
+): T & { json: boolean } {
+  const mode =
+    options.output === undefined
+      ? resolveOutputMode({ allowedModes: ['table', 'json'], json: options.json })
+      : resolveOutputMode({
+          allowedModes: ['table', 'json'],
+          json: options.json,
+          output: options.output,
+          outputSource:
+            command.getOptionValueSource('output') === 'cli' ? 'explicit' : 'default',
+        });
+  return { ...options, json: mode === 'json' };
+}
+
 export function registerProjectCommands(cli: Command): void {
   const project = cli
     .command('project')
     .alias('proj')
-    .description('Manage Linear projects')
-    .action(() => {
-      project.help();
-    });
+    .description('Manage Linear projects');
 
   project
     .command('create')
@@ -83,6 +98,7 @@ export function registerProjectCommands(cli: Command): void {
       []
     )
     .option('--dry-run', 'Preview the payload without creating the project')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
     .option('--json', 'Output the created project + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .addHelpText(
@@ -190,8 +206,8 @@ Note: Set defaults with config:
   $ agent2linear teams select  # Set default team
 `
     )
-    .action(async options => {
-      await createProjectCommand(options);
+    .action(async (options, command: Command) => {
+      await createProjectCommand(withJsonResultMode(options, command));
     });
 
   project
@@ -203,6 +219,8 @@ Note: Set defaults with config:
     .option('--desc-length <n>', 'Description preview length in characters (implies --desc)')
     .option('--desc-full', 'Show full description (no truncation)')
     .option('--no-desc', 'Hide description')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
+    .option('--json', 'Equivalent to --output json')
     .addHelpText(
       'after',
       `
@@ -216,8 +234,8 @@ Examples:
   $ agent2linear project view PRJ-123 --desc-full        # Show full description
 `
     )
-    .action(async (nameOrId: string, options) => {
-      await viewProject(nameOrId, options);
+    .action(async (nameOrId: string, options, command: Command) => {
+      await viewProject(nameOrId, withJsonResultMode(options, command));
     });
 
   project
@@ -356,10 +374,7 @@ Note: Set default template with:
   const projectDeps = project
     .command('dependencies')
     .alias('deps')
-    .description('Manage project dependencies (depends-on/blocks relations)')
-    .action(() => {
-      projectDeps.help();
-    });
+    .description('Manage project dependencies (depends-on/blocks relations)');
 
   projectDeps
     .command('add <name-or-id>')
@@ -447,6 +462,8 @@ Note:
     .alias('ls')
     .description('List all dependency relations for a project')
     .option('--direction <type>', 'Filter by direction: depends-on | blocks')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
+    .option('--json', 'Equivalent to --output json')
     .addHelpText(
       'after',
       `
@@ -467,9 +484,9 @@ Output:
   - Relation IDs (for removal)
 `
     )
-    .action(async (nameOrId: string, options) => {
+    .action(async (nameOrId: string, options, command: Command) => {
       const { listProjectDependencies } = await import('./dependencies/list.js');
-      await listProjectDependencies(nameOrId, options);
+      await listProjectDependencies(nameOrId, withJsonResultMode(options, command));
     });
 
   projectDeps

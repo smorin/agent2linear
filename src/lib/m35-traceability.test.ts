@@ -76,8 +76,9 @@ describe('M35 ID-level traceability', () => {
   });
 
   it('[CMT-VER-LIVE-CONCEPTM][PR17-R6] wires the guarded comment harness into live CI', () => {
+    expect(read('tsup.live.config.ts')).toContain('tests/scripts/test-comments-live.ts');
     expect(read('.github/workflows/live.yml')).toContain(
-      'npx tsx tests/scripts/test-comments-live.ts'
+      'node .tmp/m36-live/test-comments-live.js'
     );
   });
 });

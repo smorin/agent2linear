@@ -1,5 +1,6 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getTeamById } from '../../lib/linear-client.js';
 import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
 
@@ -46,6 +47,7 @@ export async function viewTeam(id: string, options: { web?: boolean } = {}) {
     console.log(`   $ agent2linear project create --team ${team.id}`);
     console.log(`   $ agent2linear teams set ${team.id}\n`);
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

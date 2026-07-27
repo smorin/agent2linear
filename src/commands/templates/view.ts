@@ -1,5 +1,6 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getTemplateById } from '../../lib/linear-client.js';
 
 export async function viewTemplate(templateId: string, options: { web?: boolean } = {}) {
@@ -64,6 +65,7 @@ export async function viewTemplate(templateId: string, options: { web?: boolean 
     }
     console.log('');
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch template'}`);
     process.exit(1);
   }

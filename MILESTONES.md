@@ -15,12 +15,14 @@
 
 ---
 
-## [ ] Milestone M36: Coordinated v1.0.0 Release and Publishable-Tier Audit
+## [-] Milestone M36: Coordinated v1.0.0 Release and Publishable-Tier Audit
 
-> **Status:** Republished and approved with 69 tracked items. The release is audited at the
-> publishable tier with explicit accepted exceptions; it does not claim complete Standard
-> conformance. No M36 implementation, version bump, tag, npm publication, or GitHub release has
-> occurred.
+> **Status:** Execution is in progress under the authoritative 76-ID plan. The implementation,
+> audited-v1 exception record, permanent fixtures, and version/Node alignment are recorded as
+> complete; the production audit and rollback runbook/ownership are recorded. M36 remains open for
+> final release notes, exact-candidate, package, and publication gates. This is an audited release
+> with explicit exceptions, not a claim of complete CLI Standard conformance. No exact candidate,
+> full candidate live suite, tag, or publication is claimed here.
 >
 > **Authoritative ID-level TDD plan:**
 > [docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
@@ -35,35 +37,43 @@ has independent evidence, and every retained Standard exception is explicit.
 ### Current release blockers
 
 - Scope and owner decisions are complete: M25 is excluded, M26 is transferred, the tag workflow is
-  the sole publisher, Node 22 is the floor, and the accepted conformance exceptions are frozen.
-- Fix the M34 live harness's hermetic active-workspace assertion and obtain one green CI + complete
-  ConceptM live run on the exact release-candidate SHA.
-- Resolve the current high production dependency advisory in `ink -> ws@8.18.3`.
-- Fix or explicitly record every applicable publishable-tier CLI Standard MUST; known behavior work
-  include missing global `--config`, missing `--debug`, non-repeatable `-v/--verbose`, and argv
-  secret acceptance through `--api-key <key>`.
-- Enforce the approved publication owner so local `npm run release` cannot publish beside the tag
-  workflow.
-- Reconcile the repository version (`0.32.0`) and npm latest (`0.24.1`) through an exact v1 package,
-  lockfile, CLI, tag, changelog, migration, tarball, and registry verification chain.
+  the sole publisher, the v1 Node 22/24 policy and `>=22` floor are aligned, and accepted
+  conformance exceptions/waivers are recorded.
+- The M33-M35 traceability/feature gate and the hermetic read-only M34 live blocker are complete.
+  Ordinary CI plus the complete M33-M35/full ConceptM live suite still need to pass on one exact
+  release-candidate SHA.
+- The known `ink -> ws` path is patched. The authorized production audit reports zero
+  vulnerabilities across 71 production dependencies, including zero high or critical findings.
+- The global config/debug/verbosity, safe credential input, output/stream, error/exit, signal,
+  prompt-safety, dry-run, and named automation corrections are complete and audited. The audited-v1
+  record retains approved exceptions instead of claiming a repository-wide interface rewrite.
+- The reviewed changelog, migration guide, README, milestone ledger, and rollback/forward-fix
+  ownership are complete. Candidate/package/tarball/install proof, the exact-SHA release-note
+  evidence, tag/version and single-publisher gates, and registry verification remain required.
 
 ### Tasks
 
 - [x] [M36-T00] Republish and freeze the audited-v1 scope, M25/M26 disposition, Node policy,
       publication owner, and accepted exceptions
 - [ ] [M36-T01] Restore green fail-closed ConceptM live verification on the exact candidate SHA
-- [ ] [M36-T02] Resolve production dependency advisories and implement the approved Node 22/24 policy
-- [ ] [M36-T03] Implement the known global option, secret-input, output-stream, error, and signal
-      corrections through per-ID RED -> IMPLEMENT -> GREEN -> VERIFY
-- [ ] [M36-T04] Complete the publishable-tier audit, exception record, and selected core/regression
-      fixtures
-- [ ] [M36-T05] Update package/lock/CLI version and publish complete v1 migration/release docs
-- [ ] [M36-T06] Harden release automation for exact tag/version equality and single-owner publication
-- [ ] [M36-T07] Prove clean install, full gates, offline suites, tarball contents, and packed-binary smoke
-- [ ] [M36-T08] Require green ordinary CI and ConceptM live checks on the merged candidate before tag
-- [ ] [M36-T09] Publish once, verify npm/GitHub registry state, and record rollback/forward-fix ownership
-- [ ] [M36-TS01] Enforce exact `RLS-*` plan/traceability equality and reject missing I/T/V evidence
-- [ ] [M36-TS02] Run the final independent publishable-tier, package, registry, and migration verification
+- [x] [M36-T02] Complete the production dependency audit; Node 22/24 policy and
+      version alignment are already recorded complete
+- [x] [M36-T03] Implement the global option, secret-input, output-stream, error, signal, prompt,
+      dry-run, and named automation corrections through per-ID RED -> IMPLEMENT -> GREEN -> VERIFY
+- [x] [M36-T04] Complete the publishable-tier audit, explicit exception record, and permanent
+      selected core/regression fixtures
+- [ ] [M36-T05] Complete the documentation IDs and reconcile the version/package release materials
+      through recorded evidence
+- [ ] [M36-T06] Prove tag/version equality and tag-workflow-only publication on the candidate
+- [ ] [M36-T07] Prove fresh candidate install, full gates, offline suites, tarball contents, and
+      packed-binary smoke
+- [ ] [M36-T08] Require green ordinary CI and the complete ConceptM live suite on the exact merged
+      candidate before tag
+- [ ] [M36-T09] Publish once, verify registry/GitHub state, and record rollback/forward-fix ownership
+- [ ] [M36-TS01] Reconcile exact 76-ID `RLS-*` plan/traceability status and reject missing I/T/V
+      evidence
+- [ ] [M36-TS02] Run final independent audited-v1, package, registry, migration, and rollback
+      verification
 
 ### Release rule
 

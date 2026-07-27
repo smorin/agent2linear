@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 
 import { getAliasesForId } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllInitiatives, type Initiative } from '../../lib/linear-client.js';
 import { formatListJSON,formatListTSV } from '../../lib/output.js';
 import { InitiativeList } from '../../ui/components/InitiativeList.js';
@@ -86,6 +88,7 @@ export async function listInitiatives(options: ListOptions = {}) {
   }
 
   if (options.interactive) {
+    requireInteractiveInput('initiatives list');
     // Interactive mode: browse with keyboard navigation
     render(<App options={options} />);
   } else {
@@ -121,6 +124,7 @@ export async function listInitiatives(options: ListOptions = {}) {
         });
       }
     } catch (error) {
+      if (isAuthenticationError(error)) throw error;
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch initiatives'}`);
       process.exit(1);
     }

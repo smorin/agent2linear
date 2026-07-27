@@ -55,7 +55,7 @@ function legacyKey(): { key: string; source: WorkspaceSource } | null {
  * AND applying the Phase-3 gate (exclusion + no-match policy) — without sourcing a
  * key. Both `resolveActiveProfile()` and `resolveActiveWorkspace()` build on this.
  *
- * - `apikey`: bare `--api-key` (ad-hoc workspace, forces through everything).
+ * - `apikey`: bare `--api-key-file` (ad-hoc workspace, forces through everything).
  * - `named`: a workspace/profile chosen by flag/env/project/auto-detect/default.
  * - `denied`: resolution REFUSED (exclusion, or the no-match gate).
  * - `legacy`: nothing selected — fall back to the legacy single key.
@@ -66,7 +66,7 @@ type Decision =
   | { kind: 'denied'; reason: string; hint: string }
   | { kind: 'legacy' };
 
-const FORCE_HINT = 'Pass --workspace <name> or --api-key to override.';
+const FORCE_HINT = 'Pass --workspace <name> or --api-key-file <path|-> to override.';
 
 function isProfileName(profiles: Record<string, Profile>, name: string): boolean {
   return Object.prototype.hasOwnProperty.call(profiles, name);
@@ -218,7 +218,7 @@ export function resolveActiveWorkspace(): WorkspaceResolution {
     return { key: '', source: 'legacy', denied: { reason: decision.reason, hint: decision.hint } };
   }
 
-  // Bare `--api-key` with no `--workspace` = ad-hoc workspace (no profile scope).
+  // Bare `--api-key-file` with no `--workspace` = ad-hoc workspace (no profile scope).
   if (decision.kind === 'apikey') {
     return { key: decision.apiKey, source: 'flag' };
   }
@@ -227,22 +227,6 @@ export function resolveActiveWorkspace(): WorkspaceResolution {
     const wsName = workspaceNameFor(decision.name);
     const profile = decision.profile ? loadProfiles()[decision.profile] : undefined;
     const result = resolveWorkspaceKey(wsName, profile);
-
-    // Ambiguity guard (R7 Scheme-D Option 2): a non-explicitly-selected workspace
-    // would fall back to the bare LINEAR_API_KEY while ≥2 workspaces exist — its
-    // ownership is ambiguous, so refuse rather than use the wrong key.
-    const explicit = decision.source === 'flag';
-    if (result.viaLegacy && result.key !== '' && !explicit && configuredWorkspaceCount() >= 2) {
-      const expected = profile?.apiKeyEnv ?? normalizeEnvVarName(wsName);
-      return {
-        key: '',
-        source: decision.source,
-        denied: {
-          reason: `Ambiguous key for workspace '${wsName}': falling back to the plain LINEAR_API_KEY, but multiple workspaces are configured.`,
-          hint: `Set ${expected} (or a profile envFile / a "workspace add" secrets entry), or pass --workspace explicitly.`,
-        },
-      };
-    }
 
     return { key: result.key, name: wsName, source: decision.source, profile: decision.profile };
   }
@@ -279,23 +263,20 @@ export function configuredWorkspaceCount(): number {
 }
 
 /**
- * The result of sourcing a workspace's key. `viaLegacy` marks that the key (if
- * any) came from the legacy plain `LINEAR_API_KEY` / config `apiKey` fallback —
- * used by the ambiguity guard, which must distinguish that from a named env var.
+ * The result of sourcing a workspace's key.
  */
 interface KeySourceResult {
   key: string;
   source: WorkspaceSource;
-  viaLegacy?: boolean;
 }
 
 /**
  * Source the chosen workspace's key through the ordered R7 chain (first hit wins):
- *   1. cli `--api-key`
+ *   1. cli `--api-key-file`
  *   2. named env var (`apiKeyEnv` override, else default LINEAR_API_KEY_<NAME>)
  *   3. per-profile env-file (dotenv; same var name; no process.env mutation)
  *   4. secrets registry (workspaces.json / .local.json)
- *   5. legacy plain LINEAR_API_KEY / config apiKey
+ *   5. only when unnamed: legacy plain LINEAR_API_KEY / config apiKey
  *
  * @param name - resolved workspace name, or undefined for the legacy path.
  * @param profile - the active profile (carries `apiKeyEnv` / `envFile`), if any.
@@ -303,7 +284,7 @@ interface KeySourceResult {
 export function resolveWorkspaceKey(name: string | undefined, profile?: Profile): KeySourceResult {
   const ctx = getInvocationContext();
 
-  // 1. cli: explicit `--api-key` (literal, or stdin already resolved in preAction).
+  // 1. cli: explicit `--api-key-file` (already resolved in preAction).
   if (ctx.apiKey !== undefined) {
     return { key: ctx.apiKey, source: 'flag' };
   }
@@ -334,23 +315,15 @@ export function resolveWorkspaceKey(name: string | undefined, profile?: Profile)
     }
   }
 
-  // 5. legacy plain LINEAR_API_KEY / config apiKey.
+  // A named workspace must never borrow the unnamed legacy credential.
+  if (name) {
+    return { key: '', source: 'legacy' };
+  }
+
+  // 5. unnamed legacy plain LINEAR_API_KEY / config apiKey.
   const legacy = legacyKey();
   if (legacy) {
-    return { ...legacy, viaLegacy: true };
+    return legacy;
   }
-  return { key: '', source: 'legacy', viaLegacy: true };
-}
-
-/**
- * Read a Linear API key from stdin (backs `--api-key -`). Awaited only in the CLI
- * preAction hook (the single stdin reader per invocation) — never from inside
- * `getApiKey()`, so the synchronous key-resolution path is preserved.
- */
-export async function readStdinKey(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks).toString('utf-8').trim();
+  return { key: '', source: 'legacy' };
 }

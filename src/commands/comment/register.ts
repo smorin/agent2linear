@@ -1,4 +1,4 @@
-import { Argument, Command } from 'commander';
+import { Command } from 'commander';
 
 import { UsageError } from '../../lib/cli-error.js';
 import { quotePosixShellArg } from '../../lib/shell-quote.js';
@@ -108,12 +108,70 @@ function legacySuggestion(
   return parts.join(' ');
 }
 
+const GLOBAL_OPTIONS_WITH_VALUES = new Set([
+  '--workspace',
+  '--api-key-file',
+  '--config',
+  '--cwd',
+  '-C',
+]);
+
+function commandOperands(argv: readonly string[]): string[] {
+  const operands: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === '--') {
+      operands.push(...argv.slice(index + 1));
+      break;
+    }
+    if (GLOBAL_OPTIONS_WITH_VALUES.has(token)) {
+      index += 1;
+      continue;
+    }
+    if (/^-[qv]*C$/.test(token)) {
+      index += 1;
+      continue;
+    }
+    if (
+      token.startsWith('--workspace=') ||
+      token.startsWith('--api-key-file=') ||
+      token.startsWith('--config=') ||
+      token.startsWith('--cwd=') ||
+      (token.startsWith('-C') && token.length > 2) ||
+      /^-[qv]*C.+/.test(token) ||
+      token === '--quiet' ||
+      token === '--verbose' ||
+      /^-[qv]+$/.test(token) ||
+      token === '--debug' ||
+      token === '--no-input' ||
+      token === '--no-color'
+    ) {
+      continue;
+    }
+    operands.push(token);
+  }
+  return operands;
+}
+
+const ISSUE_IDENTIFIER_RE = /^[A-Za-z][A-Za-z0-9_]*-\d+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function rejectLegacyIssueCommentArgv(argv: readonly string[]): void {
+  const operands = commandOperands(argv);
+  if (operands[0] !== 'issue' || operands[1] !== 'comment') return;
+  const target = operands[2];
+  if (target === undefined || (!ISSUE_IDENTIFIER_RE.test(target) && !UUID_RE.test(target))) return;
+  throw new UsageError(
+    `legacy comment syntax has been removed\ntry: ${legacySuggestion(target, legacyOptions([...argv]))}`
+  );
+}
+
 export function registerCommentGroup(
   parent: Command,
   targetSyntax: '<identifier>' | '<name-or-id>',
   targetDescription: string,
   handlers: CommentCommandHandlers,
-  options: { rejectLegacyIssueSyntax?: boolean } = {}
+  _options: { rejectLegacyIssueSyntax?: boolean } = {}
 ): Command {
   const group = parent
     .command('comment')
@@ -127,29 +185,6 @@ Examples:
   $ a2l ${parent.name()} comment list example
 `
     );
-
-  if (options.rejectLegacyIssueSyntax) {
-    group
-      .allowUnknownOption()
-      .addArgument(new Argument('[legacy-target]').argOptional())
-      .action((legacyTarget: string | undefined) => {
-        if (legacyTarget) {
-          throw new UsageError(
-            `legacy comment syntax has been removed\ntry: ${legacySuggestion(
-              legacyTarget,
-              legacyOptions(group.args.slice(1))
-            )}`
-          );
-        }
-        group.outputHelp({ error: true });
-        throw new UsageError('missing comment action — use comment add or comment list');
-      });
-  } else {
-    group.action(() => {
-      group.outputHelp({ error: true });
-      throw new UsageError('missing comment action — use comment add or comment list');
-    });
-  }
 
   registerLeaves(group, targetSyntax, targetDescription, handlers);
   return group;

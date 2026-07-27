@@ -33,7 +33,9 @@ export async function listWorkspaceCommand(options: ListWorkspaceOptions = {}) {
       console.log(`  Global:  ${getGlobalWorkspacesPath()}`);
       console.log(`  Project: ${getProjectWorkspacesPath()}`);
       console.log('');
-      console.log('💡 Tip: "agent2linear workspace add <name> --api-key -" reads the key from stdin');
+      console.log(
+        '💡 Tip: "agent2linear workspace add <name> --api-key-file -" reads the key from stdin'
+      );
       return;
     }
 

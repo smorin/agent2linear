@@ -11,10 +11,7 @@ import { aliasSyncCommand } from './sync.js';
 export function registerAliasCommands(cli: Command): void {
   const alias = cli
     .command('alias')
-    .description('Manage aliases for initiatives, teams, projects, project statuses, templates, and members')
-    .action(() => {
-      alias.help();
-    });
+    .description('Manage aliases for initiatives, teams, projects, project statuses, templates, and members');
 
   alias
     .command('add')
@@ -187,7 +184,7 @@ Note: This command is fully interactive. For non-interactive editing,
     .description('Clear all aliases of a specific type')
     .option('-g, --global', 'Clear from global config (default)')
     .option('-p, --project', 'Clear from project config')
-    .option('-f, --force', 'Skip confirmation prompt')
+    .option('-y, --yes', 'Supply confirmation consent')
     .option('--dry-run', 'Preview what would be cleared without actually clearing')
     .addHelpText('after', `
 Examples:
@@ -200,8 +197,8 @@ Examples:
   $ agent2linear alias clear project-status --project
 
   # Clear without confirmation
-  $ agent2linear alias clear initiative --force
-  $ agent2linear alias clear member --project --force
+  $ agent2linear alias clear initiative --yes
+  $ agent2linear alias clear member --project --yes
 
 Warning: This will remove ALL aliases of the specified type from the chosen scope.
          Use --dry-run first to preview what will be removed.

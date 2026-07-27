@@ -24,7 +24,7 @@ export function getLinearClient(): SDKClient {
 
   if (!apiKey) {
     throw new LinearClientError(
-      'Linear API key not found. Please set LINEAR_API_KEY environment variable or configure it using the config file.'
+      'Linear API key not found. Use --api-key-file <path|->, a named workspace, or LINEAR_API_KEY.'
     );
   }
 

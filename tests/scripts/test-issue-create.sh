@@ -162,7 +162,7 @@ if [ -n "$TEST_STATE_ID" ]; then
 fi
 
 # Get issue labels (filtered by team to avoid team mismatch)
-LABELS_JSON=$($CLI_CMD issue-labels list --team "$TEST_TEAM_ID" --format json 2>/dev/null || echo "[]")
+LABELS_JSON=$($CLI_CMD issue-labels list --team "$TEST_TEAM_ID" --json 2>/dev/null || echo "[]")
 TEST_LABEL_ID=$(echo "$LABELS_JSON" | node -e "const data=require('fs').readFileSync(0,'utf-8'); const labels=JSON.parse(data); console.log(labels[0]?.id || '')")
 TEST_LABEL2_ID=$(echo "$LABELS_JSON" | node -e "const data=require('fs').readFileSync(0,'utf-8'); const labels=JSON.parse(data); console.log(labels[1]?.id || '')")
 

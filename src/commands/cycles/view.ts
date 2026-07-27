@@ -1,4 +1,5 @@
 import { resolveAlias } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getCycleById } from '../../lib/linear-client.js';
 import { showError } from '../../lib/output.js';
 
@@ -27,6 +28,7 @@ export async function viewCycleCommand(idOrAlias: string, options: { json?: bool
     if (cycle.endsAt) console.log(`  Ends:   ${cycle.endsAt}`);
     console.log();
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

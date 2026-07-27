@@ -8,6 +8,56 @@
 
 ---
 
+## v1.0.0 release status and migration
+
+The M36 v1.0.0 documentation is staged, but this worktree is **not** a
+published release: no release commit, tag, package publication, or
+exact-candidate live-verification result is asserted here. The authoritative
+release checklist is the [M36 plan](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
+and its current evidence/waivers are in [CONFORMANCE.md](CONFORMANCE.md).
+
+### Runtime and version contract
+
+The v1.0.0 support contract is Node.js **22 or 24**, declared by the package
+as `>=22`; Node 18 and 20 are outside that contract. Package, lockfile, CLI,
+and CI version/runtime alignment is complete in this worktree, but that does
+not certify a release artifact. Both `a2l --version` and `a2l -V` write exactly
+this one line to stdout and exit 0:
+
+```text
+agent2linear 1.0.0
+```
+
+### What changes for v1 users
+
+- Do not put a Linear key in argv or config. The removed literal
+  `--api-key` flag is replaced by `--api-key-file <path|->`; key files, named
+  workspace environment variables, profile env files, and the local secrets
+  registry remain supported sources.
+- Use the explicit command grammar `issue comment add <identifier>` rather
+  than the removed `issue comment <identifier>` route.
+- For changed issue, project, comment, and label commands, use
+  `-o, --output table|json|tsv` where offered, or `--json` for the exact JSON
+  result. Changed lifecycle mutations use `table|json`; the deprecated
+  `-f, --format` selector is not a replacement for their new contract.
+- `labels|lbl list|ls` is a compatibility help shim. Use
+  `issue-labels list` or `project-labels list`. `--all` exhausts pages; it
+  does not include retired labels unless `--include-retired` is also supplied.
+- `alias clear` uses `-y, --yes` as its explicit consent flag. Use
+  `--dry-run` first to inspect a write-free plan.
+
+List pagination is cursor based: copy the opaque `pageInfo.endCursor` into
+`--after`; `--all` traverses remaining pages; `cursor-history list|view|clear`
+manages locally retained continuation context. There is no numeric page jump.
+
+For command-by-command replacements, safety notes, JSON/stream/exit behavior,
+and accepted compatibility boundaries, read the dedicated
+[v1.0.0 migration guide](docs/superpowers/releases/2026-07-27-M36-v1.0.0-migration-guide.md).
+The staged [v1.0.0 release notes](docs/superpowers/releases/2026-07-27-M36-v1.0.0-release-notes.md)
+record what still must be verified before a tag or publication.
+
+---
+
 ## 🎯 Why Aliases? (The Killer Feature)
 
 **The Problem**: Linear uses UUIDs everywhere. They're impossible to remember and painful for both humans and AI agents.
@@ -86,6 +136,10 @@ a2l alias list teams
 Get up and running with agent2linear in 3 easy steps:
 
 ### Step 1: Install (or use with npx)
+
+For the v1.0.0 contract, use Node.js 22 or 24 (`>=22`). This repository has
+completed its package, lockfile, CLI, and CI version/engine alignment. Verify
+the registry artifact only after the release is actually announced.
 
 **Option A: Global Install** (recommended for frequent use)
 
@@ -403,7 +457,7 @@ If you work across **multiple Linear workspaces** (e.g. personal + several compa
 
 ```bash
 # 1. Register a workspace's key in the secrets registry (piped, never in shell history)
-echo "$ACME_KEY" | a2l workspace add acme --api-key -
+echo "$ACME_KEY" | a2l workspace add acme --api-key-file -
 a2l workspace list                    # names + masked keys
 a2l workspace current                 # the resolved active workspace + source (offline)
 
@@ -431,8 +485,8 @@ repo's GitHub owner.
 
 ```bash
 # 1. Store both keys without putting secrets in config.json.
-echo "$WORK_LINEAR_API_KEY" | a2l workspace add work --api-key -
-echo "$PERSONAL_LINEAR_API_KEY" | a2l workspace add personal --api-key -
+echo "$WORK_LINEAR_API_KEY" | a2l workspace add work --api-key-file -
+echo "$PERSONAL_LINEAR_API_KEY" | a2l workspace add personal --api-key-file -
 
 # 2. Create one profile per Linear workspace.
 a2l profile add work --workspace work --default-team platform
@@ -456,7 +510,7 @@ After that:
 - `github.com/acme-co/*` and `github.com/acme-labs/*` resolve to `work`.
 - `github.com/alice/*` and `github.com/alice-labs/*` resolve to `personal`.
 - Any other repo fails with a no-match error instead of silently using the wrong key.
-- `--workspace <name>` or `--api-key` still forces a one-off override.
+- `--workspace <name>` or `--api-key-file <path|->` still forces a one-off override.
 
 Verify the routing from inside representative repos:
 
@@ -584,7 +638,7 @@ Highest to lowest:
 
 | #   | Source                                                                                | Example                               |
 | --- | ------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1   | `--workspace <name>` / `--api-key <key>` (per-invocation)                             | `a2l --workspace acme issue create …` |
+| 1   | `--workspace <name>` or `--api-key-file <path-or-stdin>` (per-invocation)             | `a2l --workspace acme issue create …` |
 | 2   | `AGENT2LINEAR_WORKSPACE` env declarator                                               | `AGENT2LINEAR_WORKSPACE=acme a2l …`   |
 | 3   | Repo config `profile`/`workspace` in `.agent2linear/config.json`                      | `{ "profile": "acme" }`               |
 | 4   | Git-remote auto-detect (remote identity → `profile.match` host/owner/repo + `remote`) | (automatic)                           |
@@ -595,7 +649,7 @@ Highest to lowest:
 
 Committable config **never** holds a raw key. For the resolved workspace `<NAME>`, the key is sourced (highest → lowest):
 
-1. `--api-key <key>` / `--api-key -` (stdin)
+1. `--api-key-file <path|->` (including stdin as `-`)
 2. **Named env var** — `apiKeyEnv` override, else the default `LINEAR_API_KEY_<NAME>` (e.g. `acme` → `LINEAR_API_KEY_ACME`, `acme-co` → `LINEAR_API_KEY_ACME_CO`)
 3. **Per-profile env-file** — `profiles.<name>.envFile` (dotenv; `~` and `$VAR` expanded; never mutates `process.env`)
 4. **Secrets registry** — `workspaces.json` (global, mode `0600`) or `.agent2linear/workspaces.local.json` (project, auto-gitignored)
@@ -617,7 +671,7 @@ a2l profile exclude acme               # mark a profile/org off-limits (linear: 
 # repo opt-out: .agent2linear/config.json -> { "linear": false }
 ```
 
-An explicit `--workspace`/`--api-key` always forces through exclusion **and** no-match.
+An explicit `--workspace`/`--api-key-file` always forces through exclusion **and** no-match.
 
 ### Safety on writes (R11)
 
@@ -744,7 +798,7 @@ a2l project comment add backend-migration \
 a2l issue comment add ENG-123 --body-file notes.md --dry-run --json
 ```
 
-Use exactly one body source: `--body`, `--body-file <path>`, `--body-file -`, or implicit non-TTY stdin. Empty bodies and multiple explicit sources are usage errors. `--api-key -` cannot share stdin with a comment body. Add commands use the normal workspace mutation guard; `-y/--yes` supplies confirmation, `--no-input` forbids prompting, and `--dry-run` never prompts or mutates.
+Use exactly one body source: `--body`, `--body-file <path>`, `--body-file -`, or implicit non-TTY stdin. Empty bodies and multiple explicit sources are usage errors. `--api-key-file -` cannot share stdin with a comment body. Add commands use the normal workspace mutation guard; `-y/--yes` supplies confirmation, `--no-input` forbids prompting, and `--dry-run` never prompts or mutates.
 
 Comment lists are human-readable stacked threads by default and use the shared raw-cursor contract:
 
@@ -945,7 +999,7 @@ Label lists return one page of 50 active labels by default. `--limit` accepts 1�
 
 `--all` changes traversal only: it does not include retired labels unless `--include-retired` is also present. There is no numeric `--page`, backward `--before`, or `--cursor` synonym. To reach page two, copy `pageInfo.endCursor` into `--after`; human output prints the copyable command and cursor-history entry ID. Pages preserve Linear's explicit `createdAt` provider order.
 
-Existing label lists retain `-f, --format default|json|tsv`. Changed label mutations use `-o, --output table|json`, and `--json` is exactly equivalent to `--output json`. All changed mutations also support `--dry-run`, `-y/--yes`, and `--no-input`.
+`issue-labels list` and `project-labels list` use `-o, --output table|json|tsv`; changed label lifecycle mutations use `-o, --output table|json`. `--json` is exactly equivalent to `--output json`. All changed mutations also support `--dry-run`, `-y/--yes`, and `--no-input`.
 
 Retirement and archival are independent Linear states. M33 exposes nullable `retiredAt` and `archivedAt`, filters active results only by `retiredAt`, and always excludes generically archived labels. It intentionally provides no `--include-archived` or label archive command.
 
@@ -1656,7 +1710,7 @@ This project uses [Vitest](https://vitest.dev/) for unit testing with comprehens
 
 **Parallelism is safe for the Vitest suite** because mutable filesystem tests are self-isolated and there are no `.concurrent` tests. Cursor-history also has a real multi-process lock test with six child writers. **New stateful unit tests must follow the same pattern**: own temporary roots, stub the relevant XDG variables in `beforeEach`, and clean up in `afterEach`.
 
-**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 18 + 20), build, and the offline config-override, cursor-history, and comment CLI E2E suites (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they create real `TEST_*` entities in a throwaway Linear workspace.
+**CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 22 + 24), build, four offline lifecycle suites, and the selected M36 built-CLI conformance fixtures (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they fail closed on the ConceptM workspace before creating disposable `TEST_*` entities.
 
 **Running Tests:**
 
@@ -1724,62 +1778,32 @@ npx vitest run --reporter=verbose
 
 ## Publishing
 
-This project uses [np](https://github.com/sindresorhus/np) for automated publishing to npm.
+Publishing is owned exclusively by the tag-triggered
+`.github/workflows/release.yml` workflow. Do not run `npm publish` locally;
+the removed `np`/`npm run release` path is not a supported publisher.
 
-**Prerequisites:**
+The workflow verifies tag/package equality, static and offline gates,
+production dependency audit, and the fail-closed ConceptM live suites before
+its GitHub-hosted publish job uses npm trusted publishing with provenance. A
+release operator must not create `v1.0.0` until every M36 candidate gate is
+recorded against one exact commit and the project owner explicitly authorizes
+the tag.
 
-- npm account with publish access
-- Logged in: `npm whoami`
-- Clean git working directory
-
-**Release Process:**
-
-```bash
-# Interactive release with np (recommended)
-npm run release
-
-# np will automatically:
-# 1. Run tests and build (via prepublishOnly)
-# 2. Bump version in package.json
-# 3. Create git tag
-# 4. Push to GitHub
-# 5. Publish to npm
-# 6. Create GitHub release
-```
-
-**Manual Publishing (not recommended):**
-
-```bash
-# Ensure everything is ready
-npm run typecheck
-npm run lint
-npm run build
-npm run test
-
-# Publish to npm
-npm publish
-
-# Tag and push
-git tag v0.24.0
-git push origin main --tags
-```
-
-**After Publishing:**
-
-```bash
-# Verify package is available
-npm view agent2linear
-
-# Test installation
-npx agent2linear --version
-npx a2l --version
-```
+See the [M36 plan](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
+for the release gates and the
+[rollback runbook](docs/superpowers/releases/2026-07-27-M36-v1.0.0-rollback.md)
+for failed-tag, failed-publish, deprecation, dist-tag rollback, and forward-fix
+procedures.
 
 ## Design Decisions
 
-### No Delete Commands
+### No Permanent Issue or Project Delete Commands
 
-Delete commands are **intentionally omitted** for data safety. This is a deliberate design choice — not a missing feature. Destructive operations like deleting projects or permanently removing issues should be done through the Linear web UI where you can visually confirm what you're deleting.
+Permanent issue and project deletion commands are intentionally omitted for
+data safety. Destructive operations that cannot be recovered should be done
+through the Linear web UI where the target can be visually confirmed. This
+does not prohibit guarded delete/remove commands for other resource types;
+for example, v1 includes issue-label and project-label delete operations.
 
 For issues, you can use the trash/restore workflow:
 
@@ -1794,7 +1818,8 @@ Trashed issues can be recovered; deleted entities cannot.
 
 See [MILESTONES.md](./MILESTONES.md) for detailed project milestones and progress.
 
-**Current Version**: v0.1.0 - Project Foundation
+**Source version:** staged v1.0.0 candidate. This line does not claim a tag or
+published npm artifact.
 
 ## License
 

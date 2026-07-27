@@ -1,6 +1,6 @@
 {
   "name": "agent2linear",
-  "version": "0.32.0",
+  "version": "1.0.0",
   "description": "Command-line tool for creating Linear issues and projects",
   "main": "dist/index.js",
   "bin": {
@@ -29,8 +29,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "prepublishOnly": "npm run typecheck && npm run lint && npm run build",
-    "release": "np"
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run build"
   },
   "keywords": [
     "linear",
@@ -62,7 +61,6 @@
     "@vitest/ui": "^4.0.4",
     "eslint": "^8.0.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
-    "np": "^10.2.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "turbo": "^1.13.0",
@@ -80,6 +78,6 @@
     "react": "^19.2.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22"
   }
 }

@@ -18,10 +18,7 @@ export function registerProfileCommands(cli: Command): void {
   const profile = cli
     .command('profile')
     .alias('prof')
-    .description('Manage profiles (workspace + defaults + detection rules)')
-    .action(() => {
-      profile.help();
-    });
+    .description('Manage profiles (workspace + defaults + detection rules)');
 
   profile
     .command('add <name>')
@@ -103,7 +100,7 @@ Examples:
 Examples:
   $ agent2linear profile exclude acme
 
-Commands refuse to use an excluded profile unless forced with --workspace/--api-key.
+Commands refuse to use an excluded profile unless forced with --workspace/--api-key-file.
 `)
     .action((name: string, options) => {
       excludeProfileCommand(name, options);
@@ -112,10 +109,7 @@ Commands refuse to use an excluded profile unless forced with --workspace/--api-
   // Nested detection-rule group (mirrors "project dependencies …").
   const match = profile
     .command('match')
-    .description('Manage git-remote auto-detection rules (host/owner/repo/remote) for a profile')
-    .action(() => {
-      match.help();
-    });
+    .description('Manage git-remote auto-detection rules (host/owner/repo/remote) for a profile');
 
   match
     .command('add <profile>')

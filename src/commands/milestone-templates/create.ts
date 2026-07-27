@@ -1,3 +1,4 @@
+import { CliError, UsageError } from '../../lib/cli-error.js';
 import { createMilestoneTemplate, parseDateOffset } from '../../lib/milestone-templates.js';
 import { showError,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
@@ -55,11 +56,9 @@ export async function createTemplate(
 
     // Validate milestones option
     if (!options.milestone || options.milestone.length === 0) {
-      showError(
-        'At least one milestone is required',
-        'Use --milestone "name:targetDate:description" to add milestones'
+      throw new UsageError(
+        'At least one milestone is required; use --milestone "name:targetDate:description"'
       );
-      process.exit(1);
     }
 
     console.log(`🔨 Creating milestone template "${name}"...`);
@@ -115,6 +114,7 @@ export async function createTemplate(
     console.log(`   $ agent2linear project add-milestones <project-id> --template ${name}`);
     console.log(`   $ agent2linear config set defaultMilestoneTemplate ${name}\n`);
   } catch (error) {
+    if (error instanceof CliError) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

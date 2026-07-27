@@ -20,11 +20,7 @@ export function registerLabelsShim(
   const labels = cli
     .command('labels')
     .alias('lbl')
-    .description('Compatibility help for issue-labels and project-labels (deprecated)')
-    .action(() => {
-      dependencies.writeStderr(WARNING);
-      labels.outputHelp();
-    });
+    .description('Compatibility help for issue-labels and project-labels (deprecated)');
 
   labels
     .command('list')

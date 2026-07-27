@@ -6,6 +6,8 @@
 
 import * as readline from 'readline';
 
+import { CliError, isAuthenticationError } from '../../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../../lib/interaction-policy.js';
 import { deleteProjectRelation,getLinearClient, getProjectRelations } from '../../../lib/linear-client.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { getRelationDirection } from '../../../lib/parsers.js';
@@ -35,6 +37,8 @@ export async function clearProjectDependencies(
   options: ClearDependenciesOptions = {}
 ) {
   try {
+    if (!options.yes) requireInteractiveInput('project dependencies clear');
+
     // Resolve project
     console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
     const resolved = await resolveProject(nameOrId);
@@ -142,6 +146,8 @@ export async function clearProjectDependencies(
     }
 
   } catch (error) {
+    if (error instanceof CliError) throw error;
+    if (isAuthenticationError(error)) throw error;
     showError('Error', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

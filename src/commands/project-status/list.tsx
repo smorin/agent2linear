@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 
 import { getAliasesForId } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllProjectStatuses, type ProjectStatus } from '../../lib/linear-client.js';
 import { formatListJSON,formatListTSV } from '../../lib/output.js';
 
@@ -112,6 +114,7 @@ export async function listProjectStatuses(options: ListOptions = {}) {
   }
 
   if (options.interactive) {
+    requireInteractiveInput('project-status list');
     // Interactive mode: display with Ink
     render(<App options={options} />);
   } else {
@@ -149,6 +152,7 @@ export async function listProjectStatuses(options: ListOptions = {}) {
         console.log('\n💡 Tip: Use "agent2linear project-status sync-aliases" to create aliases for all statuses');
       }
     } catch (error) {
+      if (isAuthenticationError(error)) throw error;
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch project statuses'}`);
       process.exit(1);
     }

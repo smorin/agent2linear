@@ -8,10 +8,7 @@ export function registerCyclesCommands(cli: Command): void {
   const cycles = cli
     .command('cycles')
     .alias('cycle')
-    .description('Manage Linear cycles (sprints)')
-    .action(() => {
-      cycles.help();
-    });
+    .description('Manage Linear cycles (sprints)');
 
   cycles
     .command('list')

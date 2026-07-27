@@ -1,6 +1,7 @@
 import * as readline from 'node:readline';
 
 import { UsageError } from './cli-error.js';
+import { noInputRequested } from './interaction-policy.js';
 
 export interface DestructiveConfirmationOptions {
   yes?: boolean;
@@ -33,7 +34,7 @@ export async function confirmDestructiveAction(
 ): Promise<void | DestructiveConfirmationDeclined> {
   if (options.yes) return;
 
-  if (options.noInput) {
+  if (noInputRequested(options.noInput)) {
     throw new UsageError(
       action + ' requires confirmation, but --no-input forbids prompting - pass -y/--yes'
     );

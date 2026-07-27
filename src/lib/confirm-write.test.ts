@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageError } from './cli-error.js';
 import { confirmWorkspaceWrite, needsWorkspaceConfirm } from './confirm-write.js';
+import { resetInvocationContext, setInvocationContext } from './invocation-context.js';
 import type { WorkspaceResolution } from './types.js';
 
 const autoDetected: WorkspaceResolution = { key: 'k', name: 'acme', source: 'auto-detect' };
 
 afterEach(() => {
+  resetInvocationContext();
   vi.restoreAllMocks();
 });
 
@@ -64,5 +66,21 @@ describe('confirmWorkspaceWrite', () => {
       exitCode: 2,
       message: expect.stringContaining('--no-input'),
     });
+  });
+
+  it('honors global --no-input even when leaf options retain their default', async () => {
+    setInvocationContext({ noInput: true });
+    await expect(confirmWorkspaceWrite(autoDetected, {}, {}, true)).rejects.toMatchObject({
+      exitCode: 2,
+      message: expect.stringContaining('--no-input'),
+    });
+  });
+
+  it('[RLS-SAFE-PROMPTS] accepts explicit --yes consent under --no-input', async () => {
+    setInvocationContext({ noInput: true });
+
+    await expect(
+      confirmWorkspaceWrite(autoDetected, { yes: true, noInput: true }, {}, true)
+    ).resolves.toBeUndefined();
   });
 });

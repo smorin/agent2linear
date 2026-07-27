@@ -16,7 +16,7 @@ export function registerConfigCommands(cli: Command): void {
     .description('Manage configuration settings for agent2linear')
     .addHelpText('before', `
 Current respected settings:
-- \`apiKey\`: Linear API authentication key (get yours at linear.app/settings/api)
+- \`apiKey\`: Legacy stored Linear API key (read/unset only; prefer workspaces or environment)
 - \`defaultInitiative\`: Default initiative ID for project creation (format: init_xxx)
 - \`defaultTeam\`: Default team ID for project creation (format: team_xxx)
 - \`defaultProject\`: Default project ID for issue creation
@@ -29,7 +29,7 @@ Current respected settings:
 Configuration files:
 - Global:  $XDG_CONFIG_HOME/agent2linear/config.json (default: ~/.config/agent2linear/config.json)
 - Project: .agent2linear/config.json (nearest, searching up from the current directory)
-- Priority: environment > project > global (for apiKey)
+- Priority: environment > project > global (for the unnamed legacy apiKey)
             project > global (for other settings)
 `)
     .addHelpText('after', `
@@ -39,10 +39,7 @@ Related Commands:
 
 Learn More:
   Get your Linear API key at: https://linear.app/settings/api
-`)
-    .action(() => {
-      config.help();
-    });
+`);
 
   config
     .command('list')
@@ -90,7 +87,6 @@ Examples:
     .option('-p, --project', 'Set in project config')
     .addHelpText('after', `
 Examples:
-  $ agent2linear config set apiKey lin_api_xxx...
   $ agent2linear config set defaultInitiative init_abc123 --global
   $ agent2linear config set defaultTeam team_xyz789 --project
   $ agent2linear config set defaultProjectTemplate template_abc123
@@ -150,8 +146,8 @@ Examples:
     .addHelpText('after', `
 Examples:
   $ agent2linear config edit                      # Interactive multi-value editing
-  $ agent2linear config edit --global             # Edit global config interactively
-  $ agent2linear config edit --key apiKey --value lin_api_xxx  # Non-interactive single value
+  $ agent2linear config edit --global                    # Edit global config interactively
+  $ agent2linear config edit --key defaultTeam --value team_xxx  # Non-interactive value
   $ agent2linear cfg edit                         # Same as 'config edit' (alias)
 `)
     .action(async (options) => {

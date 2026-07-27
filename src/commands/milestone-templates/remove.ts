@@ -1,5 +1,7 @@
 import readline from 'readline';
 
+import { CliError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getMilestoneTemplate,removeMilestoneTemplate } from '../../lib/milestone-templates.js';
 import { showError,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
@@ -78,6 +80,7 @@ export async function removeTemplate(
 
     // Confirm deletion unless --yes flag is set
     if (!options.yes) {
+      requireInteractiveInput('milestone-templates remove');
       console.log();
       const confirmed = await confirm('Are you sure you want to remove this template? (y/N) ');
       if (!confirmed) {
@@ -101,6 +104,7 @@ export async function removeTemplate(
 
     showSuccess('Milestone template removed successfully!', details);
   } catch (error) {
+    if (error instanceof CliError) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

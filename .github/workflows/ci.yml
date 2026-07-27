@@ -11,7 +11,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [22.x, 24.x]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,3 +29,13 @@ jobs:
       - run: bash tests/scripts/test-cursor-history-cli.sh
       - run: bash tests/scripts/test-comments-cli.sh
       - run: bash tests/scripts/test-label-lifecycle-cli.sh
+      # Publishable-tier CLI Standard conformance fixtures (M36 / R9.14).
+      - run: node tests/scripts/test-m36-api-key-cli.js
+      - run: node tests/scripts/test-m36-config-cli.js
+      - run: node tests/scripts/test-m36-diagnostics-cli.js
+      - run: node tests/scripts/test-m36-output-cli.js
+      - run: node tests/scripts/test-m36-output-migrations-cli.js
+      - run: node tests/scripts/test-m36-parser-no-input-cli.js
+      - run: node tests/scripts/test-m36-signals-cli.js
+      - run: node tests/scripts/test-m36-tsv-cli.js
+      - run: node tests/scripts/test-m36-version-cli.js

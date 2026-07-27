@@ -78,9 +78,9 @@ afterEach(() => {
 
 describe('cursor-history registration and lifecycle', () => {
   it('CPH-CMD-HISTORY-GROUP rejects an incomplete group with help on stderr', async () => {
-    await expect(program().parseAsync(['cursor-history'], { from: 'user' })).rejects.toBeInstanceOf(
-      UsageError
-    );
+    await expect(
+      program().parseAsync(['cursor-history'], { from: 'user' })
+    ).rejects.toMatchObject({ code: 'commander.help', exitCode: 1 });
     expect(stdout).toBe('');
     expect(stderr).toContain('Usage: agent2linear cursor-history');
     expect(stderr).toContain('list');

@@ -32,10 +32,7 @@ Examples:
 Related Commands:
   $ agent2linear config set entityCacheMinTTL 120  # Set 2-hour cache TTL
   $ agent2linear config set enableEntityCache false  # Disable caching
-`)
-    .action(() => {
-      cache.help();
-    });
+`);
 
   cache
     .command('stats')

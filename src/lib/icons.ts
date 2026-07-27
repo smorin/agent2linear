@@ -1,3 +1,4 @@
+import { isAuthenticationError } from './cli-error.js';
 import { getAllIssueLabels, getAllProjectLabels, getAllWorkflowStates } from './linear-client.js';
 import type { Icon } from './types.js';
 
@@ -215,6 +216,7 @@ export async function extractIconsFromEntities(
       }
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     // Handle errors gracefully
     console.error('Error extracting icons:', error);
   }

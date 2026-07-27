@@ -16,7 +16,7 @@ import { getEntityCache } from '../../lib/entity-cache.js';
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import { getIssueListPage, type IssueListPageResult } from '../../lib/linear-client.js';
 import { logger } from '../../lib/logger.js';
-import { filterColumns, formatContentPreview } from '../../lib/output.js';
+import { filterColumns, formatContentPreview, sanitizeTsvCell } from '../../lib/output.js';
 import { type OutputMode, resolveOutputMode } from '../../lib/output-mode.js';
 import {
   PaginationInputError,
@@ -246,22 +246,23 @@ function formatTsvOutput(
   );
 
   for (const issue of issues) {
-    const identifier = issue.identifier;
-    const title = issue.title.replace(/\t/g, ' ');
-    const state = issue.state?.name || '';
-    const priority = issue.priority !== undefined ? issue.priority.toString() : '';
-    const assignee = issue.assignee?.email || '';
-    const team = issue.team?.key || '';
-    const url = issue.url;
-    let row = `${identifier}\t${title}\t${state}\t${priority}\t${assignee}\t${team}\t${url}`;
+    const cells: unknown[] = [
+      issue.identifier,
+      issue.title,
+      issue.state?.name || '',
+      issue.priority !== undefined ? issue.priority.toString() : '',
+      issue.assignee?.email || '',
+      issue.team?.key || '',
+      issue.url,
+    ];
 
     if (showDesc) {
       const desc = descConfig?.full
-        ? (issue.description || '').replace(/\t/g, ' ').replace(/\n/g, ' ')
+        ? issue.description || ''
         : formatContentPreview(issue.description, descConfig?.length);
-      row += `\t${desc}`;
+      cells.push(desc);
     }
-    writeLine(write, row);
+    writeLine(write, cells.map(sanitizeTsvCell).join('\t'));
   }
 }
 
@@ -503,11 +504,13 @@ function renderCursorFooter(
 function renderCustomColumns(
   write: (value: string) => void,
   rows: Array<Record<string, unknown>>,
-  columns: string[]
+  columns: string[],
+  sanitizeCells = false
 ): void {
-  writeLine(write, columns.join('\t'));
+  const cell = sanitizeCells ? sanitizeTsvCell : (value: unknown) => String(value ?? '');
+  writeLine(write, columns.map(cell).join('\t'));
   for (const row of rows) {
-    writeLine(write, columns.map(column => String(row[column] ?? '')).join('\t'));
+    writeLine(write, columns.map(column => cell(row[column])).join('\t'));
   }
 }
 
@@ -519,6 +522,9 @@ export async function runIssueList(
     throw new UsageError('Legacy -f/--format has been removed; use -o/--output <table|json|tsv>');
   }
   const outputMode = issueOutputMode(options);
+  if (options.web && outputMode !== 'table') {
+    throw new UsageError('--web cannot be combined with machine-readable output');
+  }
   const limit = issuePageLimit(options.limit);
   const after = issueRawCursor(options.after);
   if (options.all && options.limit !== undefined) {
@@ -625,7 +631,7 @@ export async function runIssueList(
   }
 
   if (columns && filteredRows) {
-    renderCustomColumns(dependencies.stdout, filteredRows, columns);
+    renderCustomColumns(dependencies.stdout, filteredRows, columns, outputMode === 'tsv');
   } else if (outputMode === 'tsv') {
     formatTsvOutput(result.items, dependencies.stdout, descConfig);
   } else {

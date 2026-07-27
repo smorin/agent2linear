@@ -1,3 +1,4 @@
+import { isAuthenticationError } from './cli-error.js';
 import { getAllIssueLabels, getAllProjectLabels, getAllProjectStatuses,getAllWorkflowStates } from './linear-client.js';
 import type { Color } from './types.js';
 
@@ -145,6 +146,7 @@ export async function extractColorsFromEntities(type?: 'labels' | 'workflow-stat
       }
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     // Handle errors gracefully
     console.error('Error extracting colors:', error);
   }

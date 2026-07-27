@@ -14,9 +14,10 @@ import {
   recordCursorContinuation,
 } from '../../lib/cursor-history-adapter.js';
 import { getEntityCache } from '../../lib/entity-cache.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getProjectListPage, PROJECT_LIST_ORDER } from '../../lib/linear-client.js';
 import { logger } from '../../lib/logger.js';
-import { filterColumns, formatContentPreview } from '../../lib/output.js';
+import { filterColumns, formatContentPreview, sanitizeTsvCell } from '../../lib/output.js';
 import { type OutputMode, resolveOutputMode } from '../../lib/output-mode.js';
 import {
   type PageInfo,
@@ -215,22 +216,24 @@ function formatTSVOutput(
   console.log(showPreview ? baseHeader + '\tPreview' : baseHeader);
 
   for (const project of projects) {
-    const status = project.status?.name || project.state || '';
-    const team = project.team?.name || '';
-    const lead = project.lead?.name || '';
-    let row = project.id + '\t' + project.name + '\t' + status + '\t' + team + '\t' + lead;
+    const cells: unknown[] = [
+      project.id,
+      project.name,
+      project.status?.name || project.state || '',
+      project.team?.name || '',
+      project.lead?.name || '',
+    ];
     if (showDependencies) {
-      row += '\t' + String(project.dependsOnCount ?? 0);
-      row += '\t' + String(project.blocksCount ?? 0);
+      cells.push(project.dependsOnCount ?? 0, project.blocksCount ?? 0);
     }
     if (showPreview) {
       const text = project.description || project.content || '';
       const preview = descConfig?.full
-        ? text.replace(/\t/g, ' ').replace(/\n/g, ' ')
+        ? text
         : formatContentPreview(text, descConfig?.length);
-      row += '\t' + preview;
+      cells.push(preview);
     }
-    console.log(row);
+    console.log(cells.map(sanitizeTsvCell).join('\t'));
   }
 }
 
@@ -252,11 +255,13 @@ function flattenProjects(projects: ProjectListItem[]): Array<Record<string, unkn
 function formatColumnRows(
   rows: Array<Record<string, unknown>>,
   columns: string[],
-  includeTotal: boolean
+  includeTotal: boolean,
+  sanitizeCells = false
 ): void {
-  console.log(columns.join('\t'));
+  const cell = sanitizeCells ? sanitizeTsvCell : (value: unknown) => String(value ?? '');
+  console.log(columns.map(cell).join('\t'));
   for (const row of rows) {
-    console.log(columns.map(column => String(row[column] ?? '')).join('\t'));
+    console.log(columns.map(column => cell(row[column])).join('\t'));
   }
   if (includeTotal) {
     console.log('\nTotal: ' + String(rows.length) + ' project' + (rows.length !== 1 ? 's' : ''));
@@ -484,6 +489,12 @@ async function runProjectList(options: ProjectListCommandOptions, command: Comma
     throw error;
   }
   const outputMode = resolveCommandOutputMode(options, command);
+  if (options.web && outputMode !== 'table') {
+    throw new UsageError('--web cannot be combined with machine-readable output');
+  }
+  if (options.interactive && outputMode !== 'table') {
+    throw new UsageError('--interactive cannot be combined with machine-readable output');
+  }
   if (options.all && command.getOptionValueSource('limit') === 'cli') {
     logger.debug('--all ignores --limit and fetches every remaining project');
   }
@@ -492,6 +503,9 @@ async function runProjectList(options: ProjectListCommandOptions, command: Comma
     throw new UsageError('Cannot use --has-dependencies and --without-dependencies together');
   }
   if (options.web) throw new RuntimeError('Web mode not yet implemented');
+  if (options.interactive && !options.columns) {
+    requireInteractiveInput('project list');
+  }
 
   const filters = await buildDefaultFilters(options);
   const dependencyOptions: DependencyFilterOptions = {
@@ -543,7 +557,7 @@ async function runProjectList(options: ProjectListCommandOptions, command: Comma
         )
       );
     } else {
-      formatColumnRows(outputProjects, columns, outputMode === 'table');
+      formatColumnRows(outputProjects, columns, outputMode === 'table', outputMode === 'tsv');
       if (outputMode === 'table') printHumanPaginationFooter(presentation);
     }
   } else if (options.interactive) {

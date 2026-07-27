@@ -1,13 +1,14 @@
 import * as readline from 'readline';
 
 import { clearAliases,normalizeEntityType } from '../../lib/aliases.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { showError, showInfo,showSuccess } from '../../lib/output.js';
 import { getScopeInfo } from '../../lib/scope.js';
 
 interface ClearAliasOptions {
   global?: boolean;
   project?: boolean;
-  force?: boolean;
+  yes?: boolean;
   dryRun?: boolean;
 }
 
@@ -78,8 +79,9 @@ export async function clearAliasCommand(
     return;
   }
 
-  // Require confirmation unless --force is used
-  if (!options.force) {
+  // Require confirmation unless explicit consent is supplied.
+  if (!options.yes) {
+    requireInteractiveInput('alias clear');
     console.log(`⚠️  About to clear ${previewResult.count} ${normalizedType} alias(es) from ${scopeLabel} config:\n`);
     if (previewResult.aliases) {
       previewResult.aliases.forEach((alias) => {

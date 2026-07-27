@@ -7,10 +7,7 @@ export function registerTemplatesCommands(cli: Command): void {
   const templates = cli
     .command('templates')
     .alias('tmpl')
-    .description('Manage Linear templates')
-    .action(() => {
-      templates.help();
-    });
+    .description('Manage Linear templates');
 
   templates
     .command('list [type]')

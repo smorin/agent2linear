@@ -4,6 +4,7 @@
  * List all dependency relations for a project
  */
 
+import { isAuthenticationError, NotFoundError } from '../../../lib/cli-error.js';
 import { getLinearClient, getProjectRelations } from '../../../lib/linear-client.js';
 import { showError } from '../../../lib/output.js';
 import { getRelationDirection } from '../../../lib/parsers.js';
@@ -11,6 +12,7 @@ import { resolveProject } from '../../../lib/project-resolver.js';
 
 interface ListDependenciesOptions {
   direction?: 'depends-on' | 'blocks';
+  json?: boolean;
 }
 
 export async function listProjectDependencies(
@@ -18,11 +20,13 @@ export async function listProjectDependencies(
   options: ListDependenciesOptions = {}
 ) {
   try {
+    const silent = options.json === true;
     // Resolve project
-    console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
+    if (!silent) console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
     const resolved = await resolveProject(nameOrId);
 
     if (!resolved) {
+      if (options.json) throw new NotFoundError(`project not found: ${nameOrId}`);
       showError('Project not found', `Could not find project: ${nameOrId}`);
       process.exit(1);
     }
@@ -32,12 +36,12 @@ export async function listProjectDependencies(
     const client = getLinearClient();
 
     // Fetch relations
-    console.log('🔍 Fetching dependencies...\n');
+    if (!silent) console.log('🔍 Fetching dependencies...\n');
     const relations = await getProjectRelations(client, projectId);
 
-    if (relations.length === 0) {
+    if (relations.length === 0 && !options.json) {
       console.log(`📋 Dependencies for ${projectName} (${projectId}): None\n`);
-      process.exit(0);
+      return;
     }
 
     // Group by direction
@@ -47,6 +51,32 @@ export async function listProjectDependencies(
     // Filter by direction if specified
     const showDependsOn = !options.direction || options.direction === 'depends-on';
     const showBlocks = !options.direction || options.direction === 'blocks';
+
+    if (options.json) {
+      const serialize = (relation: (typeof relations)[number], direction: 'depends-on' | 'blocks') => {
+        const targetProject =
+          relation.project.id === projectId ? relation.relatedProject : relation.project;
+        return {
+          id: relation.id,
+          direction,
+          project: { id: targetProject.id, name: targetProject.name },
+          anchorType: relation.anchorType,
+          relatedAnchorType: relation.relatedAnchorType,
+        };
+      };
+      process.stdout.write(
+        JSON.stringify(
+          {
+            project: { id: projectId, name: projectName },
+            dependsOn: showDependsOn ? dependsOn.map(relation => serialize(relation, 'depends-on')) : [],
+            blocks: showBlocks ? blocks.map(relation => serialize(relation, 'blocks')) : [],
+          },
+          null,
+          2
+        ) + '\n'
+      );
+      return;
+    }
 
     console.log(`📋 Dependencies for ${projectName} (${projectId}):\n`);
 
@@ -103,6 +133,8 @@ export async function listProjectDependencies(
     }
 
   } catch (error) {
+    if (options.json) throw error;
+    if (isAuthenticationError(error)) throw error;
     showError('Error', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

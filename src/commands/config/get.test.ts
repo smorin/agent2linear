@@ -4,7 +4,7 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetGitContextCache } from '../../lib/git-context.js';
-import { resetInvocationContext } from '../../lib/invocation-context.js';
+import { resetInvocationContext, setInvocationContext } from '../../lib/invocation-context.js';
 import { getConfigValue } from './get.js';
 
 describe('config get [dir] — override resolution (M29)', () => {
@@ -70,5 +70,24 @@ describe('config get [dir] — override resolution (M29)', () => {
     log.mockClear();
     void getConfigValue('defaultTeam', join(repo, 'mobile')); // unlabeled rule at index 1
     expect(log.mock.calls[0][0]).toContain('repo override #1');
+  });
+
+  it('names the selected file when an explicit-config override wins', () => {
+    const path = join(repo, 'selected.json');
+    setInvocationContext({
+      explicitConfig: {
+        path,
+        value: {
+          overrides: [{ id: 'selected-rule', when: {}, defaultTeam: 'explicit-team' }],
+        },
+      },
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    void getConfigValue('defaultTeam', repo);
+
+    expect(log.mock.calls[0][0]).toBe(
+      `defaultTeam: explicit-team (from explicit config ${path} override selected-rule)`
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { isAuthenticationError, UsageError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { createProjectMilestone,validateProjectExists } from '../../lib/linear-client.js';
 import { getMilestoneTemplate, resolveMilestoneDates } from '../../lib/milestone-templates.js';
@@ -9,6 +10,13 @@ interface AddMilestonesOptions {
 }
 
 export async function addMilestones(projectNameOrId: string, options: AddMilestonesOptions = {}) {
+  const templateName = options.template ?? getConfig().defaultMilestoneTemplate;
+  if (!templateName) {
+    throw new UsageError(
+      'No milestone template specified; use --template or configure defaultMilestoneTemplate'
+    );
+  }
+
   try {
     // Use smart resolver to handle ID, alias, or name
     console.log(`🔍 Resolving project "${projectNameOrId}"...`);
@@ -40,22 +48,6 @@ export async function addMilestones(projectNameOrId: string, options: AddMilesto
     }
 
     showValidated('project', projectCheck.name!);
-
-    // Get template name from options or config
-    let templateName = options.template;
-    if (!templateName) {
-      const config = getConfig();
-      templateName = config.defaultMilestoneTemplate;
-    }
-
-    if (!templateName) {
-      showError(
-        'No milestone template specified',
-        'Provide a template using --template flag or set a default:\n' +
-        '  $ agent2linear config set defaultMilestoneTemplate <template-name>'
-      );
-      process.exit(1);
-    }
 
     // Load the template
     console.log(`🔍 Loading milestone template: ${templateName}...`);
@@ -104,6 +96,7 @@ export async function addMilestones(projectNameOrId: string, options: AddMilesto
       console.log(`⚠️  Warning: ${template.milestones.length - createdMilestones.length} milestone${template.milestones.length - createdMilestones.length === 1 ? '' : 's'} failed to create`);
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

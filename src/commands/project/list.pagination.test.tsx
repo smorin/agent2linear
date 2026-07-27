@@ -29,12 +29,16 @@ vi.mock('../../lib/linear-client.js', () => ({
   getProjectListPage: mocks.getProjectListPage,
   PROJECT_LIST_ORDER: 'updatedAt:desc',
 }));
-vi.mock('../../lib/output.js', () => ({
-  filterColumns: (rows: Array<Record<string, unknown>>, columns: string[]) =>
-    rows.map(row => Object.fromEntries(columns.map(column => [column, row[column]]))),
-  formatContentPreview: (value: string, length = 80) => value.slice(0, length),
-  showError: mocks.showError,
-}));
+vi.mock('../../lib/output.js', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/output.js')>('../../lib/output.js');
+  return {
+    ...actual,
+    filterColumns: (rows: Array<Record<string, unknown>>, columns: string[]) =>
+      rows.map(row => Object.fromEntries(columns.map(column => [column, row[column]]))),
+    formatContentPreview: (value: string, length = 80) => value.slice(0, length),
+    showError: mocks.showError,
+  };
+});
 vi.mock('../../lib/workspace-resolver.js', () => ({
   resolveActiveWorkspace: mocks.resolveActiveWorkspace,
 }));
@@ -363,6 +367,60 @@ describe('project list M34 adoption', () => {
     expect(output()).not.toContain('Next page:');
     expect(output()).not.toContain('Total:');
     expect(errorOutput()).toContain('raw-tsv-cursor');
+  });
+
+  it('[RLS-OUT-PROJECT-LIST-TSV] replaces every tab, CR, and LF in standard and custom TSV cells', async () => {
+    const dirty = project({
+      id: 'project\r1',
+      name: 'Project\tone',
+      state: 'fallback\nstate',
+      status: { id: 'status-1', name: 'In\rProgress', type: 'started' },
+      team: { id: 'team-1', key: 'PLT', name: 'Platform\nTeam' },
+      lead: { id: 'user-1', name: 'Lead\tName', email: 'lead@example.com' },
+      description: 'first\tsecond\rthird\nfourth',
+      url: 'https://linear.app/project\n/project-1',
+    });
+    mocks.getProjectListPage.mockResolvedValue(page([dirty]));
+
+    await program().parseAsync(
+      [
+        'project',
+        'list',
+        '--all-leads',
+        '--all-teams',
+        '--all-initiatives',
+        '--output',
+        'tsv',
+        '--desc-full',
+        '--no-cursor-history',
+      ],
+      { from: 'user' }
+    );
+    expect(output()).toBe(
+      'ID\tTitle\tStatus\tTeam\tLead\tPreview\n' +
+        'project 1\tProject one\tIn Progress\tPlatform Team\tLead Name\tfirst second third fourth'
+    );
+
+    stdout = [];
+    await program().parseAsync(
+      [
+        'project',
+        'list',
+        '--all-leads',
+        '--all-teams',
+        '--all-initiatives',
+        '--output',
+        'tsv',
+        '--columns',
+        'id,name,status,team,lead,description,url',
+        '--no-cursor-history',
+      ],
+      { from: 'user' }
+    );
+    expect(output()).toBe(
+      'id\tname\tstatus\tteam\tlead\tdescription\turl\n' +
+        'project 1\tProject one\tIn Progress\tPlatform Team\tLead Name\tfirst second third fourth\thttps://linear.app/project /project-1'
+    );
   });
 
   it('[CPH-RULE-PROJECT-INTERACTIVE] renders the already-fetched normalized page without refetching', async () => {

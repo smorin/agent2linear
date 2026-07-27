@@ -1,5 +1,14 @@
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -271,7 +280,7 @@ describe('getConfig() — context-aware overrides (M29)', () => {
       const cfg = getConfig(link);
       expect(cfg.defaultTeam).toBe('cli-team');
     } finally {
-      rmSync(link, { force: true });
+      unlinkSync(link);
     }
   });
 

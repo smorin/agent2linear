@@ -1,4 +1,5 @@
 import { resolveAlias } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { getAllCycles } from '../../lib/linear-client.js';
 import { formatListJSON,formatListTSV, showError } from '../../lib/output.js';
@@ -49,6 +50,7 @@ export async function listCyclesCommand(options: ListCyclesOptions) {
       }
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

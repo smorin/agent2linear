@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { UsageError } from './cli-error.js';
 import { confirmDestructiveAction } from './confirm-destructive.js';
+import { resetInvocationContext, setInvocationContext } from './invocation-context.js';
 
 const originalIsTTY = process.stdin.isTTY;
 
 afterEach(() => {
+  resetInvocationContext();
   Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: originalIsTTY });
   vi.restoreAllMocks();
 });
@@ -15,6 +17,16 @@ describe('confirmDestructiveAction', () => {
     const prompt = vi.fn();
     await expect(
       confirmDestructiveAction('delete label', { yes: true }, { prompt })
+    ).resolves.toBeUndefined();
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('[RLS-SAFE-PROMPTS] keeps --yes consent distinct from --no-input policy', async () => {
+    const prompt = vi.fn();
+    setInvocationContext({ noInput: true });
+
+    await expect(
+      confirmDestructiveAction('delete label', { yes: true, noInput: true }, { prompt })
     ).resolves.toBeUndefined();
     expect(prompt).not.toHaveBeenCalled();
   });
@@ -33,6 +45,16 @@ describe('confirmDestructiveAction', () => {
     await expect(
       confirmDestructiveAction('retire label', { noInput: true })
     ).rejects.toBeInstanceOf(UsageError);
+  });
+
+  it('honors global --no-input before invoking the prompt dependency', async () => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+    setInvocationContext({ noInput: true });
+    const prompt = vi.fn();
+    await expect(confirmDestructiveAction('delete label', {}, { prompt })).rejects.toMatchObject({
+      exitCode: 2,
+    });
+    expect(prompt).not.toHaveBeenCalled();
   });
 
   it('[LPL-SAF-CONFIRM-DECLINE] reports a typed cancellation without mutating', async () => {

@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No additional changes are recorded after the staged v1.0.0 notes below. This
+entry does not assert that a v1.0.0 tag or package has been published.
+
+## [1.0.0] - 2026-07-27
+
+> Release documentation was prepared on this date. Candidate CI and live
+> evidence, tagging, package inspection, registry verification, and
+> publication remain release gates; this section is not a publication claim.
+
 ### Added
+
+- XDG Base Directory support for configuration, cache, state, aliases, and
+  milestone-template storage, including migration-safe legacy cleanup.
+- Multi-workspace and profile configuration with named credential sources,
+  repository-based selection, fail-closed no-match policy, mutation banners,
+  and workspace/profile management commands.
+- Context-aware configuration overrides selected by path, Git identity,
+  branch, remote, and boolean match expressions, with `-C`, `config get`,
+  `config list`, and `config explain` provenance.
+- Configurable prompt templates with location/team precedence, prompt
+  inspection, and issue-prompt integration.
+- Unified repository identity matching for host, owner, repository, remote,
+  case sensitivity, forks, and multi-remote routing.
+- `config override` add/list/get/edit/remove/move management with labels,
+  validation, ordering, and read-side rule provenance.
 
 - Complete `issue-labels|ilbl` and `project-labels|plbl` lifecycle management with create, view, update, delete, retire, restore, dry-run, guarded writes, human output, and stable JSON results.
 - Raw-cursor label pagination with a default of 50, strict 1–250 limits, `--after`, `-a/--all`, `--include-retired`, cursor history, and copyable page-two commands.
@@ -25,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cursorHistory` metadata.
 - Offline cursor-history lifecycle and multiprocess writer verification.
 - Fail-closed ConceptM live pagination verification for issue/project page-two and all-remaining traversal.
+- Global `--config`, repeatable `-v/--verbose`, `--debug`, and `--no-input`
+  controls with redacted diagnostics and explicit noninteractive behavior.
 
 ### Changed
 
@@ -44,9 +70,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project traversal uses internal pages of 50 to remain below Linear GraphQL complexity limits while preserving the public 1–250 result bound.
 - Pagination/auth/usage failures use differentiated exits 1–5.
 
+### Security
+
+- **Breaking:** literal `--api-key` argv input is removed. Use
+  `--api-key-file <path|->`, named workspace environment variables, profile
+  env files, or the local secrets registry; raw keys are not accepted from
+  config argv input.
+- Key-file and stdin allocation rules prevent a credential read from sharing
+  stdin with another command input, and errors retain safe remediation rather
+  than echoing a secret.
+
+### Fixed
+
+- Issue trash now uses Linear's dedicated trash mutation; untrash remains the
+  matching restore path.
+- Human issue/project not-found errors now use the same typed exit 3 contract
+  as machine output.
+- Invalid `config override add` input exits 2 and duplicate-rule conflicts
+  exit 5 instead of both collapsing to runtime exit 1.
+- Issue/project TSV output replaces embedded tabs, carriage returns, and line
+  feeds so each result remains exactly one parseable row.
+- SIGINT, SIGTERM, and closed stdout pipes now follow stable 130, 143, and
+  quiet-pipe behavior without leaking stack traces.
+- Named dry-run commands no longer perform hidden remote or local state writes.
+
 ## [0.24.0] - 2025-11-03
 
 ### Changed - Package Rename
+
 - **Package renamed** from `linear-create` to `agent2linear`
 - **CLI commands**: Both `agent2linear` and `a2l` (short alias) are now available
 - **Repository**: Moved to https://github.com/smorin/agent2linear
@@ -60,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This major release completes the comprehensive issue management suite with four full-featured commands.
 
 #### Issue Create Command (M15.3)
+
 - **23+ creation options** with full field coverage
 - **Auto-assignment** to current user by default (override with `--no-assignee`)
 - **Member resolution** via ID, alias, email, or display name
@@ -73,6 +125,7 @@ This major release completes the comprehensive issue management suite with four 
 - **Content from files** with `--content-file` flag
 
 #### Issue Update Command (M15.4)
+
 - **33+ update options** covering all mutable fields
 - **Add/remove patterns** for labels and subscribers (`--add-labels`, `--remove-labels`)
 - **Clearing operations** with `--no-*` flags (assignee, dates, estimates, relationships)
@@ -84,6 +137,7 @@ This major release completes the comprehensive issue management suite with four 
 - **Cross-team moves** with automatic state validation
 
 #### Issue View Command (M15.2)
+
 - **Terminal display** with comprehensive formatting
 - **JSON output** mode for scripting and automation
 - **Web browser** integration with `--web` flag
@@ -92,6 +146,7 @@ This major release completes the comprehensive issue management suite with four 
 - **Identifier resolution** supports both ENG-123 format and UUIDs
 
 #### Issue List Command (M15.5)
+
 - **Smart defaults** - shows your assigned issues automatically
 - **Extensive filtering** - 20+ filter options including:
   - Team, state, priority, assignee, labels
@@ -140,8 +195,8 @@ This major release completes the comprehensive issue management suite with four 
 
 ## [0.23.0] - Previous Releases
 
-(See archive/MILESTONES_*.md for detailed history of previous releases)
+(See archive/MILESTONES\_\*.md for detailed history of previous releases)
 
 ---
 
-[0.24.0]: https://github.com/yourusername/linear-create/releases/tag/v0.24.0
+[0.24.0]: https://github.com/smorin/agent2linear/releases/tag/v0.24.0

@@ -7,10 +7,7 @@ export function registerMembersCommands(cli: Command): void {
   const members = cli
     .command('members')
     .alias('users')
-    .description('Manage Linear members/users')
-    .action(() => {
-      members.help();
-    });
+    .description('Manage Linear members/users');
 
   members
     .command('list')

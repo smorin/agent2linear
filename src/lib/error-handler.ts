@@ -3,6 +3,8 @@
  * Provides user-friendly error messages for common Linear API errors
  */
 
+import { redactText } from './redaction.js';
+
 /**
  * Extract HTTP status code from error object
  * Works with various error formats from Linear SDK
@@ -101,7 +103,7 @@ export function handleLinearError(error: unknown, context?: string): string {
         'To get a new API key:\n' +
         '  1. Go to https://linear.app/settings/api\n' +
         '  2. Create a new personal API key\n' +
-        '  3. Set it using: agent2linear config set apiKey <your-key>'
+        '  3. Pass --api-key-file <path|-> or register a named workspace'
       );
 
     case 403:
@@ -193,5 +195,5 @@ export function formatLinearErrorForLogging(error: unknown): string {
     parts.push(`  Stack: ${errObj.stack}`);
   }
 
-  return parts.join('\n');
+  return redactText(parts.join('\n'));
 }

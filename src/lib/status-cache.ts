@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import { areCacheWritesSuppressed } from './cache-write-policy.js';
 import { getApiKey, getConfig } from './config.js';
 import {
   getAllInitiatives,
@@ -14,12 +15,9 @@ import {
   type Initiative,
   type Member,
   type Team,
-  type Template
+  type Template,
 } from './linear-client.js';
-import type {
-  IssueLabel,
-  ProjectLabel,
-  WorkflowState} from './types.js';
+import type { IssueLabel, ProjectLabel, WorkflowState } from './types.js';
 import { cleanupLegacyProjectCaches, workspaceCacheDir } from './xdg-paths.js';
 
 const CACHE_FILENAME = 'cache.json';
@@ -34,6 +32,7 @@ function cacheFile(): string {
 }
 
 function ensureLegacyCleaned(): void {
+  if (areCacheWritesSuppressed()) return;
   if (legacyCleaned) return;
   legacyCleaned = true;
   cleanupLegacyProjectCaches();
@@ -116,6 +115,7 @@ function readCache(): Cache {
  * Write cache to file
  */
 function writeCache(cache: Cache): void {
+  if (areCacheWritesSuppressed()) return;
   ensureLegacyCleaned();
   try {
     const dir = cacheDir();
@@ -148,7 +148,7 @@ function isCacheValid<T extends { timestamp: number }>(entries: T[]): boolean {
 
   // Check if any entry is expired
   // All entries have the same timestamp (set when cache is refreshed)
-  return entries.every(entry => (now - entry.timestamp) < ttl);
+  return entries.every(entry => now - entry.timestamp < ttl);
 }
 
 /**
@@ -205,7 +205,9 @@ export async function refreshStatusCache(): Promise<ProjectStatusCacheEntry[]> {
     saveStatusCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh status cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh status cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -238,7 +240,10 @@ export function clearStatusCache(): void {
  */
 export async function resolveProjectStatusId(input: string): Promise<string | null> {
   // Check if it looks like a status ID
-  if (input.startsWith('status_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) {
+  if (
+    input.startsWith('status_') ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)
+  ) {
     return input;
   }
 
@@ -286,7 +291,9 @@ export async function refreshTeamsCache(): Promise<TeamCacheEntry[]> {
     saveTeamsCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh teams cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh teams cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -350,7 +357,9 @@ export async function refreshInitiativesCache(): Promise<InitiativeCacheEntry[]>
     saveInitiativesCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh initiatives cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh initiatives cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -414,7 +423,9 @@ export async function refreshMembersCache(): Promise<MemberCacheEntry[]> {
     saveMembersCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh members cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh members cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -478,7 +489,9 @@ export async function refreshTemplatesCache(): Promise<TemplateCacheEntry[]> {
     saveTemplatesCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh templates cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh templates cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -529,7 +542,9 @@ export function saveWorkflowStatesCache(workflowStates: WorkflowStateCacheEntry[
 /**
  * Refresh workflow states cache from API
  */
-export async function refreshWorkflowStatesCache(teamId?: string): Promise<WorkflowStateCacheEntry[]> {
+export async function refreshWorkflowStatesCache(
+  teamId?: string
+): Promise<WorkflowStateCacheEntry[]> {
   try {
     const workflowStates = await getAllWorkflowStates(teamId);
     const timestamp = Date.now();
@@ -542,7 +557,9 @@ export async function refreshWorkflowStatesCache(teamId?: string): Promise<Workf
     saveWorkflowStatesCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh workflow states cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh workflow states cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -583,9 +600,15 @@ export function clearWorkflowStatesCache(): void {
  * Resolve workflow state by name or ID
  * Returns the workflow state ID if found
  */
-export async function resolveWorkflowStateId(input: string, teamId?: string): Promise<string | null> {
+export async function resolveWorkflowStateId(
+  input: string,
+  teamId?: string
+): Promise<string | null> {
   // Check if it looks like a workflow state ID
-  if (input.startsWith('workflowState_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) {
+  if (
+    input.startsWith('workflowState_') ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)
+  ) {
     return input;
   }
 
@@ -633,7 +656,9 @@ export async function refreshIssueLabelsCache(teamId?: string): Promise<IssueLab
     saveIssueLabelsCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh issue labels cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh issue labels cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -707,7 +732,9 @@ export async function refreshProjectLabelsCache(): Promise<ProjectLabelCacheEntr
     saveProjectLabelsCache(cacheEntries);
     return cacheEntries;
   } catch (error) {
-    throw new Error(`Failed to refresh project labels cache: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to refresh project labels cache: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import { Argument,Command } from 'commander';
 
 import { normalizeEntityType } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { syncInitiativeAliasesCore } from '../initiatives/sync-aliases.js';
 import { syncIssueLabelAliasesCore, type SyncIssueLabelAliasesOptions } from '../issue-labels/sync-aliases.js';
 import { syncMemberAliasesCore, type SyncMemberAliasesOptions } from '../members/sync-aliases.js';
@@ -128,6 +129,7 @@ This is equivalent to running entity-specific sync-aliases commands:
             process.exit(1);
         }
       } catch (error) {
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Sync failed:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

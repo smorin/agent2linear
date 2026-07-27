@@ -1,3 +1,4 @@
+import { logger } from '../logger.js';
 import type { ConnectionPage, PageInput, PageResult } from '../pagination.js';
 import { PaginationInputError, PaginationRuntimeError, walkPages } from '../pagination.js';
 import type {
@@ -8,11 +9,7 @@ import type {
   IssueViewData,
 } from '../types.js';
 import { getLinearClient, LinearClientError } from './client.js';
-import {
-  type CommentApiDependencies,
-  type LinearComment,
-  listComments,
-} from './comments.js';
+import { type CommentApiDependencies, type LinearComment, listComments } from './comments.js';
 
 /**
  * Create a comment on an issue
@@ -111,8 +108,7 @@ export async function updateIssue(
   try {
     const client = getLinearClient();
 
-    // Update the issue with all provided fields
-    const issue = await client.updateIssue(issueId, {
+    const updateInput = {
       title: input.title,
       description: input.description,
       descriptionData: input.descriptionData,
@@ -127,20 +123,51 @@ export async function updateIssue(
       parentId: input.parentId,
       labelIds: input.labelIds,
       dueDate: input.dueDate,
-      trashed: input.trashed,
-    });
+    };
 
-    const updatedIssue = await issue.issue;
+    // Linear's supported issue trash lifecycle uses deleteIssue (trash) and
+    // unarchiveIssue (restore). Sending `trashed` through updateIssue is
+    // rejected by the API. Untrash before ordinary updates and trash after
+    // them so combined invocations operate on an active issue.
+    let issue: Awaited<ReturnType<typeof client.issue>> | undefined;
 
-    if (!updatedIssue) {
+    if (input.trashed === false) {
+      const lifecyclePayload = await client.unarchiveIssue(issueId);
+      issue = await lifecyclePayload.entity;
+      if (!lifecyclePayload.success || !issue) {
+        throw new Error('Failed to untrash issue - no issue returned');
+      }
+    }
+
+    const hasFieldUpdates = Object.values(updateInput).some(value => value !== undefined);
+    if (hasFieldUpdates || input.trashed === undefined) {
+      const updatePayload = await client.updateIssue(issueId, updateInput);
+      issue = await updatePayload.issue;
+      if (!issue) {
+        throw new Error('Issue update failed - no issue returned');
+      }
+    }
+
+    if (input.trashed === true) {
+      issue ??= await client.issue(issueId);
+      if (!issue) {
+        throw new Error('Issue trash failed - issue not found');
+      }
+      const lifecyclePayload = await client.deleteIssue(issueId);
+      if (!lifecyclePayload.success) {
+        throw new Error('Issue trash failed');
+      }
+    }
+
+    if (!issue) {
       throw new Error('Issue update failed - no issue returned');
     }
 
     return {
-      id: updatedIssue.id,
-      identifier: updatedIssue.identifier,
-      title: updatedIssue.title,
-      url: updatedIssue.url,
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      url: issue.url,
     };
   } catch (error) {
     if (error instanceof LinearClientError) {
@@ -334,6 +361,30 @@ const ISSUES_QUERY = `
   }
 `;
 
+function requestMetadata(value: unknown): { requestId?: string; status?: number | string } {
+  if (value === null || typeof value !== 'object') return {};
+  const record = value as {
+    headers?: Headers;
+    status?: number | string;
+    response?: { headers?: Headers; status?: number | string };
+    raw?: { response?: { headers?: Headers; status?: number | string } };
+  };
+  const response = record.raw?.response ?? record.response ?? record;
+  const requestId = response.headers
+    ? ['x-request-id', 'x-linear-request-id', 'linear-request-id']
+        .map(name => response.headers?.get(name))
+        .find((candidate): candidate is string => Boolean(candidate))
+    : undefined;
+  return {
+    ...(requestId ? { requestId } : {}),
+    ...(record.status !== undefined
+      ? { status: record.status }
+      : response.status !== undefined
+        ? { status: response.status }
+        : {}),
+  };
+}
+
 // Fetch an issue page while preserving Linear edge cursors and provider order.
 export async function getIssueListPage(
   filters: IssueListFilters = {},
@@ -347,17 +398,12 @@ export async function getIssueListPage(
     const graphqlFilter = buildIssueFilter(filters);
     const { input: sort, orderBy } = buildIssueSort(filters);
     let pageCount = 0;
-    let observedIssueCount = 0;
-
-    if (process.env.LINEAR_CREATE_DEBUG_FILTERS === '1') {
-      console.error('[agent2linear] Issue filters:', JSON.stringify(graphqlFilter, null, 2));
-      console.error('[agent2linear] Pagination:', {
-        limit: pageInput.limit ?? filters.limit ?? 50,
-        fetchAll: pageInput.fetchAll ?? filters.fetchAll ?? false,
-        after: pageInput.after ?? null,
-      });
-      console.error('[agent2linear] Issue order:', orderBy);
-    }
+    logger.internal('issue list resolution', {
+      hasFilter: Object.keys(graphqlFilter).length > 0,
+      limit: pageInput.limit ?? filters.limit ?? 50,
+      fetchAll: pageInput.fetchAll ?? filters.fetchAll ?? false,
+      orderBy,
+    });
 
     const rawPage = await walkPages<RawIssue>({
       limit: pageInput.limit ?? filters.limit,
@@ -365,35 +411,45 @@ export async function getIssueListPage(
       fetchAll: pageInput.fetchAll ?? filters.fetchAll,
       fetchPage: async ({ first, after }) => {
         pageCount += 1;
+        const pageStart = Date.now();
         const variables = {
           filter: Object.keys(graphqlFilter).length > 0 ? graphqlFilter : null,
           first,
           after,
           sort,
         };
-        const response = (await client.client.rawRequest(ISSUES_QUERY, variables)) as {
+        let response: {
           data?: { issues?: unknown };
+          headers?: Headers;
+          status?: number;
         };
+        try {
+          response = (await client.client.rawRequest(ISSUES_QUERY, variables)) as typeof response;
+        } catch (error) {
+          const metadata = requestMetadata(error);
+          logger.request({
+            method: 'POST',
+            status: metadata.status ?? 'error',
+            requestId: metadata.requestId,
+            latencyMs: Date.now() - pageStart,
+            pageCount,
+          });
+          throw error;
+        }
+        const metadata = requestMetadata(response);
+        logger.request({
+          method: 'POST',
+          status: metadata.status ?? 'unknown',
+          requestId: metadata.requestId,
+          latencyMs: Date.now() - pageStart,
+          pageCount,
+        });
 
         if (tracking) {
           logCall('IssueList', 'query', 'main', Date.now() - startTime, variables);
         }
 
         const connection = response.data?.issues as ConnectionPage<RawIssue>;
-        if (
-          process.env.LINEAR_CREATE_DEBUG_FILTERS === '1' &&
-          connection &&
-          Array.isArray(connection.edges) &&
-          connection.pageInfo &&
-          typeof connection.pageInfo.hasNextPage === 'boolean'
-        ) {
-          observedIssueCount += connection.edges.length;
-          console.error(
-            `[agent2linear] Page ${pageCount}: fetched ${connection.edges.length} issues ` +
-              `(total: ${observedIssueCount}, hasNextPage: ${connection.pageInfo.hasNextPage})`
-          );
-        }
-
         return connection;
       },
     });
@@ -901,7 +957,10 @@ export async function getFullIssueById(issueId: string): Promise<IssueViewData |
         : { id: '', name: 'Unknown', email: '' },
     };
   } catch (error) {
-    return null;
+    if (error instanceof LinearClientError) throw error;
+    throw new LinearClientError(
+      `Failed to get issue details: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -953,11 +1012,7 @@ export async function getIssueCommentSummary(
   comments: IssueViewComment[];
   pageInfo: PageResult<LinearComment>['pageInfo'];
 }> {
-  const result = await listComments(
-    { type: 'issue', id: issueId },
-    { limit: 50 },
-    dependencies
-  );
+  const result = await listComments({ type: 'issue', id: issueId }, { limit: 50 }, dependencies);
   return {
     comments: result.items.map(comment => ({
       id: comment.id,

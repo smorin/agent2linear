@@ -6,6 +6,7 @@ import {
   hasProjectConfig,
   maskApiKey,
 } from '../../lib/config.js';
+import { getInvocationContext } from '../../lib/invocation-context.js';
 import {
   getTemplateById,
   validateInitiativeExists,
@@ -25,7 +26,11 @@ function sourceLabelFor(source: ConfigLocation, profileName: string | undefined)
       // M29: which override rule supplied the value (scope + the `when` clause). M31:
       // also name the winning rule by its label (`ruleId`), else `#<ruleIndex>`.
       const selector = source.ruleId ?? (source.ruleIndex !== undefined ? `#${source.ruleIndex}` : undefined);
-      const scopeWord = source.scope === 'project' ? 'repo' : 'global';
+      const scopeWord = source.path
+        ? `explicit config ${source.path}`
+        : source.scope === 'project'
+          ? 'repo'
+          : 'global';
       const selectorPart = selector ? ` ${selector}` : '';
       return `${scopeWord} override${selectorPart} (when ${JSON.stringify(source.when)})`;
     }
@@ -33,6 +38,8 @@ function sourceLabelFor(source: ConfigLocation, profileName: string | undefined)
       return 'project config';
     case 'profile':
       return profileName ? `profile '${profileName}'` : 'profile';
+    case 'explicit':
+      return `explicit config ${source.path}`;
     default:
       return 'global config';
   }
@@ -46,12 +53,17 @@ export async function listConfig() {
 
   // Show config file paths
   console.log('Configuration Files:');
-  console.log(
-    `  Global:  ${getGlobalConfigPath()} ${hasGlobalConfig() ? '✓' : '(not found)'}`
-  );
-  console.log(
-    `  Project: ${getProjectConfigPath()} ${hasProjectConfig() ? '✓' : '(not found)'}`
-  );
+  const explicit = getInvocationContext().explicitConfig;
+  if (explicit) {
+    console.log(`  Explicit: ${explicit.path} ✓`);
+  } else {
+    console.log(
+      `  Global:  ${getGlobalConfigPath()} ${hasGlobalConfig() ? '✓' : '(not found)'}`
+    );
+    console.log(
+      `  Project: ${getProjectConfigPath()} ${hasProjectConfig() ? '✓' : '(not found)'}`
+    );
+  }
   console.log();
 
   // Show API Key

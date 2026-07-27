@@ -5,6 +5,7 @@ import { buildGitContext, type RemoteIdentity } from './git-context.js';
 import { getInvocationContext, setInvocationContext } from './invocation-context.js';
 import { needsGitContext, type OverrideLayer, resolveOverrides } from './overrides.js';
 import { getProfileScope } from './profiles.js';
+import { registerSecret } from './redaction.js';
 import type { Scope } from './scope.js';
 import type { Config, ConfigLocation, ResolvedConfig } from './types.js';
 import { resolveActiveProfile, resolveActiveWorkspace } from './workspace-resolver.js';
@@ -85,17 +86,22 @@ function writeConfigFile(path: string, config: Partial<Config>): void {
  * so any getConfig() call from the resolution path would recurse infinitely.
  */
 export function readGlobalConfig(): Partial<Config> {
+  const explicit = getInvocationContext().explicitConfig;
+  if (explicit) return explicit.value;
   return readConfigFile(globalConfigFile());
 }
 
 /** Read the RAW nearest project config.json (walk-up discovery from `startDir`/cwd; {} if none). */
 export function readProjectConfig(startDir?: string): Partial<Config> {
+  if (getInvocationContext().explicitConfig) return {};
   const f = projectConfigReadFile(startDir);
   return f ? readConfigFile(f) : {};
 }
 
 /** Read the RAW config.json for a scope's write target (read-modify-write helper). */
 export function readConfigForScope(scope: Scope): Partial<Config> {
+  const explicit = getInvocationContext().explicitConfig;
+  if (explicit) return scope === 'global' ? explicit.value : {};
   const file = scope === 'global' ? globalConfigFile() : projectConfigWriteFile();
   return readConfigFile(file);
 }
@@ -118,9 +124,14 @@ export function getConfig(contextDir?: string): ResolvedConfig {
     contextDir ?? getInvocationContext().contextDir ?? process.cwd()
   );
   const envConfig: Partial<Config> = {};
-  const globalConfig = readConfigFile(globalConfigFile());
-  const projectReadFile = projectConfigReadFile(effectiveDir);
+  const explicit = getInvocationContext().explicitConfig;
+  const globalReadFile = explicit?.path ?? globalConfigFile();
+  const globalConfig = explicit?.value ?? readConfigFile(globalReadFile);
+  const projectReadFile = explicit ? null : projectConfigReadFile(effectiveDir);
   const projectConfig = projectReadFile ? readConfigFile(projectReadFile) : {};
+  const globalLocation: ConfigLocation = explicit
+    ? { type: 'explicit', path: globalReadFile }
+    : { type: 'global', path: globalReadFile };
 
   // Profile scope: the active profile's recognized Config defaults, slotted into
   // the merge between global and project. `getProfileScope(undefined)` returns {}
@@ -161,21 +172,21 @@ export function getConfig(contextDir?: string): ResolvedConfig {
 
   // Default Profile location (global-only setting)
   if (globalConfig.defaultProfile) {
-    locations.defaultProfile = { type: 'global', path: globalConfigFile() };
+    locations.defaultProfile = globalLocation;
   }
 
   // No-Match Policy location
   if (projectConfig.noMatchPolicy) {
     locations.noMatchPolicy = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.noMatchPolicy) {
-    locations.noMatchPolicy = { type: 'global', path: globalConfigFile() };
+    locations.noMatchPolicy = globalLocation;
   }
 
   // Confirm Auto-Detected Writes location
   if (projectConfig.confirmAutoDetectedWrites !== undefined) {
     locations.confirmAutoDetectedWrites = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.confirmAutoDetectedWrites !== undefined) {
-    locations.confirmAutoDetectedWrites = { type: 'global', path: globalConfigFile() };
+    locations.confirmAutoDetectedWrites = globalLocation;
   }
 
   // API Key location (env has highest priority for security)
@@ -184,112 +195,112 @@ export function getConfig(contextDir?: string): ResolvedConfig {
   } else if (projectConfig.apiKey) {
     locations.apiKey = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.apiKey) {
-    locations.apiKey = { type: 'global', path: globalConfigFile() };
+    locations.apiKey = globalLocation;
   }
 
   // Default Initiative location
   if (projectConfig.defaultInitiative) {
     locations.defaultInitiative = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultInitiative) {
-    locations.defaultInitiative = { type: 'global', path: globalConfigFile() };
+    locations.defaultInitiative = globalLocation;
   }
 
   // Default Team location
   if (projectConfig.defaultTeam) {
     locations.defaultTeam = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultTeam) {
-    locations.defaultTeam = { type: 'global', path: globalConfigFile() };
+    locations.defaultTeam = globalLocation;
   }
 
   // Default Project location (M15.1)
   if (projectConfig.defaultProject) {
     locations.defaultProject = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultProject) {
-    locations.defaultProject = { type: 'global', path: globalConfigFile() };
+    locations.defaultProject = globalLocation;
   }
 
   // Default Issue Template location
   if (projectConfig.defaultIssueTemplate) {
     locations.defaultIssueTemplate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultIssueTemplate) {
-    locations.defaultIssueTemplate = { type: 'global', path: globalConfigFile() };
+    locations.defaultIssueTemplate = globalLocation;
   }
 
   // Default Project Template location
   if (projectConfig.defaultProjectTemplate) {
     locations.defaultProjectTemplate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultProjectTemplate) {
-    locations.defaultProjectTemplate = { type: 'global', path: globalConfigFile() };
+    locations.defaultProjectTemplate = globalLocation;
   }
 
   // Default Milestone Template location
   if (projectConfig.defaultMilestoneTemplate) {
     locations.defaultMilestoneTemplate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultMilestoneTemplate) {
-    locations.defaultMilestoneTemplate = { type: 'global', path: globalConfigFile() };
+    locations.defaultMilestoneTemplate = globalLocation;
   }
 
   // Default Prompt location (M30)
   if (projectConfig.defaultPrompt) {
     locations.defaultPrompt = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultPrompt) {
-    locations.defaultPrompt = { type: 'global', path: globalConfigFile() };
+    locations.defaultPrompt = globalLocation;
   }
 
   // Project Cache Min TTL location
   if (projectConfig.projectCacheMinTTL) {
     locations.projectCacheMinTTL = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.projectCacheMinTTL) {
-    locations.projectCacheMinTTL = { type: 'global', path: globalConfigFile() };
+    locations.projectCacheMinTTL = globalLocation;
   }
 
   // Default Auto Assign Lead location
   if (projectConfig.defaultAutoAssignLead !== undefined) {
     locations.defaultAutoAssignLead = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.defaultAutoAssignLead !== undefined) {
-    locations.defaultAutoAssignLead = { type: 'global', path: globalConfigFile() };
+    locations.defaultAutoAssignLead = globalLocation;
   }
 
   // Entity Cache Min TTL location
   if (projectConfig.entityCacheMinTTL) {
     locations.entityCacheMinTTL = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.entityCacheMinTTL) {
-    locations.entityCacheMinTTL = { type: 'global', path: globalConfigFile() };
+    locations.entityCacheMinTTL = globalLocation;
   }
 
   // Enable Entity Cache location
   if (projectConfig.enableEntityCache !== undefined) {
     locations.enableEntityCache = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.enableEntityCache !== undefined) {
-    locations.enableEntityCache = { type: 'global', path: globalConfigFile() };
+    locations.enableEntityCache = globalLocation;
   }
 
   // Enable Persistent Cache location
   if (projectConfig.enablePersistentCache !== undefined) {
     locations.enablePersistentCache = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.enablePersistentCache !== undefined) {
-    locations.enablePersistentCache = { type: 'global', path: globalConfigFile() };
+    locations.enablePersistentCache = globalLocation;
   }
 
   // Enable Session Cache location
   if (projectConfig.enableSessionCache !== undefined) {
     locations.enableSessionCache = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.enableSessionCache !== undefined) {
-    locations.enableSessionCache = { type: 'global', path: globalConfigFile() };
+    locations.enableSessionCache = globalLocation;
   }
 
   // Enable Batch Fetching location
   if (projectConfig.enableBatchFetching !== undefined) {
     locations.enableBatchFetching = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.enableBatchFetching !== undefined) {
-    locations.enableBatchFetching = { type: 'global', path: globalConfigFile() };
+    locations.enableBatchFetching = globalLocation;
   }
 
   // Prewarm Cache On Create location
   if (projectConfig.prewarmCacheOnCreate !== undefined) {
     locations.prewarmCacheOnCreate = { type: 'project', path: projectReadFile ?? projectConfigWriteFile() };
   } else if (globalConfig.prewarmCacheOnCreate !== undefined) {
-    locations.prewarmCacheOnCreate = { type: 'global', path: globalConfigFile() };
+    locations.prewarmCacheOnCreate = globalLocation;
   }
 
   // Profile-source labeling: a key supplied by the profile scope (and NOT
@@ -364,7 +375,10 @@ export function getConfig(contextDir?: string): ResolvedConfig {
         continue;
       }
       (merged as Record<string, unknown>)[field] = value;
-      (locations as Record<string, ConfigLocation>)[field] = provenance;
+      (locations as Record<string, ConfigLocation>)[field] =
+        explicit && provenance.scope === 'global'
+          ? { ...provenance, path: explicit.path }
+          : provenance;
     }
     // Stash the per-rule alias overlay for this context so `loadAliases()` /
     // `resolveAlias()` can apply it at highest precedence (M29 §5.1/U6). Preserve
@@ -382,7 +396,7 @@ export function getConfig(contextDir?: string): ResolvedConfig {
  * Get API key from the resolved active workspace.
  *
  * Routes through the workspace resolver chokepoint so multi-workspace selection
- * (--workspace / --api-key, secrets registry) funnels through one place. With no
+ * (--workspace / --api-key-file, secrets registry) funnels through one place. With no
  * workspaces/profiles configured and no explicit selection, this returns exactly
  * today's value (env LINEAR_API_KEY, else config-file apiKey) — byte-identical.
  */
@@ -396,6 +410,7 @@ export function getApiKey(): string | undefined {
   // resolveActiveWorkspace() already sourced the key WITH full profile context
   // (named env var / env-file / secrets). Reuse it — re-sourcing here would drop
   // the profile and miss apiKeyEnv/envFile.
+  registerSecret(resolution.key);
   return resolution.key || undefined;
 }
 

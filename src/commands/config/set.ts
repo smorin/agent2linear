@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { CONFIG_KEY_CHOICES, type ConfigKey,isValidConfigKey, setConfigValue } from '../../lib/config.js';
 import {
   getTemplateById,
@@ -156,6 +157,7 @@ export async function setConfig(key: string, value: string, options: SetConfigOp
       console.log(`   Use 'agent2linear config list' to view your configuration`);
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

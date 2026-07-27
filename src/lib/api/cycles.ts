@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '../cli-error.js';
 import { getLinearClient, LinearClientError } from './client.js';
 
 /**
@@ -72,6 +73,7 @@ export async function getCycleById(cycleId: string): Promise<{
       endsAt: cycle.endsAt?.toString(),
     };
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }
@@ -117,6 +119,7 @@ export async function resolveCycleIdentifier(
     // Not found by any method
     return null;
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }

@@ -1,4 +1,6 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+
+const GIT_INTEGRATION_GLOB = '**/*.git-integration.test.ts';
 
 export default defineConfig({
   test: {
@@ -20,5 +22,27 @@ export default defineConfig({
       branches: 100,
       statements: 100,
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          exclude: [...configDefaults.exclude, GIT_INTEGRATION_GLOB],
+          fileParallelism: true,
+          testTimeout: 5_000,
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'git-integration',
+          include: [GIT_INTEGRATION_GLOB],
+          fileParallelism: false,
+          testTimeout: 15_000,
+          sequence: { groupOrder: 1 },
+        },
+      },
+    ],
   },
 });

@@ -9,10 +9,7 @@ export function registerWorkspaceCommands(cli: Command): void {
   const workspace = cli
     .command('workspace')
     .alias('ws')
-    .description('Manage named Linear workspaces (API keys/secrets)')
-    .action(() => {
-      workspace.help();
-    });
+    .description('Manage named Linear workspaces (API keys/secrets)');
 
   workspace
     .command('add <name>')
@@ -20,12 +17,12 @@ export function registerWorkspaceCommands(cli: Command): void {
     .option('-g, --global', 'Save to global secrets registry (default)')
     .option('-p, --project', 'Save to project secrets registry (gitignored)')
     .addHelpText('after', `
-The API key is provided via the program-level --api-key option:
+The API key is provided via the program-level --api-key-file option:
 
 Examples:
-  $ agent2linear workspace add acme --api-key lin_api_xxxxxxxx
-  $ echo "lin_api_xxxxxxxx" | agent2linear workspace add acme --api-key -
-  $ agent2linear workspace add acme --api-key - --project   # gitignored project secrets
+  $ agent2linear workspace add acme --api-key-file ./linear.key
+  $ echo "lin_api_xxxxxxxx" | agent2linear workspace add acme --api-key-file -
+  $ agent2linear workspace add acme --api-key-file - --project   # gitignored project secrets
 
 Notes:
   - Global secrets land in workspaces.json (mode 0600).

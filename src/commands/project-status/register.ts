@@ -8,10 +8,7 @@ export function registerProjectStatusCommands(cli: Command): void {
   const projectStatus = cli
     .command('project-status')
     .alias('pstatus')
-    .description('Manage Linear project statuses')
-    .action(() => {
-      projectStatus.help();
-    });
+    .description('Manage Linear project statuses');
 
   projectStatus
     .command('list')
