@@ -1712,6 +1712,11 @@ This project uses [Vitest](https://vitest.dev/) for unit testing with comprehens
 
 **CI coverage:** `ci.yml` runs on every PR/push — typecheck, lint, the full Vitest suite (Node 22 + 24), build, four offline lifecycle suites, and the selected M36 built-CLI conformance fixtures (no secret). The **live** API suites run separately in `live.yml` — only on **push-to-`main`** and manual `workflow_dispatch` (never on PRs, so `LINEAR_API_KEY` is never exposed to a fork) — and they fail closed on the ConceptM workspace before creating disposable `TEST_*` entities.
 
+The release-grade live gate is the guarded auth plus M33-M36 harness set. Each write-capable harness
+validates the exact ConceptM identity and owns automatic cleanup. The older
+`tests/scripts/run-all-tests.sh` developer aggregate is not a CI or release gate: it contains
+pre-v1 assertions and manual-cleanup fixtures that are unsuitable for unattended publication.
+
 **Running Tests:**
 
 ```bash

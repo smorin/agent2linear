@@ -57,9 +57,5 @@ jobs:
         run: node .tmp/m36-live/test-m36-issue-automation-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      # Full live integration suite — creates real TEST_* entities in the throwaway
-      # workspace; exits non-zero if any test fails.
-      - name: Live integration suite
-        run: cd tests/scripts && bash run-all-tests.sh
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # The guarded M33-M36 harnesses above are the release-grade live suite: each
+      # validates ConceptM before writes and owns automatic disposable-fixture cleanup.

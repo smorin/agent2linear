@@ -5,6 +5,14 @@ import { describe, expect, it } from 'vitest';
 
 const readText = (path: string): string => readFileSync(resolve(path), 'utf8');
 
+const guardedLiveCommands = [
+  'node dist/index.js whoami',
+  'node .tmp/m36-live/test-label-lifecycle-live.js',
+  'node tests/scripts/test-pagination-live.js',
+  'node .tmp/m36-live/test-comments-live.js',
+  'node .tmp/m36-live/test-m36-issue-automation-live.js',
+];
+
 describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
   it('removes local np publishing and leaves one tag-only publisher', () => {
     const packageJson = JSON.parse(readText('package.json')) as {
@@ -50,5 +58,15 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
     expect(live).toContain('node .tmp/m36-live/test-m36-issue-automation-live.js');
     expect(live).not.toContain('npx tsx');
     expect(readText('.github/workflows/release.yml')).not.toContain('npx tsx');
+  });
+
+  it('[RLS-BLK-LIVE-SUITE][RLS-CI-RELEASE-GATES] gates on the guarded current live suite', () => {
+    for (const workflowPath of ['.github/workflows/live.yml', '.github/workflows/release.yml']) {
+      const workflow = readText(workflowPath);
+      for (const command of guardedLiveCommands) {
+        expect(workflow, workflowPath).toContain(command);
+      }
+      expect(workflow, workflowPath).not.toContain('run-all-tests.sh');
+    }
   });
 });

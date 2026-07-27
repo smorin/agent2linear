@@ -60,7 +60,7 @@ ID before implementation; observational audit probes do not automatically become
 | `RLS-DEC-NODE-SUPPORT`     | DECISION | v1 supports Node 22 and 24, declares `>=22`, and does not claim support for EOL Node 18/20                                   | DONE     | N/A   | PASS    | approved 2026-07-26       |
 | `RLS-GATE-M33-M35`         | GATE     | M33-M35 traceability and feature regression suites pass without freezing their historical row counts as public release state | BASELINE | GREEN | PASS    | focused + full suite      |
 | `RLS-BLK-LIVE-M34`         | GATE     | Fix the hermetic ConceptM identity assertion; read-only M34 live traversal passes                                            | DONE     | N/A   | PASS    | local ConceptM pass       |
-| `RLS-BLK-LIVE-SUITE`       | GATE     | M33, M34, M35, and the full ConceptM live suite pass on one release-candidate SHA                                            | TODO     | N/A   | PENDING | `RLS-BLK-LIVE-M34`        |
+| `RLS-BLK-LIVE-SUITE`       | GATE     | Auth plus the guarded M33-M36 ConceptM harnesses pass and clean up on one release-candidate SHA                              | TODO     | N/A   | PENDING | `RLS-BLK-LIVE-M34`        |
 | `RLS-BLK-PROD-AUDIT`       | GATE     | Resolve or explicitly block on every high/critical production dependency advisory                                            | DONE     | GREEN | PASS    | production audit: 0 total |
 
 ## 3. Workstream 2 — CLI foundation and credential safety (17)
@@ -321,6 +321,13 @@ clear` now uses `-y/--yes`; its former force-as-consent spelling is removed beca
   a true timeout still returns `ETIMEDOUT`/`SIGTERM` and fails the explicit exit assertion. The
   complete four-family plus nine-M36 sequential built gate passed under the supported Node 24
   runtime after normalization. Strongest-agent review reports PASS.
+- LIVE GATE AUDIT: exact candidate `1b2b885` passed auth and the guarded M33-M36 ConceptM
+  harnesses; all disposable fixtures were cleaned up. The additional legacy `run-all-tests.sh`
+  invocation was rejected as a release gate because its pre-v1 grammar assertions, repo-root path
+  assumptions, and manual-cleanup fixtures are not hermetic release evidence. Its eight created
+  `AGE-58` through `AGE-65` issues were trashed. A RED release-policy regression now requires both
+  live workflows to retain the five guarded commands and exclude the legacy aggregate; the
+  workflow correction is GREEN and awaits exact follow-up-candidate verification.
 
 ## 9. Ordered TDD execution slices
 

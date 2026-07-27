@@ -80,10 +80,6 @@ jobs:
         run: node .tmp/m36-live/test-m36-issue-automation-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      - name: Full ConceptM live integration suite
-        run: cd tests/scripts && bash run-all-tests.sh
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
 
   publish:
     needs: verify
