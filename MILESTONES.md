@@ -15,6 +15,64 @@
 
 ---
 
+## [ ] Milestone M36: Coordinated v1.0.0 Release and Publishable-Tier Audit
+
+> **Status:** Republished and approved with 69 tracked items. The release is audited at the
+> publishable tier with explicit accepted exceptions; it does not claim complete Standard
+> conformance. No M36 implementation, version bump, tag, npm publication, or GitHub release has
+> occurred.
+>
+> **Authoritative ID-level TDD plan:**
+> [docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
+>
+> **M25/M26 reconciliation evidence:**
+> [docs/superpowers/plans/2026-07-26-M25-M26-milestone-reconciliation.md](docs/superpowers/plans/2026-07-26-M25-M26-milestone-reconciliation.md)
+
+**Goal:** Ship the complete post-0.24.1 feature set as v1.0.0 only after every required
+breaking-interface, security, package, live ConceptM, documentation, publication, and rollback gate
+has independent evidence, and every retained Standard exception is explicit.
+
+### Current release blockers
+
+- Scope and owner decisions are complete: M25 is excluded, M26 is transferred, the tag workflow is
+  the sole publisher, Node 22 is the floor, and the accepted conformance exceptions are frozen.
+- Fix the M34 live harness's hermetic active-workspace assertion and obtain one green CI + complete
+  ConceptM live run on the exact release-candidate SHA.
+- Resolve the current high production dependency advisory in `ink -> ws@8.18.3`.
+- Fix or explicitly record every applicable publishable-tier CLI Standard MUST; known behavior work
+  include missing global `--config`, missing `--debug`, non-repeatable `-v/--verbose`, and argv
+  secret acceptance through `--api-key <key>`.
+- Enforce the approved publication owner so local `npm run release` cannot publish beside the tag
+  workflow.
+- Reconcile the repository version (`0.32.0`) and npm latest (`0.24.1`) through an exact v1 package,
+  lockfile, CLI, tag, changelog, migration, tarball, and registry verification chain.
+
+### Tasks
+
+- [x] [M36-T00] Republish and freeze the audited-v1 scope, M25/M26 disposition, Node policy,
+      publication owner, and accepted exceptions
+- [ ] [M36-T01] Restore green fail-closed ConceptM live verification on the exact candidate SHA
+- [ ] [M36-T02] Resolve production dependency advisories and implement the approved Node 22/24 policy
+- [ ] [M36-T03] Implement the known global option, secret-input, output-stream, error, and signal
+      corrections through per-ID RED -> IMPLEMENT -> GREEN -> VERIFY
+- [ ] [M36-T04] Complete the publishable-tier audit, exception record, and selected core/regression
+      fixtures
+- [ ] [M36-T05] Update package/lock/CLI version and publish complete v1 migration/release docs
+- [ ] [M36-T06] Harden release automation for exact tag/version equality and single-owner publication
+- [ ] [M36-T07] Prove clean install, full gates, offline suites, tarball contents, and packed-binary smoke
+- [ ] [M36-T08] Require green ordinary CI and ConceptM live checks on the merged candidate before tag
+- [ ] [M36-T09] Publish once, verify npm/GitHub registry state, and record rollback/forward-fix ownership
+- [ ] [M36-TS01] Enforce exact `RLS-*` plan/traceability equality and reject missing I/T/V evidence
+- [ ] [M36-TS02] Run the final independent publishable-tier, package, registry, and migration verification
+
+### Release rule
+
+M36 remains open until every required `RLS-*` item in the authoritative plan is complete. Accepted
+Standard exceptions must remain explicit; an unreviewed MUST failure, green feature suite alone, or
+full-conformance claim cannot authorize a tag or publication.
+
+---
+
 ## [x] Milestone M35: First-class Issue and Project Comments (breaking release; v1.0.0-or-later accepted)
 
 > **Status:** Complete — implemented and verified in the dedicated combined M34/M35 worktree; 318-ID evidence is published. On 2026-07-25 the project owner accepted the coordinated `v1.0.0`-or-later release path, resolving R9.3 version selection while retaining the explicit R9.2 nonconformance.
@@ -730,7 +788,14 @@ ignores the new top-level `id`.
 
 ## Backlog (Future Milestones)
 
-## [ ] Milestone M26: Output Format Standardization & Stream Separation (v0.26.0)
+## [~] Milestone M26: Output Format Standardization & Stream Separation (superseded by M36)
+
+> **Disposition approved 2026-07-26:** Superseded, not completed. Later milestones partially
+> implemented this work, while its original `-f/--format` design conflicts with CLI Design Standard
+> v1.4.14 and the M33-M35 `-o/--output` convention. Every still-valid behavioral requirement has a
+> dedicated `RLS-*` owner in M36; implementation-only consolidation ideas were retired. Historical
+> state and the exact transfer map are in
+> [the M25/M26 reconciliation](docs/superpowers/plans/2026-07-26-M25-M26-milestone-reconciliation.md).
 
 **Goal**: Standardize output formatting across all commands by separating data (stdout) from human messages (stderr), fixing machine-readability issues, and extending format support to all read/write commands following Unix conventions.
 
@@ -761,7 +826,7 @@ ignores the new top-level `id`.
 
 #### Phase 1: Core Stream Separation & Output Library
 
-- [ ] [M26-T01] Update `src/lib/output.ts` to route all messages to stderr
+- [~] [M26-T01] Superseded; valid stream ownership transferred to `RLS-OUT-SHARED-DIAGNOSTICS`
   - Change `showResolvedAlias()`: `console.log` → `console.error`
   - Change `showValidating()`: `console.log` → `console.error`
   - Change `showValidated()`: `console.log` → `console.error`
@@ -770,13 +835,13 @@ ignores the new top-level `id`.
   - Change `showWarning()`: `console.log` → `console.error`
   - Verify `showError()` already uses `console.error` ✅
 
-- [ ] [M26-T02] Add new output helper functions to `src/lib/output.ts`
+- [~] [M26-T02] Superseded; behavior transferred to M36 output IDs, helper shape is not a contract
   - Add `outputJSON(data: any)` for structured JSON output to stdout
   - Add `outputTSV(items: any[], fields: string[])` for TSV output to stdout
   - Add `formatTSVField(value: any)` with proper escaping (tabs, newlines, carriage returns)
   - Add `showProgress(message: string, options: { quiet?: boolean })` for conditional output
 
-- [ ] [M26-T03] Add global `--quiet` flag to CLI
+- [~] [M26-T03] Superseded; remaining quiet behavior transferred to `RLS-OUT-QUIET`
   - Add `-q, --quiet` option to main program in `src/cli.ts`
   - Pass quiet flag through to all commands via options
   - Update all commands to respect quiet flag when showing progress messages
@@ -784,20 +849,20 @@ ignores the new top-level `id`.
 
 #### Phase 2: Fix Existing Format Support Issues
 
-- [ ] [M26-T04] Fix TSV escaping in `project list` command
+- [~] [M26-T04] Superseded; transferred to `RLS-OUT-PROJECT-LIST-TSV`
   - Implement proper tab character escaping in TSV output (`\t`)
   - Implement newline escaping (`\n`) and carriage return escaping (`\r`)
   - Test with project titles/descriptions containing tabs and newlines
   - Ensure TSV output is RFC 4180 compliant
 
-- [ ] [M26-T05] Consolidate table/TSV formatting code in `project list`
+- [~] [M26-T05] Superseded implementation detail; M36 tracks output behavior, not a prescribed refactor
   - Merge `formatTableOutput()` and `formatTSVOutput()` into unified function
   - Add `truncate: boolean` parameter to control field truncation
   - Add `showSummary: boolean` parameter to control summary line
   - Reduce code duplication from ~70% to <10%
   - Ensure both formats produce identical output except for truncation/summary
 
-- [ ] [M26-T06] Remove summary line from TSV/JSON formats in `project list`
+- [x] [M26-T06] Remove summary line from TSV/JSON formats in `project list`
   - Verify JSON output has no summary line (already correct)
   - Remove "Total: N projects" line from TSV output
   - Keep summary line only in default table format for humans
@@ -805,14 +870,14 @@ ignores the new top-level `id`.
 
 #### Phase 3: Extend Format Support to Read Commands
 
-- [ ] [M26-T07] Add format support to `project view` command
+- [~] [M26-T07] Superseded; transferred to `RLS-OUT-PROJECT-VIEW`
   - Add `--format json|tsv|table` option to command definition
   - Implement JSON output: full project object as JSON to stdout
   - Implement TSV output: single row with key fields (id, name, status, team, lead, url)
   - Route all messages (validation, success) to stderr
   - Test with `--quiet` flag for clean automation
 
-- [ ] [M26-T08] Add format support to `project dependencies list` command
+- [~] [M26-T08] Superseded; transferred to `RLS-OUT-PROJECT-DEPENDENCIES-LIST`
   - Add `--format json|tsv|table` option
   - Implement JSON output: array of dependency objects
   - Implement TSV output: tab-separated rows with headers
@@ -821,7 +886,7 @@ ignores the new top-level `id`.
 
 #### Phase 4: Add Format Support to Mutation Commands
 
-- [ ] [M26-T09] Add format support to `project create` command
+- [~] [M26-T09] Superseded; transferred to `RLS-OUT-PROJECT-CREATE`
   - Add `--format json|tsv` option (table format doesn't make sense for single item)
   - JSON format: output created project object to stdout
   - TSV format: output single row with created project data
@@ -829,63 +894,64 @@ ignores the new top-level `id`.
   - Progress messages go to stderr, created data to stdout
   - Test automation workflow: extract ID from JSON output
 
-- [ ] [M26-T10] Add format support to `project update` command
+- [~] [M26-T10] Superseded; transferred to `RLS-OUT-PROJECT-UPDATE`
   - Add `--format json|tsv` option
   - JSON format: output updated project object to stdout
   - TSV format: output single row with updated project data
   - Progress/success messages to stderr
   - Test updating and piping output to next command
 
-- [ ] [M26-T11] Add format support to `issue create` command (if time permits)
+- [~] [M26-T11] Superseded; transferred to `RLS-OUT-ISSUE-CREATE`
   - Add `--format json|tsv` option
   - JSON format: output created issue object
   - Enable automation: `ISSUE_ID=$(a2l issue create ... --format json | jq -r '.id')`
 
-- [ ] [M26-T12] Add format support to `issue update` command (if time permits)
+- [~] [M26-T12] Superseded; transferred to `RLS-OUT-ISSUE-UPDATE`
   - Add `--format json|tsv` option
   - JSON format: output updated issue object
   - Enable chaining: update issue and extract specific field
 
 #### Phase 5: Documentation & Cleanup
 
-- [ ] [M26-T13] Update README.md with output format documentation
+- [~] [M26-T13] Superseded; transferred to `RLS-DOC-README`
   - Add "Output Formats" section explaining table/json/tsv
   - Document stream separation (stdout vs stderr)
   - Add automation examples with jq
   - Document `--quiet` flag usage
 
-- [ ] [M26-T14] Update command help text for format options
+- [~] [M26-T14] Superseded; transferred to per-command M36 output IDs
   - Ensure all commands with `--format` have clear help descriptions
   - Document which formats are supported per command
   - Add examples to help output
 
-- [ ] [M26-T15] Archive or update related documentation
+- [~] [M26-T15] Superseded; this reconciliation is the authoritative archival update
   - Verify OUTPUT_STREAMS_PROPOSAL.md is referenced in README
   - Add implementation notes to proposal marking completed phases
   - Update CLAUDE.md if needed
 
 ### Test Tasks
 
-- [ ] [M26-TS01] Create integration test for stream separation
+- [~] [M26-TS01] Superseded; transferred to `RLS-TST-STREAMS`
   - Test that JSON output on stdout is valid JSON (pipe to jq)
   - Test that progress messages appear on stderr
   - Test that `2>/dev/null` suppresses all messages, keeps data
   - Test that `--quiet` suppresses progress messages
   - Add to `tests/scripts/test-output-streams.sh`
 
-- [ ] [M26-TS02] Create integration test for TSV escaping
+- [~] [M26-TS02] Superseded; transferred to `RLS-TST-TSV`
   - Create project with tab character in title
   - Create project with newline in description
   - Verify TSV output properly escapes special characters
   - Verify TSV can be parsed by standard tools (cut, awk, Python csv module)
 
-- [ ] [M26-TS03] Test automation workflows
+- [~] [M26-TS03] Superseded; transferred to `RLS-TST-AUTOMATION`
   - Test: Create project, extract ID with jq, use in next command
   - Test: List projects in JSON, filter with jq, count results
   - Test: Update project, verify output matches expected format
   - Document working examples in test output
 
-- [ ] [M26-TS04] Verify backward compatibility
+- [~] [M26-TS04] Verify backward compatibility — **SUPERSEDED by accepted v1 breaking changes;
+  M36 owns migration-contract verification**
   - Test default output (no --format flag) remains unchanged
   - Verify existing scripts without --format still work
   - Check that table format still has summary lines
@@ -958,7 +1024,13 @@ https://linear.app/myorg/project/test-abc
 
 ---
 
-## [ ] Milestone M25: Issue Interactive Enhancements (v0.25.0)
+## [~] Milestone M25: Issue Interactive Enhancements (superseded)
+
+> **Disposition approved 2026-07-26:** Superseded, not completed or deprecated. None of the seven
+> unimplemented IDs is part of M36 or the v1.0.0 release. If interactive issue create/update is
+> wanted later, it must be proposed as a newly scoped post-v1 project with new IDs; interactive
+> view/list is not carried forward. Evidence and rationale are in
+> [the M25/M26 reconciliation](docs/superpowers/plans/2026-07-26-M25-M26-milestone-reconciliation.md).
 
 **Goal**: Add Ink-powered interactive experiences for all issue commands
 
@@ -976,13 +1048,13 @@ https://linear.app/myorg/project/test-abc
 
 ### Tasks
 
-- [ ] [M25-T01] Create shared interactive form primitives for issues
-- [ ] [M25-T02] Implement interactive wrapper for `issue create`
-- [ ] [M25-T03] Implement interactive wrapper for `issue update`
-- [ ] [M25-T04] Implement interactive wrapper for `issue view`
-- [ ] [M25-T05] Implement interactive wrapper for `issue list`
-- [ ] [M25-TS01] Add dedicated interactive test scenarios per command
-- [ ] [M25-TS02] Update documentation and help output with interactive instructions
+- [~] [M25-T01] Superseded; future shared primitives require a newly scoped interactive project
+- [~] [M25-T02] Superseded; reconsider interactive `issue create` only in a new post-v1 project
+- [~] [M25-T03] Superseded; reconsider interactive `issue update` only in a new post-v1 project
+- [~] [M25-T04] Superseded and not carried forward; table, JSON, and web cover issue viewing
+- [~] [M25-T05] Superseded and not carried forward; list/filter/web behavior remains non-interactive
+- [~] [M25-TS01] Superseded with the unimplemented interactive command scope
+- [~] [M25-TS02] Superseded with the unimplemented interactive command scope
 
 ### Deliverable
 
@@ -1159,7 +1231,7 @@ ENG-123  API redesign       High    Backlog      Backend
 - [x] `npm run build` succeeds for final release
 - [x] `npm run typecheck` passes
 - [x] `npm run lint` passes (0 errors, 59 warnings acceptable)
-- [ ] Interactive modes work (`-I` flag) - **Deferred to M25 (v0.25.0)**
+- [~] Interactive modes work (`-I` flag) - **Deferred to M25; not an M15 completion gate**
 - [x] Web modes work (`-w` flag)
 - [x] Config defaults apply correctly with validation
 - [x] Member resolution works via ID, alias, email, and display name
@@ -2540,17 +2612,17 @@ $ agent2linear issue list --team backend --web
 
 #### Verification
 
-- [ ] `npm run build` succeeds
-- [ ] `npm run typecheck` passes
-- [ ] `npm run lint` passes
-- [ ] All list tests pass (~37 test cases including new edge case and error tests)
-- [ ] Smart defaults work correctly: - assignee=me (unless --assignee or --all-assignees provided) - team=defaultTeam (unless --team provided) - active only = (triage, backlog, unstarted, started) states
-- [ ] Filter precedence logic works: - Explicit --assignee overrides "me" default (no --all-assignees needed) - Explicit --team overrides defaultTeam
-- [ ] Override flags work correctly (--all-assignees removes assignee filter)
-- [ ] All filter combinations work correctly
-- [ ] All output formats work (table, JSON, TSV)
-- [ ] Sorting and limiting work correctly with edge cases
-- [ ] Web mode opens correct URL with filters applied
+- [x] `npm run build` succeeds
+- [x] `npm run typecheck` passes
+- [x] `npm run lint` passes
+- [x] All list tests pass (the historical count is superseded by the current suite)
+- [x] Smart defaults work correctly: - assignee=me (unless --assignee or --all-assignees provided) - team=defaultTeam (unless --team provided) - active only = (triage, backlog, unstarted, started) states
+- [x] Filter precedence logic works: - Explicit --assignee overrides "me" default (no --all-assignees needed) - Explicit --team overrides defaultTeam
+- [x] Override flags work correctly (--all-assignees removes assignee filter)
+- [x] Filter combinations are covered by the completed M15.5/current list suites
+- [x] Current issue-list output formats work (table, JSON, TSV)
+- [x] Sorting and limiting work correctly with edge cases
+- [x] Web mode opens the filtered URL
 
 **Regression Testing:** See Overall Verification section (lines 178-191)
 
@@ -2668,15 +2740,15 @@ $ agent2linear issue list --limit 10
 
 #### Verification
 
-- [ ] Unit tests: 108/108 passed
-- [ ] Integration tests: 14/14 scripts executed successfully
-- [ ] Build verification: build ✓, typecheck ✓, lint ✓ (0 errors)
-- [ ] Version updated in package.json and src/cli.ts to 0.24.0
-- [ ] README.md updated with comprehensive M15 feature documentation
-- [ ] CHANGELOG.md created with v0.24.0 release notes
-- [ ] M15 milestone marked `[x]` Complete in MILESTONES.md
-- [ ] Git tag v0.24.0 created and pushed to GitHub successfully
-- [ ] All M15.6 tasks marked `[x]` complete (33 tasks total)
+- [x] Unit tests: 108/108 passed
+- [x] Integration tests: 14/14 scripts executed successfully with documented skips/limitations
+- [x] Build verification: build ✓, typecheck ✓, lint ✓ (0 errors)
+- [x] Version updated in package.json and src/cli.ts to 0.24.0
+- [x] README.md updated with comprehensive M15 feature documentation
+- [x] CHANGELOG.md created with v0.24.0 release notes
+- [x] M15 milestone marked `[x]` Complete in MILESTONES.md
+- [x] Git tag v0.24.0 created and pushed to GitHub successfully
+- [x] All tracked M15.6 tasks marked `[x]` complete
 
 ---
 

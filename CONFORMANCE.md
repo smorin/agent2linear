@@ -4,6 +4,50 @@ This repository is reviewed against **CLI Design Standard v1.4.14** at the
 **publishable** tier. M34's pagination and cursor-history surfaces are designed to
 that tier; this document does not claim that every older command already conforms.
 
+## M36 audited-v1 release snapshot (2026-07-26)
+
+M36 is the coordinated v1.0.0 publishable-tier audit and release gate. Its authoritative 69-item plan is
+[the M36 TDD plan](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md), and the
+M25/M26 status evidence is in
+[the milestone reconciliation](docs/superpowers/plans/2026-07-26-M25-M26-milestone-reconciliation.md).
+
+The release is not currently ready to publish and does not claim complete Standard conformance:
+
+- the four known global blockers below remain open;
+- M25 is superseded and excluded from v1; any future interactive issue create/update work requires
+  a newly scoped post-v1 project rather than reopening historical IDs;
+- M26 is now explicitly superseded; its valid remaining behaviors have dedicated M36 `RLS-*`
+  owners, while its old `-f/--format` design remains prohibited by R4.2;
+- merged-head CI is green, but the ConceptM live workflow fails because the M34 harness expects
+  `Active: ConceptM` while the valid environment-backed default reports `Active: (default)` and
+  separately reports `Organization: ConceptM` plus `Workspace: conceptm`;
+- the repository reports `0.32.0`, npm `latest` reports `0.24.1`, and no v1 tag exists;
+- `npm audit --omit=dev` reports a high production advisory through `ink -> ws@8.18.3`;
+- the tag-triggered workflow is the approved sole publisher, but local `np` publishing is not yet
+  disabled;
+- the approved Node floor is 22 with Node 22/24 verification, but package metadata still permits
+  Node 18 and workflows still use Node 20.
+
+M36 must run a complete Appendix C audit. Confirmed behavior defects included in v1 receive atomic
+TDD IDs; observational checks do not automatically become permanent fixtures. No tag or publication
+is authorized by this snapshot.
+
+### M36 owner-approved Standard exceptions
+
+These exceptions block a claim of complete conformance, but they do not block the approved audited-v1
+release. Each remains visible in the migration and release notes.
+
+| Rule       | Retained behavior                                                                           | Rationale and owner/date                                                               |
+| ---------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| R1.3 MUST  | `issue-labels` and `project-labels` remain canonical plural nouns                           | Existing public command families; owner approved 2026-07-26                            |
+| R5.2 MUST  | JSON remains the canonical XDG/workspace config format                                      | Avoid an unrelated configuration migration; owner approved 2026-07-26                  |
+| R9.2 MUST  | legacy issue-comment grammar is removed immediately with a migration error                  | Previously accepted breaking v1 behavior; owner reaffirmed audited-v1 model 2026-07-26 |
+| R10.1 MUST | workspace/profile/`whoami`/`doctor` remain the identity model instead of a new `auth` group | Preserve the established multi-workspace design; owner approved 2026-07-26             |
+
+Existing SHOULD waivers for nested comment `add`, `--body-file`, project trash under `update`, and
+M34-owned `--all` pagination remain in their feature sections below. Backend-defined list ordering
+may be waived only after the M36 audit records the affected command and evidence.
+
 ## M34 applicability
 
 | Axis                           | Applies | M34 behavior                                            |
@@ -76,9 +120,10 @@ The authoritative atomic ledger and verification method are in
 [the M34 TDD plan](docs/superpowers/plans/2026-07-22-M34-raw-cursor-pagination-history-tdd.md).
 Offline built-CLI coverage is provided by
 `tests/scripts/test-cursor-history-cli.sh`. The opt-in
-`tests/scripts/test-pagination-live.js` harness fails closed unless both the
-organization and active workspace are exactly ConceptM; it performs no remote
-writes. The 214-ID completion map is
+`tests/scripts/test-pagination-live.js` harness is intended to fail closed to the
+ConceptM organization/workspace and performs no remote writes. Its current CI identity assertion is
+the explicit `RLS-BLK-LIVE-M34` release blocker; M36 must make the environment hermetic and restore
+the green live proof. The 214-ID completion map is
 `docs/superpowers/plans/2026-07-24-M34-traceability.md`.
 
 ## M35 comment-management conformance
