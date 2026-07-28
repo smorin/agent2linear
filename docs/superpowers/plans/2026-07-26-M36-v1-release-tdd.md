@@ -328,6 +328,21 @@ clear` now uses `-y/--yes`; its former force-as-consent spelling is removed beca
   `AGE-58` through `AGE-65` issues were trashed. A RED release-policy regression now requires both
   live workflows to retain the five guarded commands and exclude the legacy aggregate; the
   workflow correction is GREEN and awaits exact follow-up-candidate verification.
+- FOLLOW-UP LIVE CONSISTENCY: candidate `d13b7f9` passed the fresh Node 22/24, dependency-audit,
+  package, tarball, and installed-binary gates, then M33 exposed an immediate stale by-ID read after
+  issue-label restore. The unchanged candidate passed the same cleanly isolated ConceptM harness on
+  rerun, while source tracing proved a fresh label ID, verified retired precondition, one restore
+  mutation, and one immediate post-read. Four RED lifecycle tests now cover issue/project retire and
+  restore with a stale first read; the shared bounded post-read and exhaustion behavior are GREEN.
+  A later rebuilt run proved those lifecycle results but exposed the separate assumption that
+  Linear's catalog filter updates immediately; the live harness now bounds only that read-only
+  observation. Node 22 and Node 24 each pass 1,162 tests with 1 skipped, the label built-CLI family
+  passes 37/37, and production/live builds pass. Exact-candidate M33-M36 live closure remains
+  PENDING: subsequent ConceptM runs first encountered explicit upstream GraphQL 503 connection
+  resets, including one at the initial read-only `whoami`, and all created fixtures were cleaned up.
+  After recovery, read-only auth and the complete rebuilt working-tree M33-M36 guarded set passed;
+  M33/M35 cleanup completed, M34 performed zero writes, and the M36 disposable issue was trashed.
+  This is pre-commit evidence and must be repeated from the exact follow-up candidate SHA.
 
 ## 9. Ordered TDD execution slices
 
