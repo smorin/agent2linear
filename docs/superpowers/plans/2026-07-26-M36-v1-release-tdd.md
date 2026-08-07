@@ -51,17 +51,17 @@ ID before implementation; observational audit probes do not automatically become
 
 ## 2. Workstream 1 — Scope, baseline, and release prerequisites (9)
 
-| ID                         | Kind     | Atomic contract                                                                                                              | I        | T     | V       | Basis                     |
-| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ----- | ------- | ------------------------- |
-| `RLS-DEC-CONFORMANCE-MODE` | DECISION | Ship an audited v1 with explicit accepted exceptions; do not claim complete CLI Standard conformance                         | DONE     | N/A   | PASS    | approved 2026-07-26       |
-| `RLS-DEC-M25`              | DECISION | Supersede M25; future interactive issue create/update requires a new post-v1 project                                         | DONE     | N/A   | PASS    | approved 2026-07-26       |
-| `RLS-DEC-M26`              | DECISION | Supersede M26 and transfer retained behavior to current-convention M36 owners                                                | DONE     | N/A   | PASS    | approved 2026-07-26       |
-| `RLS-DEC-PUBLISH-OWNER`    | DECISION | The tag-triggered GitHub workflow is the only npm publisher; local release tooling cannot publish                            | DONE     | N/A   | PASS    | approved 2026-07-26       |
-| `RLS-DEC-NODE-SUPPORT`     | DECISION | v1 supports Node 22 and 24, declares `>=22`, and does not claim support for EOL Node 18/20                                   | DONE     | N/A   | PASS    | approved 2026-07-26       |
-| `RLS-GATE-M33-M35`         | GATE     | M33-M35 traceability and feature regression suites pass without freezing their historical row counts as public release state | BASELINE | GREEN | PASS    | focused + full suite      |
-| `RLS-BLK-LIVE-M34`         | GATE     | Fix the hermetic ConceptM identity assertion; read-only M34 live traversal passes                                            | DONE     | N/A   | PASS    | local ConceptM pass       |
-| `RLS-BLK-LIVE-SUITE`       | GATE     | Auth plus the guarded M33-M36 ConceptM harnesses pass and clean up on one release-candidate SHA                              | TODO     | N/A   | PENDING | `RLS-BLK-LIVE-M34`        |
-| `RLS-BLK-PROD-AUDIT`       | GATE     | Resolve or explicitly block on every high/critical production dependency advisory                                            | DONE     | GREEN | PASS    | production audit: 0 total |
+| ID                         | Kind     | Atomic contract                                                                                                              | I        | T     | V    | Basis                     |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ----- | ---- | ------------------------- |
+| `RLS-DEC-CONFORMANCE-MODE` | DECISION | Ship an audited v1 with explicit accepted exceptions; do not claim complete CLI Standard conformance                         | DONE     | N/A   | PASS | approved 2026-07-26       |
+| `RLS-DEC-M25`              | DECISION | Supersede M25; future interactive issue create/update requires a new post-v1 project                                         | DONE     | N/A   | PASS | approved 2026-07-26       |
+| `RLS-DEC-M26`              | DECISION | Supersede M26 and transfer retained behavior to current-convention M36 owners                                                | DONE     | N/A   | PASS | approved 2026-07-26       |
+| `RLS-DEC-PUBLISH-OWNER`    | DECISION | The tag-triggered GitHub workflow is the only npm publisher; local release tooling cannot publish                            | DONE     | N/A   | PASS | approved 2026-07-26       |
+| `RLS-DEC-NODE-SUPPORT`     | DECISION | v1 supports Node 22 and 24, declares `>=22`, and does not claim support for EOL Node 18/20                                   | DONE     | N/A   | PASS | approved 2026-07-26       |
+| `RLS-GATE-M33-M35`         | GATE     | M33-M35 traceability and feature regression suites pass without freezing their historical row counts as public release state | BASELINE | GREEN | PASS | focused + full suite      |
+| `RLS-BLK-LIVE-M34`         | GATE     | Fix the hermetic ConceptM identity assertion; read-only M34 live traversal passes                                            | DONE     | N/A   | PASS | local ConceptM pass       |
+| `RLS-BLK-LIVE-SUITE`       | GATE     | Auth plus the guarded M33-M36 ConceptM harnesses pass and clean up on one release-candidate SHA                              | DONE     | N/A   | PASS | candidate `670cd69`       |
+| `RLS-BLK-PROD-AUDIT`       | GATE     | Resolve or explicitly block on every high/critical production dependency advisory                                            | DONE     | GREEN | PASS | production audit: 0 total |
 
 ## 3. Workstream 2 — CLI foundation and credential safety (17)
 
@@ -187,9 +187,9 @@ project/setup behavior remains within the R8 audit.
 
 | ID                      | Kind | Release contract                                                                                                                     | I    | T     | V       |
 | ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------ | ---- | ----- | ------- |
-| `RLS-PKG-CANDIDATE`     | GATE | fresh checkout passes install, build, typecheck, lint, unit/integration, offline suites, and supported Node matrix                   | TODO | N/A   | PENDING |
-| `RLS-PKG-PACK`          | GATE | `npm pack --dry-run` contains only allowlisted artifacts and no credentials, config, state, worktree files, or source-only test data | TODO | N/A   | PENDING |
-| `RLS-PKG-INSTALL`       | GATE | install the exact tarball into a fresh prefix; both `a2l` and `agent2linear` help/version and smoke behavior work                    | TODO | N/A   | PENDING |
+| `RLS-PKG-CANDIDATE`     | GATE | fresh checkout passes install, build, typecheck, lint, unit/integration, offline suites, and supported Node matrix                   | DONE | N/A   | PASS    |
+| `RLS-PKG-PACK`          | GATE | `npm pack --dry-run` contains only allowlisted artifacts and no credentials, config, state, worktree files, or source-only test data | DONE | N/A   | PASS    |
+| `RLS-PKG-INSTALL`       | GATE | install the exact tarball into a fresh prefix; both `a2l` and `agent2linear` help/version and smoke behavior work                    | DONE | N/A   | PASS    |
 | `RLS-CI-RELEASE-GATES`  | GATE | tag/version equality and green ordinary CI, security, offline, and ConceptM live evidence are required on the candidate SHA          | DONE | GREEN | PENDING |
 | `RLS-CI-SINGLE-PUBLISH` | GATE | tag workflow publishes once with provenance/trusted-publisher controls; local `np` cannot publish                                    | DONE | GREEN | PENDING |
 | `RLS-REG-PUBLISH`       | GATE | create the GitHub release, verify npm `latest=1.0.0`, install from the registry, and prove npm/GitHub SHA/integrity agreement        | TODO | N/A   | PENDING |
@@ -342,7 +342,16 @@ clear` now uses `-y/--yes`; its former force-as-consent spelling is removed beca
   resets, including one at the initial read-only `whoami`, and all created fixtures were cleaned up.
   After recovery, read-only auth and the complete rebuilt working-tree M33-M36 guarded set passed;
   M33/M35 cleanup completed, M34 performed zero writes, and the M36 disposable issue was trashed.
-  This is pre-commit evidence and must be repeated from the exact follow-up candidate SHA.
+- EXACT FOLLOW-UP CANDIDATE: detached candidate `670cd69` passed fresh `npm ci`, Node 22 and Node 24
+  full suites at 1,162 passed with 1 skipped each, typecheck, lint, production/live builds, all four
+  offline families, all nine M36 built-CLI fixtures, and the authorized production audit with zero
+  vulnerabilities across 71 production dependencies. `npm pack` contained exactly the seven
+  allowlisted files; tarball `agent2linear-1.0.0.tgz` has SHA-1
+  `73561cff56069465e384a8c62b791903fd57708c`. A fresh 60-package install proved both binary names,
+  version, root/project help, and empty cursor-history JSON. Exact-SHA ConceptM auth plus M33-M36
+  then passed; M33/M35 cleaned every disposable fixture, M34 made zero writes, and M36 trashed its
+  disposable issue. Merged-candidate CI, tag, release-note SHA, single publication, and registry
+  verification remain PENDING.
 
 ## 9. Ordered TDD execution slices
 
