@@ -33,17 +33,18 @@ jobs:
         run: node dist/index.js whoami
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # M34 is read-only and proves that raw cursor continuation reaches page two
+      # and all remaining records in the exact ConceptM workspace. Run it before
+      # mutating suites so their cleanup cannot create a read-after-write consistency race.
+      - name: M34 raw-cursor pagination
+        run: node tests/scripts/test-pagination-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       # M33 lifecycle verification fails closed unless both the Linear organization and
       # selected a2l workspace are exactly ConceptM. It creates only unique TEST_M33_* fixtures
       # and retries cleanup in a finally block.
       - name: M33 label and project lifecycle
         run: node .tmp/m36-live/test-label-lifecycle-live.js
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      # M34 is read-only and proves that raw cursor continuation reaches page two
-      # and all remaining records in the exact ConceptM workspace.
-      - name: M34 raw-cursor pagination
-        run: node tests/scripts/test-pagination-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       # M35 creates disposable issue/project comments only after exact ConceptM
@@ -57,5 +58,5 @@ jobs:
         run: node .tmp/m36-live/test-m36-issue-automation-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      # The guarded M33-M36 harnesses above are the release-grade live suite: each
-      # validates ConceptM before writes and owns automatic disposable-fixture cleanup.
+      # M34 plus the guarded M33, M35, and M36 harnesses above are the release-grade
+      # live suite; mutating harnesses validate ConceptM and own disposable-fixture cleanup.

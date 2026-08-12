@@ -81,4 +81,17 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
       expect(workflow, workflowPath).not.toContain('run-all-tests.sh');
     }
   });
+
+  it('[RLS-BLK-LIVE-SUITE][RLS-CI-RELEASE-GATES] runs read-only pagination before mutating lifecycle checks', () => {
+    for (const workflowPath of ['.github/workflows/live.yml', '.github/workflows/release.yml']) {
+      const workflow = readText(workflowPath);
+      const paginationIndex = workflow.indexOf('node tests/scripts/test-pagination-live.js');
+      const lifecycleIndex = workflow.indexOf(
+        'node .tmp/m36-live/test-label-lifecycle-live.js'
+      );
+
+      expect(paginationIndex, workflowPath).toBeGreaterThan(-1);
+      expect(lifecycleIndex, workflowPath).toBeGreaterThan(paginationIndex);
+    }
+  });
 });
