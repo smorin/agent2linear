@@ -7,14 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No additional changes are recorded after the staged v1.0.0 notes below. This
-entry does not assert that a v1.0.0 tag or package has been published.
+No unreleased changes are currently recorded.
 
-## [1.0.0] - 2026-07-27
-
-> Release documentation was prepared on this date. Candidate CI and live
-> evidence, tagging, package inspection, registry verification, and
-> publication remain release gates; this section is not a publication claim.
+## [1.0.0] - 2026-08-12
 
 ### Added
 

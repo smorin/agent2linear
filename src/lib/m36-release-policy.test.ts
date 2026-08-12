@@ -14,6 +14,18 @@ const guardedLiveCommands = [
 ];
 
 describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
+  it('[RLS-DOC-README][RLS-DOC-CHANGELOG][RLS-PKG-PACK] keeps packaged release docs timeless', () => {
+    const packageJson = JSON.parse(readText('package.json')) as {
+      files?: string[];
+    };
+    expect(packageJson.files).toEqual(expect.arrayContaining(['README.md', 'CHANGELOG.md']));
+
+    const packagedReleaseDocs = [readText('README.md'), readText('CHANGELOG.md')].join('\n');
+    expect(packagedReleaseDocs).not.toMatch(
+      /documentation is staged|staged v1\.0\.0|not a published release|does not (?:claim|assert)|not certify a release artifact|not a publication claim|publication remain release gates|release is actually announced/i
+    );
+  });
+
   it('removes local np publishing and leaves one tag-only publisher', () => {
     const packageJson = JSON.parse(readText('package.json')) as {
       devDependencies?: Record<string, string>;

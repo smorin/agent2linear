@@ -8,21 +8,20 @@
 
 ---
 
-## v1.0.0 release status and migration
+## v1.0.0 release and migration
 
-The M36 v1.0.0 documentation is staged, but this worktree is **not** a
-published release: no release commit, tag, package publication, or
-exact-candidate live-verification result is asserted here. The authoritative
-release checklist is the [M36 plan](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
-and its current evidence/waivers are in [CONFORMANCE.md](CONFORMANCE.md).
+Version 1.0.0 establishes the audited CLI, runtime, packaging, and release
+contract described below. The implementation and verification checklist is
+the [M36 plan](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md), and
+the accepted conformance decisions and waivers are recorded in
+[CONFORMANCE.md](CONFORMANCE.md).
 
 ### Runtime and version contract
 
 The v1.0.0 support contract is Node.js **22 or 24**, declared by the package
-as `>=22`; Node 18 and 20 are outside that contract. Package, lockfile, CLI,
-and CI version/runtime alignment is complete in this worktree, but that does
-not certify a release artifact. Both `a2l --version` and `a2l -V` write exactly
-this one line to stdout and exit 0:
+as `>=22`; Node 18 and 20 are outside that contract. The package, lockfile,
+CLI, and CI use the same version and runtime contract. Both `a2l --version`
+and `a2l -V` write exactly this one line to stdout and exit 0:
 
 ```text
 agent2linear 1.0.0
@@ -53,8 +52,8 @@ manages locally retained continuation context. There is no numeric page jump.
 For command-by-command replacements, safety notes, JSON/stream/exit behavior,
 and accepted compatibility boundaries, read the dedicated
 [v1.0.0 migration guide](docs/superpowers/releases/2026-07-27-M36-v1.0.0-migration-guide.md).
-The staged [v1.0.0 release notes](docs/superpowers/releases/2026-07-27-M36-v1.0.0-release-notes.md)
-record what still must be verified before a tag or publication.
+The [v1.0.0 release notes](docs/superpowers/releases/2026-07-27-M36-v1.0.0-release-notes.md)
+summarize the release contents and verification record.
 
 ---
 
@@ -137,9 +136,8 @@ Get up and running with agent2linear in 3 easy steps:
 
 ### Step 1: Install (or use with npx)
 
-For the v1.0.0 contract, use Node.js 22 or 24 (`>=22`). This repository has
-completed its package, lockfile, CLI, and CI version/engine alignment. Verify
-the registry artifact only after the release is actually announced.
+For the v1.0.0 contract, use Node.js 22 or 24 (`>=22`). The package, lockfile,
+CLI, and CI declare the same version and runtime support.
 
 **Option A: Global Install** (recommended for frequent use)
 
@@ -1823,8 +1821,7 @@ Trashed issues can be recovered; deleted entities cannot.
 
 See [MILESTONES.md](./MILESTONES.md) for detailed project milestones and progress.
 
-**Source version:** staged v1.0.0 candidate. This line does not claim a tag or
-published npm artifact.
+**Source version:** v1.0.0.
 
 ## License
 
