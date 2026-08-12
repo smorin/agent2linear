@@ -175,6 +175,7 @@ cli
           'project-labels retire',
           'workflow-states delete',
         ]).has(commandPath.join(' ')),
+      dryRun: actionOptions.dryRun === true,
       interactiveInput:
         actionOptions.interactive === true || commandRequiresInteractiveInput(commandPath),
       noInput,

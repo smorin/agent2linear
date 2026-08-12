@@ -118,5 +118,6 @@ describe('stdinAllocationConflict', () => {
     expect(stdinAllocationConflict(input)).toMatch(/confirmation input/);
     expect(stdinAllocationConflict({ ...input, yes: true })).toBeNull();
     expect(stdinAllocationConflict({ ...input, noInput: true })).toBeNull();
+    expect(stdinAllocationConflict({ ...input, dryRun: true })).toBeNull();
   });
 });

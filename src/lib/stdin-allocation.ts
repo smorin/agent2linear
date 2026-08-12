@@ -5,6 +5,7 @@ export interface StdinAllocationInput {
   bodyFile?: string;
   description?: string;
   destructiveConfirmation?: boolean;
+  dryRun?: boolean;
   interactiveInput?: boolean;
   noInput?: boolean;
   stdinIsTTY: boolean;
@@ -31,7 +32,7 @@ export function stdinAllocationConflict(input: StdinAllocationInput): string | n
     return 'stdin cannot supply both --api-key-file - and interactive input — use a key file path or another credential source';
   }
 
-  if (input.destructiveConfirmation && !input.yes && !input.noInput) {
+  if (input.destructiveConfirmation && !input.dryRun && !input.yes && !input.noInput) {
     return 'stdin cannot supply both --api-key-file - and confirmation input — pass -y/--yes or --no-input, or use a key file path';
   }
 

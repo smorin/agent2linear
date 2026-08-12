@@ -170,6 +170,9 @@ try {
     ['cfg', 'set', '--project', 'apiKey', configSecret, '--version'],
     ['config', 'set', '--quiet', 'apiKey', configSecret, '--help'],
     ['config', 'set', '-C', project, 'apiKey', configSecret, '--help'],
+    ['-qC', project, 'config', 'set', 'apiKey', configSecret, '--help'],
+    ['config', '-vC', project, 'set', 'apiKey', configSecret, '--help'],
+    ['config', 'set', '-qC', project, 'apiKey', configSecret, '--help'],
     ['config', 'edit', '--key', 'apiKey', '--value', configSecret, '--help'],
   ]) {
     const before = snapshot(root);
@@ -224,6 +227,13 @@ try {
     2,
     /requires interactive input from a TTY|stdin cannot supply both --api-key-file - and interactive input/
   );
+
+  const destructiveDryRun = run(
+    ['--api-key-file', '-', 'alias', 'clear', 'team', '--dry-run'],
+    { input: 'lin_api_single_stream\n' }
+  );
+  assert.equal(destructiveDryRun.status, 0, destructiveDryRun.stderr);
+  assert.doesNotMatch(destructiveDryRun.stderr, /confirmation input/);
 
   const added = run(['--api-key-file', keyFile, 'workspace', 'add', 'from-file']);
   assert.equal(added.status, 0, added.stderr);

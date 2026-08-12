@@ -42,6 +42,14 @@ const ROOT_OPTIONS_WITHOUT_VALUES = new Set([
 ]);
 const CONFIG_SET_SCOPE_OPTIONS = new Set(['-g', '--global', '-p', '--project']);
 
+function isCombinedCOption(arg: string): boolean {
+  return /^-[qv]*C$/.test(arg);
+}
+
+function isInlineCOption(arg: string): boolean {
+  return /^-[qv]*C.+/.test(arg);
+}
+
 /** Extract config-set's two positionals while honoring its accepted option grammar. */
 function configSetOperands(args: readonly string[]): string[] {
   const operands: string[] = [];
@@ -59,9 +67,14 @@ function configSetOperands(args: readonly string[]): string[] {
       index += 1;
       continue;
     }
+    if (isCombinedCOption(arg)) {
+      index += 1;
+      continue;
+    }
     if (
       [...ROOT_OPTIONS_WITH_VALUES].some(flag => arg.startsWith(`${flag}=`)) ||
-      (arg.startsWith('-C') && arg.length > 2)
+      (arg.startsWith('-C') && arg.length > 2) ||
+      isInlineCOption(arg)
     ) {
       continue;
     }
@@ -90,11 +103,16 @@ export function rejectUnsafeCredentialArgv(argv: readonly string[]): void {
       index += 1;
       continue;
     }
+    if (isCombinedCOption(arg)) {
+      index += 1;
+      continue;
+    }
     if (
       ROOT_OPTIONS_WITHOUT_VALUES.has(arg) ||
       /^-[qv]+$/.test(arg) ||
       [...ROOT_OPTIONS_WITH_VALUES].some(flag => arg.startsWith(`${flag}=`)) ||
-      (arg.startsWith('-C') && arg.length > 2)
+      (arg.startsWith('-C') && arg.length > 2) ||
+      isInlineCOption(arg)
     ) {
       continue;
     }
@@ -112,11 +130,16 @@ export function rejectUnsafeCredentialArgv(argv: readonly string[]): void {
       index += 1;
       continue;
     }
+    if (isCombinedCOption(arg)) {
+      index += 1;
+      continue;
+    }
     if (
       ROOT_OPTIONS_WITHOUT_VALUES.has(arg) ||
       /^-[qv]+$/.test(arg) ||
       [...ROOT_OPTIONS_WITH_VALUES].some(flag => arg.startsWith(`${flag}=`)) ||
       (arg.startsWith('-C') && arg.length > 2) ||
+      isInlineCOption(arg) ||
       arg.startsWith('-')
     ) {
       continue;
