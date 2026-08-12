@@ -64,12 +64,14 @@ jobs:
         run: node dist/index.js whoami
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      - name: M33 label and project lifecycle
-        run: node .tmp/m36-live/test-label-lifecycle-live.js
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # Keep the read-only pagination proof ahead of mutating suites so fixture cleanup
+      # cannot create a read-after-write consistency race.
       - name: M34 raw-cursor pagination
         run: node tests/scripts/test-pagination-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      - name: M33 label and project lifecycle
+        run: node .tmp/m36-live/test-label-lifecycle-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       - name: M35 issue and project comments
