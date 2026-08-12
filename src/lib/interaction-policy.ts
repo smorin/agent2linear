@@ -10,6 +10,10 @@ const ALWAYS_INTERACTIVE_COMMANDS = new Set([
   'milestone-templates edit',
 ]);
 
+export function commandRequiresInteractiveInput(commandPath: readonly string[]): boolean {
+  return ALWAYS_INTERACTIVE_COMMANDS.has(commandPath.join(' '));
+}
+
 export function noInputRequested(localNoInput = false): boolean {
   return localNoInput || getInvocationContext().noInput === true;
 }
@@ -34,7 +38,7 @@ export function assertInteractionAllowed(
 ): void {
   if (!noInput && stdinIsTTY) return;
   const path = commandPath.join(' ');
-  if (ALWAYS_INTERACTIVE_COMMANDS.has(path)) {
+  if (commandRequiresInteractiveInput(commandPath)) {
     throw new UsageError(
       noInput
         ? `${path} requires interactive input; --no-input forbids interactive input`

@@ -614,7 +614,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
           2
         )
       );
-      process.exit(0);
+      return;
     }
 
     // Display success message

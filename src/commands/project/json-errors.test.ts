@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openInBrowser } from '../../lib/browser.js';
 import { areCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
 import { NotFoundError, RuntimeError, UsageError } from '../../lib/cli-error.js';
+import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import {
   createProject,
   getFullProjectDetails,
@@ -88,6 +89,29 @@ afterEach(() => {
 });
 
 describe('M36 named project JSON errors', () => {
+  it('[RLS-DIAG-LEVELS] returns successful project JSON creation to the process boundary', async () => {
+    vi.mocked(guardWorkspaceForMutation).mockResolvedValue({
+      key: 'conceptm',
+      name: 'ConceptM',
+      source: 'flag',
+    });
+    vi.mocked(createProject).mockResolvedValue({
+      id: 'project-1',
+      name: 'Created project',
+      url: 'https://linear.app/conceptm/project/project-1',
+      state: 'planned',
+    });
+
+    await createProjectCommand({
+      title: 'Created project',
+      team: 'team-1',
+      noLead: true,
+      json: true,
+    });
+
+    expect(process.exit).not.toHaveBeenCalled();
+  });
+
   it('[RLS-OUT-JSON-CLEAN] project create --json --dry-run emits its one final JSON result on stdout', async () => {
     vi.mocked(validateTeamExists).mockImplementation(async () => {
       expect(areCacheWritesSuppressed()).toBe(true);

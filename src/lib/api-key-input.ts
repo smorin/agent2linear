@@ -83,16 +83,54 @@ export function rejectUnsafeCredentialArgv(argv: readonly string[]): void {
     throw new UsageError(`Legacy --api-key <key> has been removed; ${API_KEY_MIGRATION_GUIDANCE}`);
   }
 
-  const configIndex = args.findIndex(arg => arg === 'config' || arg === 'cfg');
+  let configIndex = -1;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (ROOT_OPTIONS_WITH_VALUES.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (
+      ROOT_OPTIONS_WITHOUT_VALUES.has(arg) ||
+      /^-[qv]+$/.test(arg) ||
+      [...ROOT_OPTIONS_WITH_VALUES].some(flag => arg.startsWith(`${flag}=`)) ||
+      (arg.startsWith('-C') && arg.length > 2)
+    ) {
+      continue;
+    }
+    if (arg.startsWith('-')) continue;
+    if (arg === 'config' || arg === 'cfg') configIndex = index;
+    break;
+  }
   if (configIndex === -1) return;
   const configArgs = args.slice(configIndex + 1);
 
-  const setIndex = configArgs.indexOf('set');
+  let subcommandIndex = -1;
+  for (let index = 0; index < configArgs.length; index += 1) {
+    const arg = configArgs[index];
+    if (ROOT_OPTIONS_WITH_VALUES.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (
+      ROOT_OPTIONS_WITHOUT_VALUES.has(arg) ||
+      /^-[qv]+$/.test(arg) ||
+      [...ROOT_OPTIONS_WITH_VALUES].some(flag => arg.startsWith(`${flag}=`)) ||
+      (arg.startsWith('-C') && arg.length > 2) ||
+      arg.startsWith('-')
+    ) {
+      continue;
+    }
+    subcommandIndex = index;
+    break;
+  }
+
+  const subcommand = configArgs[subcommandIndex];
   const setOperands =
-    setIndex === -1 ? [] : configSetOperands(configArgs.slice(setIndex + 1));
+    subcommand !== 'set' ? [] : configSetOperands(configArgs.slice(subcommandIndex + 1));
   const [setKey, setValue] = setOperands;
   if (
-    setIndex !== -1 &&
+    subcommand === 'set' &&
     setKey === 'apiKey' &&
     setValue !== undefined &&
     setValue !== '--help' &&
@@ -103,9 +141,10 @@ export function rejectUnsafeCredentialArgv(argv: readonly string[]): void {
     );
   }
 
-  if (configArgs.includes('edit')) {
-    const key = optionValue(configArgs, '--key');
-    const value = optionValue(configArgs, '--value');
+  if (subcommand === 'edit') {
+    const editArgs = configArgs.slice(subcommandIndex + 1);
+    const key = optionValue(editArgs, '--key');
+    const value = optionValue(editArgs, '--value');
     if (key.value === 'apiKey' && value.present) {
       throw new UsageError(
         `config edit --key apiKey --value <value> is not supported because it exposes an API key in argv; ${API_KEY_MIGRATION_GUIDANCE}`

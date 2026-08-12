@@ -178,6 +178,27 @@ try {
     assert.deepEqual(snapshot(root), before, command.join(' '));
   }
 
+  for (const command of [
+    ['--config', 'config', 'issue', 'list', '--help'],
+    [
+      'issue',
+      'create',
+      '--title',
+      'config',
+      '--team',
+      'set',
+      '--assignee',
+      'apiKey',
+      '--description',
+      'foo',
+      '--help',
+    ],
+  ]) {
+    const result = run(command);
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /exposes an API key in argv/);
+  }
+
   const stdinConflicts = [
     ['--api-key-file', '-', 'issue', 'comment', 'add', 'ENG-123', '--body-file', '-'],
     ['--api-key-file', '-', 'issue', 'create'],
@@ -188,6 +209,21 @@ try {
     const result = run(command, { input: 'lin_api_single_stream\n' });
     assertFailure(result, 2, /stdin cannot supply both --api-key-file - and/);
   }
+
+  assertFailure(
+    run(['--api-key-file', '-', 'issue-labels', 'retire', 'label-id'], {
+      input: 'lin_api_single_stream\n',
+    }),
+    2,
+    /stdin cannot supply both --api-key-file - and confirmation input/
+  );
+  assertFailure(
+    run(['--api-key-file', '-', 'project', 'create', '--interactive'], {
+      input: 'lin_api_single_stream\n',
+    }),
+    2,
+    /requires interactive input from a TTY|stdin cannot supply both --api-key-file - and interactive input/
+  );
 
   const added = run(['--api-key-file', keyFile, 'workspace', 'add', 'from-file']);
   assert.equal(added.status, 0, added.stderr);

@@ -670,7 +670,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
           2
         )
       );
-      process.exit(0);
+      return;
     }
 
     // Display success message

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { areCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
+import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { resolveIssueIdentifier } from '../../lib/issue-resolver.js';
 import {
   createIssue,
@@ -17,6 +18,7 @@ vi.mock('../../lib/aliases.js', () => ({ resolveAlias: vi.fn((_type, value) => v
 vi.mock('../../lib/config.js', () => ({
   getConfig: vi.fn(() => ({ prewarmCacheOnCreate: false })),
 }));
+vi.mock('../../lib/confirm-write.js', () => ({ guardWorkspaceForMutation: vi.fn() }));
 vi.mock('../../lib/linear-client.js', () => ({
   createIssue: vi.fn(),
   getFullIssueById: vi.fn(),
@@ -38,6 +40,52 @@ afterEach(() => {
 });
 
 describe('M36 issue JSON output contracts', () => {
+  it('[RLS-DIAG-LEVELS] returns successful JSON actions to the diagnostic process boundary', async () => {
+    vi.mocked(guardWorkspaceForMutation).mockResolvedValue({
+      key: 'conceptm',
+      name: 'ConceptM',
+      source: 'flag',
+    });
+    vi.mocked(validateTeamExists).mockResolvedValue({ valid: true, name: 'Engineering' });
+    vi.mocked(createIssue).mockResolvedValue({
+      id: ISSUE_ID,
+      identifier: 'ENG-1',
+      title: 'Created',
+      url: 'https://linear.app/conceptm/issue/ENG-1',
+    });
+    vi.mocked(getFullIssueById).mockResolvedValue({
+      id: ISSUE_ID,
+      identifier: 'ENG-1',
+      title: 'Existing',
+    } as Awaited<ReturnType<typeof getFullIssueById>>);
+    vi.mocked(updateIssue).mockResolvedValue({
+      id: ISSUE_ID,
+      identifier: 'ENG-1',
+      title: 'Updated',
+      url: 'https://linear.app/conceptm/issue/ENG-1',
+    });
+    vi.mocked(resolveIssueIdentifier).mockResolvedValue({
+      issueId: ISSUE_ID,
+      resolvedBy: 'identifier',
+      originalInput: 'ENG-1',
+    });
+    const exit = vi.spyOn(process, 'exit').mockImplementation(code => {
+      throw new Error(`unexpected process.exit(${String(code)})`);
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await createIssueCommand({
+      title: 'Created',
+      team: 'team-1',
+      noAssignee: true,
+      json: true,
+    });
+    await updateIssueCommand(ISSUE_ID, { title: 'Updated', json: true });
+    await viewIssue('ENG-1', { json: true });
+
+    expect(exit).not.toHaveBeenCalled();
+  });
+
   it('[RLS-OUT-JSON-CLEAN] emits only the dry-run JSON payload for issue create', async () => {
     vi.mocked(validateTeamExists).mockImplementation(async () => {
       expect(areCacheWritesSuppressed()).toBe(true);

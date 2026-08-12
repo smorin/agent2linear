@@ -31,7 +31,10 @@ import { registerWorkspaceCommands } from './commands/workspace/register.js';
 import { API_KEY_MIGRATION_GUIDANCE, readApiKeyFile } from './lib/api-key-input.js';
 import { inferErrorOutputMode, UsageError } from './lib/cli-error.js';
 import { isExplicitConfigMutationCommand, loadExplicitConfig } from './lib/explicit-config.js';
-import { assertInteractionAllowed } from './lib/interaction-policy.js';
+import {
+  assertInteractionAllowed,
+  commandRequiresInteractiveInput,
+} from './lib/interaction-policy.js';
 import { setInvocationContext } from './lib/invocation-context.js';
 import { configureDiagnostics, logger } from './lib/logger.js';
 import { setNoColor } from './lib/output.js';
@@ -159,8 +162,25 @@ cli
       body: actionOptions.body,
       bodyFile: actionOptions.bodyFile,
       description: actionOptions.description,
+      destructiveConfirmation:
+        actionOptions.trash === true ||
+        new Set([
+          'alias clear',
+          'cursor-history clear',
+          'issue-labels delete',
+          'issue-labels retire',
+          'milestone-templates remove',
+          'project dependencies clear',
+          'project-labels delete',
+          'project-labels retire',
+          'workflow-states delete',
+        ]).has(commandPath.join(' ')),
+      interactiveInput:
+        actionOptions.interactive === true || commandRequiresInteractiveInput(commandPath),
+      noInput,
       stdinIsTTY: process.stdin.isTTY === true,
       title: actionOptions.title,
+      yes: actionOptions.yes === true,
     });
     if (stdinConflict) {
       throw new UsageError(stdinConflict);

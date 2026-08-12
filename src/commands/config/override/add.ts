@@ -110,7 +110,7 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
               operation: 'config.override.add',
               scope,
               override: serializeRule(rule, index),
-              validation: { localWrite: false },
+              validation: { localWrites: false },
             },
             null,
             2

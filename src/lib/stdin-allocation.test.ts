@@ -96,4 +96,27 @@ describe('stdinAllocationConflict', () => {
       })
     ).toMatch(/issue description/);
   });
+
+  it('rejects stdin credentials before explicit interactive input starts', () => {
+    expect(
+      stdinAllocationConflict({
+        apiKeyFile: '-',
+        commandPath: ['project', 'create'],
+        interactiveInput: true,
+        stdinIsTTY: true,
+      })
+    ).toMatch(/interactive input/);
+  });
+
+  it('rejects stdin credentials before a destructive confirmation unless bypassed', () => {
+    const input = {
+      apiKeyFile: '-',
+      commandPath: ['issue', 'update'],
+      destructiveConfirmation: true,
+      stdinIsTTY: true,
+    } as const;
+    expect(stdinAllocationConflict(input)).toMatch(/confirmation input/);
+    expect(stdinAllocationConflict({ ...input, yes: true })).toBeNull();
+    expect(stdinAllocationConflict({ ...input, noInput: true })).toBeNull();
+  });
 });

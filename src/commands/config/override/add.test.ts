@@ -148,7 +148,7 @@ describe('runOverrideAdd', () => {
         index: 0,
         rule: { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' },
       },
-      validation: { localWrite: false },
+      validation: { localWrites: false },
     });
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });

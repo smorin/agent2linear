@@ -129,7 +129,7 @@ export async function viewIssue(identifier: string, options: ViewOptions = {}) {
           2
         )
       );
-      process.exit(0);
+      return;
     }
 
     // Handle --web flag

@@ -161,7 +161,7 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
           operation: 'config.override.edit',
           scope,
           override: serializeRule(rule, matchIndex),
-          validation: { localWrite: false },
+          validation: { localWrites: false },
         }, null, 2));
       } else {
         showInfo(`Dry run — would update override "${ruleLabel(rule.id, matchIndex)}" in ${scopeLabel} config:`);

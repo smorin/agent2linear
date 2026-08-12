@@ -989,7 +989,7 @@ async function updateIssueNonInteractive(
           2
         )
       );
-      process.exit(0);
+      return result;
     }
 
     // Display success message
@@ -1087,7 +1087,7 @@ async function updateIssueCommandInternal(identifier: string, options: UpdateOpt
       }
       restore();
       console.log(JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2));
-      process.exit(0);
+      return;
     }
 
     console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);

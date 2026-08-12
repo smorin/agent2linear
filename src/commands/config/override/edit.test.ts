@@ -245,7 +245,7 @@ describe('runOverrideEdit', () => {
         index: 0,
         rule: { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'mobile' },
       },
-      validation: { localWrite: false },
+      validation: { localWrites: false },
     });
     expect(globalRules()[0].defaultTeam).toBe('frontend');
   });

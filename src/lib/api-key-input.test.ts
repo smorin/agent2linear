@@ -53,6 +53,10 @@ describe('rejectUnsafeCredentialArgv', () => {
 
   it.each([
     ['--api-key-file', 'linear.key', '--help'],
+    ['--config', 'config', 'issue', 'list'],
+    ['issue', 'create', '--title', 'config', '--team', 'set', '--assignee', 'apiKey', '--description', 'foo'],
+    ['config', 'explain', '--key', 'set', '--value', 'apiKey'],
+    ['config', 'explain', '--key', 'edit', '--value', 'apiKey'],
     ['config', 'set', 'defaultTeam', 'team-id'],
     ['config', 'set', '--global', 'defaultTeam', 'team-id'],
     ['config', 'set', '-C', '/tmp', 'defaultTeam', 'team-id'],
