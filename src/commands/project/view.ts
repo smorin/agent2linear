@@ -1,44 +1,57 @@
 import { openInBrowser } from '../../lib/browser.js';
+import { NotFoundError, UsageError } from '../../lib/cli-error.js';
 import { getFullProjectDetails } from '../../lib/linear-client.js';
-import { formatContentPreview,showEntityNotFound, showResolvedAlias } from '../../lib/output.js';
+import { formatContentPreview, showResolvedAlias } from '../../lib/output.js';
 import { resolveProject } from '../../lib/project-resolver.js';
 
-export async function viewProject(nameOrId: string, options: { web?: boolean; autoAlias?: boolean; desc?: boolean; descLength?: string; descFull?: boolean; noDesc?: boolean } = {}) {
+interface ViewProjectOptions {
+  web?: boolean;
+  autoAlias?: boolean;
+  desc?: boolean;
+  descLength?: string;
+  descFull?: boolean;
+  noDesc?: boolean;
+  json?: boolean;
+}
+
+export async function viewProject(nameOrId: string, options: ViewProjectOptions = {}) {
+  if (options.json && options.web) {
+    throw new UsageError('--web cannot be combined with JSON output');
+  }
+  const silent = options.json === true;
+
   // Use smart resolver to handle ID, alias, or name
-  console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
+  if (!silent) console.log(`\n🔍 Resolving project "${nameOrId}"...\n`);
 
   const resolved = await resolveProject(nameOrId, {
     autoAlias: options.autoAlias,
   });
 
   if (!resolved) {
-    showEntityNotFound('project', nameOrId);
-    console.error('   Tip: Use exact project name, project ID, or create an alias');
-    process.exit(1);
+    throw new NotFoundError(`project not found: ${nameOrId}`);
   }
 
   const resolvedId = resolved.projectId;
 
   // Show how the project was resolved
-  if (resolved.resolvedBy === 'alias') {
+  if (!silent && resolved.resolvedBy === 'alias') {
     showResolvedAlias(resolved.usedAlias!, resolvedId);
-  } else if (resolved.resolvedBy === 'name') {
+  } else if (!silent && resolved.resolvedBy === 'name') {
     console.log(`   ✓ Found project by name: "${resolved.project?.name}"`);
     if (resolved.createdAlias) {
       console.log(`   ✓ Created alias "${resolved.createdAlias.alias}" (${resolved.createdAlias.scope})`);
     }
-  } else if (resolved.resolvedBy === 'cache') {
+  } else if (!silent && resolved.resolvedBy === 'cache') {
     console.log(`   ✓ Found in cache: "${resolved.project?.name}"`);
   }
 
   try {
-    console.log(`\n🔍 Fetching project details...\n`);
+    if (!silent) console.log(`\n🔍 Fetching project details...\n`);
 
     const details = await getFullProjectDetails(resolvedId);
 
     if (!details) {
-      showEntityNotFound('project', resolvedId);
-      process.exit(1);
+      throw new NotFoundError(`project not found: ${resolvedId}`);
     }
 
     const { project, lastAppliedTemplate, milestones, issues } = details;
@@ -49,6 +62,11 @@ export async function viewProject(nameOrId: string, options: { web?: boolean; au
       await openInBrowser(project.url);
       console.log(`✓ Browser opened to ${project.url}`);
       process.exit(0);
+    }
+
+    if (options.json) {
+      process.stdout.write(JSON.stringify(details, null, 2) + '\n');
+      return;
     }
 
     // Display project details
@@ -145,6 +163,8 @@ export async function viewProject(nameOrId: string, options: { web?: boolean; au
 
     console.log();
   } catch (error) {
+    if (options.json) throw error;
+    if (error instanceof NotFoundError) throw error;
     console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

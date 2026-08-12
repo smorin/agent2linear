@@ -431,13 +431,45 @@ async function requireProjectLabel(id: string): Promise<ProjectLabel> {
   return label;
 }
 
+const LABEL_LIFECYCLE_READ_ATTEMPTS = 3;
+const LABEL_LIFECYCLE_READ_DELAY_MS = 100;
+
+async function waitForLabelLifecycleState<T extends { retiredAt: string | null }>(
+  read: () => Promise<T>,
+  expectedRetired: boolean,
+  resource: string,
+  id: string
+): Promise<T> {
+  for (let attempt = 1; attempt <= LABEL_LIFECYCLE_READ_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) {
+      await new Promise(resolve => setTimeout(resolve, LABEL_LIFECYCLE_READ_DELAY_MS));
+    }
+
+    const label = await read();
+    if ((label.retiredAt !== null) === expectedRetired) return label;
+  }
+
+  const expectedState = expectedRetired ? 'retired' : 'restored';
+  throw new RuntimeError(
+    'Linear did not return the ' +
+      expectedState +
+      ' state for ' +
+      resource +
+      ' ' +
+      id +
+      ' after ' +
+      LABEL_LIFECYCLE_READ_ATTEMPTS +
+      ' reads'
+  );
+}
+
 export async function retireIssueLabel(id: string): Promise<IssueLabel> {
   const client = getLinearClient();
   const payload = await client.issueLabelRetire(id);
   if ((payload as { success?: boolean }).success === false) {
     throw new RuntimeError('Linear rejected issue-label retirement');
   }
-  return requireIssueLabel(id);
+  return waitForLabelLifecycleState(() => requireIssueLabel(id), true, 'issue label', id);
 }
 
 export async function restoreIssueLabel(id: string): Promise<IssueLabel> {
@@ -446,7 +478,7 @@ export async function restoreIssueLabel(id: string): Promise<IssueLabel> {
   if ((payload as { success?: boolean }).success === false) {
     throw new RuntimeError('Linear rejected issue-label restoration');
   }
-  return requireIssueLabel(id);
+  return waitForLabelLifecycleState(() => requireIssueLabel(id), false, 'issue label', id);
 }
 
 export async function retireProjectLabel(id: string): Promise<ProjectLabel> {
@@ -455,7 +487,7 @@ export async function retireProjectLabel(id: string): Promise<ProjectLabel> {
   if ((payload as { success?: boolean }).success === false) {
     throw new RuntimeError('Linear rejected project-label retirement');
   }
-  return requireProjectLabel(id);
+  return waitForLabelLifecycleState(() => requireProjectLabel(id), true, 'project label', id);
 }
 
 export async function restoreProjectLabel(id: string): Promise<ProjectLabel> {
@@ -464,5 +496,5 @@ export async function restoreProjectLabel(id: string): Promise<ProjectLabel> {
   if ((payload as { success?: boolean }).success === false) {
     throw new RuntimeError('Linear rejected project-label restoration');
   }
-  return requireProjectLabel(id);
+  return waitForLabelLifecycleState(() => requireProjectLabel(id), false, 'project label', id);
 }

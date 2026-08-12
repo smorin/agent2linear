@@ -87,7 +87,9 @@ export interface LabelListOptions {
   team?: string;
   workspace?: boolean;
   color?: string;
-  format?: string;
+  output?: string;
+  outputSource?: OutputValueSource;
+  json?: boolean;
   limit?: string;
   limitSource?: OutputValueSource;
   after?: string;
@@ -177,11 +179,16 @@ function mutationMode(options: MutationOutputOptions): 'table' | 'json' {
   return mode;
 }
 
-function listMode(value: string | undefined): 'table' | 'json' | 'tsv' {
-  const mode = value ?? 'default';
-  if (mode === 'default') return 'table';
-  if (mode === 'json' || mode === 'tsv') return mode;
-  throw new UsageError('format must be one of: default, json, tsv');
+function listMode(options: LabelListOptions): 'table' | 'json' | 'tsv' {
+  const allowedModes = ['table', 'json', 'tsv'] as const;
+  return options.output === undefined
+    ? resolveOutputMode({ allowedModes, json: options.json })
+    : resolveOutputMode({
+        allowedModes,
+        output: options.output,
+        outputSource: options.outputSource ?? 'default',
+        json: options.json,
+      });
 }
 
 function requireWorkspace(resolution: WorkspaceResolution): WorkspaceResolution {
@@ -543,7 +550,8 @@ function listFilters(
 function cursorOptions(
   kind: LabelKind,
   options: LabelListOptions,
-  filters: AnyLabelListFilters
+  filters: AnyLabelListFilters,
+  mode: 'table' | 'json' | 'tsv'
 ): CanonicalCommandOption[] {
   const result: CanonicalCommandOption[] = [];
   if (kind === 'issue') {
@@ -553,8 +561,8 @@ function cursorOptions(
   }
   if (filters.color) result.push({ flag: '--color', value: filters.color });
   if (filters.includeRetired) result.push({ flag: '--include-retired' });
-  if (options.format && options.format !== 'default') {
-    result.push({ flag: '--format', value: options.format });
+  if (mode !== 'table') {
+    result.push({ flag: '--output', value: mode });
   }
   if (options.cursorHistory === false) result.push({ flag: '--no-cursor-history' });
   return result;
@@ -564,13 +572,14 @@ function commandsForPage(
   kind: LabelKind,
   options: LabelListOptions,
   filters: AnyLabelListFilters,
+  mode: 'table' | 'json' | 'tsv',
   limit: number,
   after: string | undefined,
   endCursor: string
 ): CursorCommands {
   return buildCursorCommands({
     commandPath: [kind === 'issue' ? 'issue-labels' : 'project-labels', 'list'],
-    options: cursorOptions(kind, options, filters),
+    options: cursorOptions(kind, options, filters, mode),
     limit,
     ...(after === undefined ? {} : { startingAfter: after }),
     emittedCursor: endCursor,
@@ -647,7 +656,7 @@ export async function runLabelList(
   options: LabelListOptions,
   dependencies: LabelRunnerDependencies = defaultDependencies
 ): Promise<void> {
-  const mode = listMode(options.format);
+  const mode = listMode(options);
   let limit: number;
   let after: string | undefined;
   try {
@@ -673,10 +682,10 @@ export async function runLabelList(
 
   const commands =
     page.pageInfo.hasNextPage && page.pageInfo.endCursor !== null
-      ? commandsForPage(kind, options, filters, limit, after, page.pageInfo.endCursor)
+      ? commandsForPage(kind, options, filters, mode, limit, after, page.pageInfo.endCursor)
       : null;
   const completeCommands =
-    commands ?? commandsForPage(kind, options, filters, limit, after, after ?? '__complete__');
+    commands ?? commandsForPage(kind, options, filters, mode, limit, after, after ?? '__complete__');
   const workspace = requireWorkspace(dependencies.resolveWorkspace());
   const history = await dependencies.recordHistory({
     disabled: options.cursorHistory === false,

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { resolveAlias } from './aliases.js';
+import { areCacheWritesSuppressed } from './cache-write-policy.js';
 import { getApiKey, getConfig } from './config.js';
 import type { ProjectResult } from './linear-client.js';
 import { findProjectByName, getProjectById } from './linear-client.js';
@@ -19,6 +20,7 @@ function cacheFile(): string {
 }
 
 function ensureLegacyCleaned(): void {
+  if (areCacheWritesSuppressed()) return;
   if (legacyCleaned) return;
   legacyCleaned = true;
   cleanupLegacyProjectCaches();
@@ -55,6 +57,7 @@ function readCache(): ProjectCache {
  * Write project cache to file
  */
 function writeCache(cache: ProjectCache): void {
+  if (areCacheWritesSuppressed()) return;
   ensureLegacyCleaned();
   try {
     const dir = cacheDir();
@@ -82,7 +85,7 @@ function getCacheTTL(): number {
 function isCacheValid(entry: CacheEntry): boolean {
   const now = Date.now();
   const ttl = getCacheTTL();
-  return (now - entry.timestamp) < ttl;
+  return now - entry.timestamp < ttl;
 }
 
 /**

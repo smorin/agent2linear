@@ -5,7 +5,8 @@ import React from 'react';
 import { resolveAlias } from '../../lib/aliases.js';
 import { formatColorPreview } from '../../lib/colors.js';
 import { getConfig } from '../../lib/config.js';
-import { getAllWorkflowStates } from '../../lib/linear-client.js';
+import { noInputRequested } from '../../lib/interaction-policy.js';
+import { getAllWorkflowStates, getLinearClient } from '../../lib/linear-client.js';
 
 interface WorkflowStatesListProps {
   teamId?: string;
@@ -104,6 +105,10 @@ export function listWorkflowStates(program: Command) {
     .option('--color <hex>', 'Filter by color (hex code)')
     .option('-f, --format <type>', 'Output format (json|tsv)', 'default')
     .action(async (options) => {
+      // The default renderer reports asynchronous failures inside React. In
+      // no-input mode, surface missing credentials at the process boundary.
+      if (noInputRequested()) getLinearClient();
+
       // Handle JSON/TSV output before rendering React component
       if (options.format === 'json' || options.format === 'tsv') {
         try {

@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
-import { UsageError } from '../../lib/cli-error.js';
 import { registerIssueCommentCommands } from '../issue/comment/register.js';
 import { registerProjectCommentCommands } from '../project/comment/register.js';
+import { rejectLegacyIssueCommentArgv } from './register.js';
 
 function command(parent: Command, name: string): Command {
   const found = parent.commands.find(item => item.name() === name);
@@ -118,30 +118,23 @@ describe('M35 comment registration', () => {
       add: vi.fn(async () => undefined),
       list: vi.fn(async () => undefined),
     });
-    await expect(root.parseAsync(['node', 'a2l', 'issue', 'comment'])).rejects.toBeInstanceOf(
-      UsageError
-    );
+    await expect(root.parseAsync(['node', 'a2l', 'issue', 'comment'])).rejects.toMatchObject({
+      code: 'commander.help',
+      exitCode: 1,
+    });
     expect(stderr.mock.calls.flat().join('')).toContain('Usage:');
   });
 
-  it('CMT-CMD-LEGACY-REJECT rejects the old leaf with an exact quoted replacement', async () => {
-    const root = new Command().exitOverride();
-    const issue = root.command('issue');
-    registerIssueCommentCommands(issue, {
-      add: vi.fn(async () => undefined),
-      list: vi.fn(async () => undefined),
-    });
-    const parsed = root.parseAsync([
-      'node',
-      'a2l',
+  it('CMT-CMD-LEGACY-REJECT rejects the old leaf with an exact quoted replacement', () => {
+    expect(() =>
+      rejectLegacyIssueCommentArgv([
       'issue',
       'comment',
       'ENG-123',
       '--body',
       'hello world',
-    ]);
-    await expect(parsed).rejects.toMatchObject({ exitCode: 2 });
-    await expect(parsed).rejects.toThrow(
+      ])
+    ).toThrow(
       "legacy comment syntax has been removed\ntry: a2l issue comment add 'ENG-123' --body 'hello world'"
     );
   });

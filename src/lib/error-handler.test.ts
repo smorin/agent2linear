@@ -1,6 +1,9 @@
-import { describe, expect,it } from 'vitest';
+import { afterEach, describe, expect,it } from 'vitest';
 
 import { formatLinearErrorForLogging,handleLinearError, isLinearError } from './error-handler.js';
+import { registerSecret, resetRegisteredSecrets } from './redaction.js';
+
+afterEach(() => resetRegisteredSecrets());
 
 describe('handleLinearError', () => {
   it('handles 401 authentication errors', () => {
@@ -108,5 +111,15 @@ describe('formatLinearErrorForLogging', () => {
     const error = new Error('test');
     const result = formatLinearErrorForLogging(error);
     expect(result).toContain('Stack:');
+  });
+
+  it('redacts registered credentials from provider messages and stacks', () => {
+    registerSecret('opaque-provider-secret');
+    const error = new Error('failed with opaque-provider-secret');
+
+    const result = formatLinearErrorForLogging(error);
+
+    expect(result).toContain('[REDACTED]');
+    expect(result).not.toContain('opaque-provider-secret');
   });
 });

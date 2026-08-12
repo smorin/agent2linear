@@ -622,7 +622,7 @@ echo "=========================================="
 echo ""
 
 # Get project labels
-LABELS_JSON=$($CLI_CMD project-labels list --format json 2>/dev/null || echo "[]")
+LABELS_JSON=$($CLI_CMD project-labels list --json 2>/dev/null || echo "[]")
 LABEL_1=$(echo "$LABELS_JSON" | node -e "const data=require('fs').readFileSync(0,'utf-8'); const labels=JSON.parse(data); console.log(labels[0]?.id || '')")
 LABEL_2=$(echo "$LABELS_JSON" | node -e "const data=require('fs').readFileSync(0,'utf-8'); const labels=JSON.parse(data); console.log(labels[1]?.id || '')")
 

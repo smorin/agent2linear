@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 
 import { getAliasesForId } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllTemplates, type Template } from '../../lib/linear-client.js';
 import { formatListJSON,formatListTSV } from '../../lib/output.js';
 
@@ -164,6 +166,7 @@ export async function listTemplates(typeFilter?: string, options: ListOptions = 
   }
 
   if (options.interactive) {
+    requireInteractiveInput('templates list');
     // Interactive mode: display with Ink
     render(<App options={options} typeFilter={normalizedType} />);
   } else {
@@ -225,6 +228,7 @@ export async function listTemplates(typeFilter?: string, options: ListOptions = 
         console.log('💡 Tip: Use "agent2linear config set defaultProjectTemplate <id>" to save a default');
       }
     } catch (error) {
+      if (isAuthenticationError(error)) throw error;
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch templates'}`);
       process.exit(1);
     }

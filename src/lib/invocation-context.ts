@@ -3,19 +3,30 @@
  * CLI `preAction` hook before any command runs. Keeps the workspace resolver free
  * of Commander coupling and avoids re-reading `process.argv`.
  *
- * The hook resolves `--api-key -` (stdin) to a literal key BEFORE stashing, so the
+ * The hook resolves `--api-key-file` to a literal key BEFORE stashing, so the
  * resolver only ever sees a plain string. This is what lets `getApiKey()` stay
  * synchronous.
  */
 
-import type { Aliases } from './types.js';
+import type { Aliases, Config } from './types.js';
+
+export interface ExplicitConfigSelection {
+  /** Absolute path resolved after the global -C/--cwd option. */
+  path: string;
+  /** Validated JSON object captured before the command action runs. */
+  value: Partial<Config>;
+}
 
 export interface InvocationContext {
+  /** True when the global --no-input policy forbids interactive prompting. */
+  noInput?: boolean;
+  /** Whether the CLI invocation can read interactive terminal input. */
+  stdinIsTTY?: boolean;
   /** Value of the program-level `--workspace <name>` flag, if provided. */
   workspace?: string;
-  /** Literal API key from `--api-key <key>` (or read from stdin for `--api-key -`). */
+  /** Literal API key read from `--api-key-file <path|->`. */
   apiKey?: string;
-  /** True when the invocation consumed stdin to resolve `--api-key -`. */
+  /** True when the invocation consumed stdin to resolve `--api-key-file -`. */
   apiKeyFromStdin?: boolean;
   /**
    * Resolution-context dir from the program-level `-C, --cwd` flag (or
@@ -23,6 +34,8 @@ export interface InvocationContext {
    * Governs config discovery and override matching downstream.
    */
   contextDir?: string;
+  /** Sole JSON config selected by the program-level --config option. */
+  explicitConfig?: ExplicitConfigSelection;
   /**
    * Per-rule alias overlay resolved by `getConfig()` for the current context
    * (M29 §5.1/U6). `loadAliases()` overlays it at highest precedence (override >

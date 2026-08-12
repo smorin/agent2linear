@@ -10,7 +10,7 @@ import type { WorkspaceResolution, WorkspaceSource } from './types.js';
 
 /** Short human label for how the active workspace was selected. */
 const SOURCE_LABELS: Record<WorkspaceSource, string> = {
-  flag: 'explicit (--workspace/--api-key)',
+  flag: 'explicit (--workspace/--api-key-file)',
   env: 'AGENT2LINEAR_WORKSPACE env',
   'env-file': 'env-file',
   project: 'repo config',
@@ -21,7 +21,7 @@ const SOURCE_LABELS: Record<WorkspaceSource, string> = {
 
 /** The display name for a resolution (handles ad-hoc / default fallbacks). */
 function displayName(ws: WorkspaceResolution): string {
-  return ws.name ?? (ws.source === 'flag' ? '(ad-hoc via --api-key)' : '(default)');
+  return ws.name ?? (ws.source === 'flag' ? '(ad-hoc via --api-key-file)' : '(default)');
 }
 
 /**

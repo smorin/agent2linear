@@ -156,7 +156,13 @@ export function runOverrideEdit(selector: string, options: OverrideEditOptions =
 
     if (options.dryRun) {
       if (options.json) {
-        console.log(JSON.stringify(serializeRule(rule, matchIndex), null, 2));
+        console.log(JSON.stringify({
+          dryRun: true,
+          operation: 'config.override.edit',
+          scope,
+          override: serializeRule(rule, matchIndex),
+          validation: { localWrites: false },
+        }, null, 2));
       } else {
         showInfo(`Dry run — would update override "${ruleLabel(rule.id, matchIndex)}" in ${scopeLabel} config:`);
         console.log(JSON.stringify(redactRuleSecrets(rule), null, 2));

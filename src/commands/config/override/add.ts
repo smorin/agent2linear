@@ -8,6 +8,7 @@
  * without writing; `--json` emits the rule record.
  */
 
+import { ConflictError, normalizeCliError, UsageError } from '../../../lib/cli-error.js';
 import { readConfigForScope, writeConfigForScope } from '../../../lib/config.js';
 import { showError, showInfo, showSuccess } from '../../../lib/output.js';
 import { getScopeInfo } from '../../../lib/scope.js';
@@ -33,6 +34,7 @@ interface OverrideAddOptions extends WhenFlagOptions {
 }
 
 export function runOverrideAdd(label: string, options: OverrideAddOptions = {}): void {
+  let inputValidated = false;
   try {
     const trimmedLabel = label?.trim();
     if (!trimmedLabel) {
@@ -66,14 +68,18 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
     const aliases: Partial<Aliases> = parseAlias(options.alias ?? []);
 
     if (Object.keys(values).length === 0 && Object.keys(aliases).length === 0) {
-      throw new Error('at least one value is required (--set <key>=<value> or --alias <entity>.<name>=<id>)');
+      throw new Error(
+        'at least one value is required (--set <key>=<value> or --alias <entity>.<name>=<id>)'
+      );
     }
+
+    inputValidated = true;
 
     const cfg = readConfigForScope(scope);
     cfg.overrides ??= [];
 
     if (
-      cfg.overrides.some((r) => {
+      cfg.overrides.some(r => {
         const entry = r as unknown;
         return (
           entry !== null &&
@@ -83,7 +89,9 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
         );
       })
     ) {
-      throw new Error(`override rule "${trimmedLabel}" already exists in ${scopeLabel} config`);
+      throw new ConflictError(
+        `override rule "${trimmedLabel}" already exists in ${scopeLabel} config`
+      );
     }
 
     const rule: ConfigOverride = { id: trimmedLabel, when, ...values };
@@ -95,7 +103,19 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
 
     if (options.dryRun) {
       if (options.json) {
-        console.log(JSON.stringify(serializeRule(rule, index), null, 2));
+        console.log(
+          JSON.stringify(
+            {
+              dryRun: true,
+              operation: 'config.override.add',
+              scope,
+              override: serializeRule(rule, index),
+              validation: { localWrites: false },
+            },
+            null,
+            2
+          )
+        );
       } else {
         showInfo(`Dry run — would add override "${trimmedLabel}" to ${scopeLabel} config:`);
         console.log(JSON.stringify(rule, null, 2));
@@ -115,7 +135,14 @@ export function runOverrideAdd(label: string, options: OverrideAddOptions = {}):
     console.log(JSON.stringify(rule, null, 2));
     showInfo(`Verify it fires with: agent2linear config explain <dir>`);
   } catch (error) {
-    showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    process.exit(1);
+    const normalized = inputValidated
+      ? normalizeCliError(error)
+      : error instanceof UsageError
+        ? error
+        : new UsageError(error instanceof Error ? error.message : 'Unknown error', {
+            cause: error,
+          });
+    showError(`Error: ${normalized.message}`);
+    process.exit(normalized.exitCode);
   }
 }

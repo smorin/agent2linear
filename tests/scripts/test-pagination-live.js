@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assertLiveOrganizationIdentity } from './live-identity.js';
+
 const EXPECTED_ORGANIZATION = 'ConceptM';
+const EXPECTED_ORGANIZATION_URL_KEY = 'conceptm';
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const cli = join(repo, 'dist/index.js');
 const stateRoot = mkdtempSync(join(tmpdir(), 'a2l-m34-live-'));
@@ -106,16 +109,10 @@ function verifyTraversal(resource, baseArgs, collectionKey) {
 
 try {
   const identity = run(['whoami']);
-  if (
-    !identity.includes('Organization: ' + EXPECTED_ORGANIZATION) ||
-    !identity.includes('Active:       ' + EXPECTED_ORGANIZATION)
-  ) {
-    throw new Error(
-      'Fail-closed: M34 live tests require the exact ' +
-        EXPECTED_ORGANIZATION +
-        ' organization and active workspace'
-    );
-  }
+  assertLiveOrganizationIdentity(identity, {
+    organizationName: EXPECTED_ORGANIZATION,
+    organizationUrlKey: EXPECTED_ORGANIZATION_URL_KEY,
+  });
 
   const issue = verifyTraversal('issue', ['issue', 'list'], 'issues');
   const project = verifyTraversal(

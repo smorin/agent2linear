@@ -44,7 +44,8 @@ describe('M33 issue-label command registration', () => {
         '-t, --team <id>',
         '-w, --workspace',
         '--color <hex>',
-        '-f, --format <type>',
+        '-o, --output <table|json|tsv>',
+        '--json',
         '--limit <number>',
         '--after <cursor>',
         '--include-retired',
@@ -52,6 +53,7 @@ describe('M33 issue-label command registration', () => {
         '--no-cursor-history',
       ])
     );
+    expect(flags).not.toContain('-f, --format <type>');
   });
 
   it('[LPL-OPT-IL-CREATE-OUTPUT][LPL-OPT-IL-UPDATE-OUTPUT][LPL-OPT-IL-DELETE-OUTPUT][LPL-OPT-IL-RETIRE-OUTPUT][LPL-OPT-IL-RESTORE-OUTPUT] registers result controls independently', () => {
@@ -102,7 +104,8 @@ describe('M33 project-label command registration', () => {
     expect(flags).toEqual(
       expect.arrayContaining([
         '--color <hex>',
-        '-f, --format <type>',
+        '-o, --output <table|json|tsv>',
+        '--json',
         '--limit <number>',
         '--after <cursor>',
         '--include-retired',
@@ -110,6 +113,7 @@ describe('M33 project-label command registration', () => {
         '--no-cursor-history',
       ])
     );
+    expect(flags).not.toContain('-f, --format <type>');
     expect(flags.some(flag => flag.includes('archived'))).toBe(false);
   });
 

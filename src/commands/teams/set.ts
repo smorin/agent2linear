@@ -1,4 +1,5 @@
 import { resolveAlias } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { setConfigValue } from '../../lib/config.js';
 import { validateTeamExists } from '../../lib/linear-client.js';
 import { showError, showInfo,showResolvedAlias, showSuccess, showValidated, showValidating } from '../../lib/output.js';
@@ -42,6 +43,7 @@ export async function setTeam(teamId: string, options: SetTeamOptions = {}) {
 
     showInfo(`Use 'agent2linear config show' to view your configuration`);
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

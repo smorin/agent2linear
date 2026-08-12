@@ -48,6 +48,15 @@ describe('cursor history adopter', () => {
         emittedCursor: 'cursor',
       })
     ).toThrow(/sensitive/i);
+
+    expect(() =>
+      buildCursorCommands({
+        commandPath: ['issue', 'list'],
+        options: [{ flag: '--api-key-file', value: '/private/keys/linear' }],
+        limit: 50,
+        emittedCursor: 'cursor',
+      })
+    ).toThrow(/sensitive/i);
   });
 
   it('[CPH-HIS-SECRET-BAN] refuses unsafe structured context without writing history', async () => {
@@ -83,6 +92,22 @@ describe('cursor history adopter', () => {
     } finally {
       process.argv = original;
     }
+  });
+
+  it('[CPH-HIS-RAW-ARGV-BAN] rejects a key-file path embedded in reconstructed commands', async () => {
+    const append = vi.fn();
+    const unsafe = baseEntry();
+    unsafe.commands.sourceCommand = 'a2l issue list --api-key-file /private/keys/linear';
+
+    const result = await recordCursorContinuation({
+      disabled: false,
+      pageInfo: { returnedCount: 1, hasNextPage: true, endCursor: 'cursor', fetchedAll: false },
+      storeFactory: () => ({ append }) as never,
+      entry: unsafe,
+    });
+
+    expect(result).toMatchObject({ status: 'failed', entryId: null });
+    expect(append).not.toHaveBeenCalled();
   });
 
   it('CPH-HIS-NO-RECORD-COMPLETE does not construct or write a store', async () => {

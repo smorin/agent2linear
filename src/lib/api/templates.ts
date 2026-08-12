@@ -1,3 +1,4 @@
+import { logger } from '../logger.js';
 import { getLinearClient, LinearClientError } from './client.js';
 
 /**
@@ -47,10 +48,7 @@ export async function getAllTemplates(typeFilter?: 'issue' | 'project'): Promise
         });
       }
     } catch (err) {
-      // Templates may not be available - log the error for debugging
-      if (process.env.DEBUG) {
-        console.error('Error fetching templates:', err);
-      }
+      logger.internal('template fetch failed');
       throw err; // Re-throw to let caller know there was an error
     }
 

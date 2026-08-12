@@ -9,7 +9,7 @@ interface CurrentWorkspaceOptions {
 /**
  * Print the RESOLVED active workspace + selection source + masked key, offline
  * (no API call), mirroring `config get`. Honors the program-level --workspace /
- * --api-key selectors via the invocation context the preAction hook stashed.
+ * --api-key-file selectors via the invocation context the preAction hook stashed.
  */
 export function currentWorkspaceCommand(options: CurrentWorkspaceOptions = {}) {
   try {
@@ -48,7 +48,8 @@ export function currentWorkspaceCommand(options: CurrentWorkspaceOptions = {}) {
       return;
     }
 
-    const nameLabel = resolution.name ?? (resolution.source === 'flag' ? '(ad-hoc via --api-key)' : '(default)');
+    const nameLabel =
+      resolution.name ?? (resolution.source === 'flag' ? '(ad-hoc via --api-key-file)' : '(default)');
     console.log(`Workspace: ${nameLabel}`);
     console.log(`Source:    ${resolution.source}`);
     console.log(`API Key:   ${hasKey ? maskApiKey(resolution.key) : '(not set)'}`);

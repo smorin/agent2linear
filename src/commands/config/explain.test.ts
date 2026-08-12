@@ -22,6 +22,9 @@ describe('sourceLabel — provenance labels', () => {
     expect(sourceLabel({ type: 'project' })).toBe('repo config');
     expect(sourceLabel({ type: 'profile' })).toBe('profile');
     expect(sourceLabel({ type: 'global' })).toBe('global config');
+    expect(sourceLabel({ type: 'explicit', path: '/tmp/selected.json' })).toBe(
+      'explicit config /tmp/selected.json'
+    );
     expect(sourceLabel({ type: 'env' })).toBe('environment');
     expect(sourceLabel({ type: 'none' })).toBe('unset');
   });

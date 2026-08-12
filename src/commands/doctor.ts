@@ -33,8 +33,7 @@ export async function doctorCommand() {
     passed++;
   } else {
     console.log('  ✗ API key not configured');
-    console.log('    Run: agent2linear config set apiKey <your-key>');
-    console.log('    Or set LINEAR_API_KEY environment variable');
+    console.log('    Use --api-key-file <path|->, a named workspace, or LINEAR_API_KEY');
     failed++;
   }
 
@@ -110,7 +109,7 @@ export async function doctorCommand() {
   }
   if (readProjectConfig().apiKey) {
     console.log(`  ⚠️  Raw apiKey in project config: ${getProjectConfigPath()}`);
-    console.log('     Move it out: agent2linear workspace add <name> --api-key -');
+    console.log('     Move it out: agent2linear workspace add <name> --api-key-file -');
     hygieneOk = false;
   }
   if (hygieneOk) {

@@ -11,6 +11,8 @@
  * Based on DATES.md specification
  */
 
+import { UsageError } from './cli-error.js';
+
 /**
  * Successfully parsed date result
  */
@@ -473,10 +475,10 @@ export function parseProjectDate(input: string): DateParseResult {
 }
 
 /**
- * Parse date for CLI commands with error handling and console output
+ * Parse a date for CLI commands, using the shared usage-error boundary.
  *
  * This is a convenience wrapper around parseProjectDate() that:
- * - Handles errors by printing to console and exiting
+ * - Reports invalid command input as a typed usage error
  * - Returns a simple object with date and optional resolution
  * - Used by project create/update commands
  *
@@ -491,9 +493,7 @@ export function parseDateForCommand(
   const result = parseProjectDate(input);
 
   if (!result.success) {
-    console.error(`❌ Invalid ${fieldName}: ${result.error}\n`);
-    console.error(result.suggestion);
-    process.exit(1);
+    throw new UsageError(`Invalid ${fieldName}: ${result.error}\n${result.suggestion}`);
   }
 
   return {

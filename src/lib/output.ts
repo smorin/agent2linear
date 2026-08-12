@@ -6,6 +6,8 @@
  * and reduce code duplication.
  */
 
+import { getDiagnosticState } from './logger.js';
+
 /**
  * No-color mode flag. When true, emojis are stripped from output messages.
  */
@@ -20,10 +22,9 @@ export function setNoColor(enabled: boolean): void {
 }
 
 /**
- * Temporarily silence `console.log` (stdout) when `silent` is true, so a command
- * can emit a single clean JSON object on stdout without interleaved progress
- * messages. Returns a restore function (a no-op when `silent` is false). Errors
- * still surface — they go to `console.error` (stderr), which is untouched.
+ * Temporarily suppress legacy `console.log` progress when `silent` is true, so
+ * a command can emit one clean JSON object on stdout. Returns a restore
+ * function (a no-op when `silent` is false).
  */
 export function silenceStdoutWhile(silent: boolean): () => void {
   if (!silent) {
@@ -65,10 +66,25 @@ export function filterColumns<T extends Record<string, unknown>>(
 }
 
 /**
+ * Render a value as one TSV cell without allowing it to change the row or
+ * column structure. Each tab, carriage return, and line feed is replaced
+ * independently so the surrounding TSV remains a rectangular record set.
+ */
+export function sanitizeTsvCell(value: unknown): string {
+  return String(value ?? '').replace(/[\t\r\n]/g, ' ');
+}
+
+/**
  * Capitalize the first letter of a string
  */
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function showDiagnostic(message: string): void {
+  const diagnostics = getDiagnosticState();
+  if (diagnostics.quiet && !diagnostics.debug) return;
+  console.error(message);
 }
 
 /**
@@ -81,7 +97,7 @@ function capitalize(str: string): string {
  * // Output: 📎 Resolved alias "backend" to init_abc123
  */
 export function showResolvedAlias(alias: string, id: string): void {
-  console.log(stripEmoji(`📎 Resolved alias "${alias}" to ${id}`));
+  showDiagnostic(stripEmoji(`📎 Resolved alias "${alias}" to ${id}`));
 }
 
 /**
@@ -94,7 +110,7 @@ export function showResolvedAlias(alias: string, id: string): void {
  * // Output: 🔍 Validating team ID: team_abc123...
  */
 export function showValidating(entityType: string, id: string): void {
-  console.log(stripEmoji(`🔍 Validating ${entityType} ID: ${id}...`));
+  showDiagnostic(stripEmoji(`🔍 Validating ${entityType} ID: ${id}...`));
 }
 
 /**
@@ -107,7 +123,7 @@ export function showValidating(entityType: string, id: string): void {
  * // Output:    ✓ Team found: Engineering
  */
 export function showValidated(entityType: string, name: string): void {
-  console.log(`   ✓ ${capitalize(entityType)} found: ${name}`);
+  showDiagnostic(`   ✓ ${capitalize(entityType)} found: ${name}`);
 }
 
 /**
@@ -165,7 +181,7 @@ export function showError(message: string, hint?: string): void {
  * // 💡 Use "agent2linear config show" to view your configuration
  */
 export function showInfo(message: string): void {
-  console.log(stripEmoji(`\n💡 ${message}\n`));
+  showDiagnostic(stripEmoji(`\n💡 ${message}\n`));
 }
 
 /**
@@ -177,7 +193,7 @@ export function showInfo(message: string): void {
  * // Output: ⚠️ This command is deprecated
  */
 export function showWarning(message: string): void {
-  console.log(stripEmoji(`⚠️  ${message}`));
+  console.error(stripEmoji(`⚠️  ${message}`));
 }
 
 /**

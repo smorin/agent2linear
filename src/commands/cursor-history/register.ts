@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 
-import { UsageError } from '../../lib/cli-error.js';
 import { runCursorHistoryClear } from './clear.js';
 import { runCursorHistoryList } from './list.js';
 import { type CursorHistoryCommandDependencies, mergeCursorHistoryDependencies } from './shared.js';
@@ -18,10 +17,6 @@ export function registerCursorHistoryCommands(
   const history = cli
     .command('cursor-history')
     .description('Inspect and clear locally stored raw cursor history')
-    .action(() => {
-      dependencies.stderr(history.helpInformation());
-      throw new UsageError('A cursor-history subcommand is required');
-    })
     .addHelpText(
       'after',
       `

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { extractColorsFromEntities, formatColorPreview } from '../../lib/colors.js';
 
 export function extractColors(program: Command) {
@@ -35,6 +36,7 @@ export function extractColors(program: Command) {
         }
         console.log('');
       } catch (error) {
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

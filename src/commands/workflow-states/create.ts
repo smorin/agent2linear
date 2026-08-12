@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { CliError, isAuthenticationError, UsageError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { createWorkflowState } from '../../lib/linear-client.js';
 
@@ -18,10 +19,7 @@ export function createWorkflowStateCommand(program: Command) {
       try {
         // Validate required fields
         if (!options.name) {
-          console.error('❌ Error: --name is required');
-          console.log('');
-          console.log('Usage: agent2linear workflow-states create --name "In Review" --team team_abc123');
-          process.exit(1);
+          throw new UsageError('--name is required');
         }
 
         // Get team ID
@@ -32,17 +30,9 @@ export function createWorkflowStateCommand(program: Command) {
         }
 
         if (!teamId) {
-          console.error('❌ Error: Team is required');
-          console.log('');
-          console.log('Please specify a team using one of these options:');
-          console.log('  1. Use --team flag:');
-          console.log(`     $ agent2linear workflow-states create --name "${options.name}" --team team_abc123`);
-          console.log('');
-          console.log('  2. Set a default team:');
-          console.log('     $ agent2linear teams select');
-          console.log('     $ agent2linear config set defaultTeam team_abc123');
-          console.log('');
-          process.exit(1);
+          throw new UsageError(
+            'Team is required; pass --team <id|alias> or configure defaultTeam'
+          );
         }
 
         // Resolve team alias
@@ -92,6 +82,8 @@ export function createWorkflowStateCommand(program: Command) {
         console.log(`   Position: ${state.position}`);
         console.log('');
       } catch (error) {
+        if (error instanceof CliError) throw error;
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

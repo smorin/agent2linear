@@ -10,7 +10,7 @@ interface ExcludeProfileOptions {
 
 /**
  * Mark a profile as off-limits (`linear: false`) so resolution refuses to act on
- * it — unless forced by an explicit --workspace/--api-key (offline).
+ * it — unless forced by an explicit --workspace/--api-key-file (offline).
  */
 export function excludeProfileCommand(name: string, options: ExcludeProfileOptions = {}): void {
   try {
@@ -30,7 +30,7 @@ export function excludeProfileCommand(name: string, options: ExcludeProfileOptio
     showSuccess('Profile excluded from Linear!', {
       Profile: name,
       Scope: scopeLabel,
-      Note: 'Commands will refuse to use this profile unless forced with --workspace/--api-key',
+      Note: 'Commands will refuse to use this profile unless forced with --workspace/--api-key-file',
     });
   } catch (error) {
     showError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);

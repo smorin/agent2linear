@@ -1,5 +1,13 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { withCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
+import {
+  CliError,
+  isAuthenticationError,
+  NotFoundError,
+  RuntimeError,
+  UsageError,
+} from '../../lib/cli-error.js';
 import { confirmDestructiveAction } from '../../lib/confirm-destructive.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { readContentFile } from '../../lib/file-utils.js';
@@ -80,9 +88,10 @@ interface UpdateOptions {
 async function updateIssueNonInteractive(
   identifier: string,
   options: UpdateOptions,
-  skipGuard = false
+  skipGuard = false,
+  jsonErrorMode = options.json === true
 ) {
-  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
+  const restoreLog = silenceStdoutWhile(!!options.json);
   try {
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 1: VALIDATION - Mutual Exclusivity Checks
@@ -90,6 +99,8 @@ async function updateIssueNonInteractive(
 
     // 1. Description mutual exclusivity
     if (options.description && options.descriptionFile) {
+      if (jsonErrorMode)
+        throw new UsageError('Cannot use both --description and --description-file');
       console.error('❌ Error: Cannot use both --description and --description-file\n');
       console.error('Choose one:');
       console.error('  --description "markdown text"  (inline description)');
@@ -99,6 +110,7 @@ async function updateIssueNonInteractive(
 
     // 2. Labels mutual exclusivity: --labels vs --add-labels/--remove-labels
     if (options.labels && options.addLabels) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --labels and --add-labels');
       console.error('❌ Error: Cannot use both --labels and --add-labels\n');
       console.error('--labels replaces ALL labels (replace mode)');
       console.error('--add-labels adds to existing labels (add mode)');
@@ -109,6 +121,7 @@ async function updateIssueNonInteractive(
     }
 
     if (options.labels && options.removeLabels) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --labels and --remove-labels');
       console.error('❌ Error: Cannot use both --labels and --remove-labels\n');
       console.error('--labels replaces ALL labels (replace mode)');
       console.error('--remove-labels removes specific labels (remove mode)');
@@ -122,6 +135,8 @@ async function updateIssueNonInteractive(
 
     // 3. Subscribers mutual exclusivity: --subscribers vs --add-subscribers/--remove-subscribers
     if (options.subscribers && options.addSubscribers) {
+      if (jsonErrorMode)
+        throw new UsageError('Cannot use both --subscribers and --add-subscribers');
       console.error('❌ Error: Cannot use both --subscribers and --add-subscribers\n');
       console.error('--subscribers replaces ALL subscribers (replace mode)');
       console.error('--add-subscribers adds to existing subscribers (add mode)');
@@ -132,6 +147,8 @@ async function updateIssueNonInteractive(
     }
 
     if (options.subscribers && options.removeSubscribers) {
+      if (jsonErrorMode)
+        throw new UsageError('Cannot use both --subscribers and --remove-subscribers');
       console.error('❌ Error: Cannot use both --subscribers and --remove-subscribers\n');
       console.error('--subscribers replaces ALL subscribers (replace mode)');
       console.error('--remove-subscribers removes specific subscribers (remove mode)');
@@ -143,6 +160,7 @@ async function updateIssueNonInteractive(
 
     // 4. Assignee mutual exclusivity
     if (options.assignee && options.noAssignee) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --assignee and --no-assignee');
       console.error('❌ Error: Cannot use both --assignee and --no-assignee\n');
       console.error('Choose one:');
       console.error('  --assignee user@email.com   (assign to user)');
@@ -152,6 +170,7 @@ async function updateIssueNonInteractive(
 
     // 5. Due date mutual exclusivity
     if (options.dueDate && options.noDueDate) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --due-date and --no-due-date');
       console.error('❌ Error: Cannot use both --due-date and --no-due-date\n');
       console.error('Choose one:');
       console.error('  --due-date 2025-12-31   (set due date)');
@@ -161,6 +180,7 @@ async function updateIssueNonInteractive(
 
     // 6. Estimate mutual exclusivity
     if (options.estimate !== undefined && options.noEstimate) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --estimate and --no-estimate');
       console.error('❌ Error: Cannot use both --estimate and --no-estimate\n');
       console.error('Choose one:');
       console.error('  --estimate 8      (set estimate)');
@@ -170,6 +190,7 @@ async function updateIssueNonInteractive(
 
     // 7. Project mutual exclusivity
     if (options.project && options.noProject) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --project and --no-project');
       console.error('❌ Error: Cannot use both --project and --no-project\n');
       console.error('Choose one:');
       console.error('  --project proj_xxx   (assign to project)');
@@ -179,6 +200,7 @@ async function updateIssueNonInteractive(
 
     // 8. Cycle mutual exclusivity
     if (options.cycle && options.noCycle) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --cycle and --no-cycle');
       console.error('❌ Error: Cannot use both --cycle and --no-cycle\n');
       console.error('Choose one:');
       console.error('  --cycle cycle_xxx   (assign to cycle)');
@@ -188,6 +210,7 @@ async function updateIssueNonInteractive(
 
     // 9. Parent mutual exclusivity
     if (options.parent && options.noParent) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --parent and --no-parent');
       console.error('❌ Error: Cannot use both --parent and --no-parent\n');
       console.error('Choose one:');
       console.error('  --parent ENG-123   (set/change parent)');
@@ -197,6 +220,7 @@ async function updateIssueNonInteractive(
 
     // 10. Trash mutual exclusivity
     if (options.trash && options.untrash) {
+      if (jsonErrorMode) throw new UsageError('Cannot use both --trash and --untrash');
       console.error('❌ Error: Cannot use both --trash and --untrash\n');
       console.error('Choose one:');
       console.error('  --trash     (move to trash)');
@@ -239,15 +263,7 @@ async function updateIssueNonInteractive(
       options.untrash;
 
     if (!hasUpdateField) {
-      console.error('❌ Error: No update options specified\n');
-      console.error('You must provide at least one field to update.');
-      console.error('\nExamples:');
-      console.error('  agent2linear issue update ENG-123 --title "New title"');
-      console.error('  agent2linear issue update ENG-123 --priority 1');
-      console.error('  agent2linear issue update ENG-123 --state done\n');
-      console.error('For all options, see:');
-      console.error('  agent2linear issue update --help\n');
-      process.exit(1);
+      throw new UsageError('At least one issue update field is required');
     }
 
     // Read description from stdin if --description is "-"
@@ -263,6 +279,9 @@ async function updateIssueNonInteractive(
     if (options.descriptionFile) {
       const result = await readContentFile(options.descriptionFile);
       if (!result.success) {
+        if (jsonErrorMode) {
+          throw new RuntimeError(`Error reading file: ${options.descriptionFile}: ${result.error}`);
+        }
         console.error(`❌ Error reading file: ${options.descriptionFile}\n`);
         console.error(`   ${result.error}\n`);
         process.exit(1);
@@ -279,6 +298,7 @@ async function updateIssueNonInteractive(
 
     // Try to resolve the identifier - supports both UUID and ENG-123 formats
     let issueId: string;
+    let resolvedIdentifier = identifier;
 
     // Check if it's a UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -289,10 +309,12 @@ async function updateIssueNonInteractive(
       // Verify issue exists
       const issue = await getFullIssueById(issueId);
       if (!issue) {
+        if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
         console.error(`❌ Error: Issue not found: "${identifier}"`);
         console.error(`   Issue UUID not found in Linear\n`);
         process.exit(1);
       }
+      resolvedIdentifier = issue.identifier;
       console.log(`   ✓ Issue found: ${issue.identifier}`);
     } else {
       // Not a UUID - try identifier format (ENG-123)
@@ -300,6 +322,7 @@ async function updateIssueNonInteractive(
       const resolved = await resolveIssueId(identifier);
 
       if (!resolved) {
+        if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
         console.error(`❌ Error: Issue not found: "${identifier}"`);
         console.error(`   Expected format: ENG-123 or UUID\n`);
         console.error('To list issues:');
@@ -321,6 +344,7 @@ async function updateIssueNonInteractive(
     if (options.title) {
       const title = options.title.trim();
       if (title.length < 1) {
+        if (jsonErrorMode) throw new UsageError('Title cannot be empty');
         console.error('❌ Error: Title cannot be empty');
         process.exit(1);
       }
@@ -341,6 +365,7 @@ async function updateIssueNonInteractive(
       const { validatePriority } = await import('../../lib/validators.js');
       const priorityResult = validatePriority(options.priority);
       if (!priorityResult.valid) {
+        if (jsonErrorMode) throw new UsageError(priorityResult.error ?? 'Invalid priority');
         console.error(`❌ ${priorityResult.error}`);
         process.exit(1);
       }
@@ -353,6 +378,7 @@ async function updateIssueNonInteractive(
 
     if (options.estimate !== undefined) {
       if (options.estimate < 0) {
+        if (jsonErrorMode) throw new UsageError('Estimate must be a non-negative number');
         console.error('❌ Error: Estimate must be a non-negative number');
         process.exit(1);
       }
@@ -383,6 +409,7 @@ async function updateIssueNonInteractive(
           // Validate state belongs to current issue's team
           const currentIssue = await getFullIssueById(issueId);
           if (!currentIssue) {
+            if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
             console.error(`❌ Error: Could not fetch current issue state`);
             process.exit(1);
           }
@@ -393,6 +420,11 @@ async function updateIssueNonInteractive(
           if (state) {
             const stateTeam = await state.team;
             if (stateTeam && stateTeam.id !== currentIssue.team.id) {
+              if (jsonErrorMode) {
+                throw new UsageError(
+                  `Workflow state ${state.name} does not belong to the issue team`
+                );
+              }
               console.error(`❌ Error: State validation failed\n`);
               console.error(`   State "${state.name}" belongs to team "${stateTeam.name}"`);
               console.error(`   but issue team is "${currentIssue.team.name}"`);
@@ -406,6 +438,7 @@ async function updateIssueNonInteractive(
           updates.stateId = stateId;
         }
       } catch (error) {
+        if (jsonErrorMode) throw error;
         console.error(`❌ ${error instanceof Error ? error.message : 'Unknown error'}`);
         process.exit(1);
       }
@@ -419,6 +452,7 @@ async function updateIssueNonInteractive(
       const { validateISODate } = await import('../../lib/validators.js');
       const dateResult = validateISODate(options.dueDate);
       if (!dateResult.valid) {
+        if (jsonErrorMode) throw new UsageError(dateResult.error ?? 'Invalid due date');
         console.error(`❌ ${dateResult.error}`);
         process.exit(1);
       }
@@ -440,6 +474,7 @@ async function updateIssueNonInteractive(
       const member = await resolveMemberIdentifier(options.assignee, resolveAlias);
 
       if (!member) {
+        if (jsonErrorMode) throw new NotFoundError(`Member not found: ${options.assignee}`);
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('member', options.assignee, 'members list'));
         console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -481,6 +516,7 @@ async function updateIssueNonInteractive(
       console.log(`🔍 Validating team: ${teamId}...`);
       const teamCheck = await validateTeamExists(teamId);
       if (!teamCheck.valid) {
+        if (jsonErrorMode) throw new NotFoundError(teamCheck.error ?? `Team not found: ${teamId}`);
         console.error(`❌ ${teamCheck.error}`);
         process.exit(1);
       }
@@ -497,6 +533,11 @@ async function updateIssueNonInteractive(
         if (state) {
           const stateTeam = await state.team;
           if (stateTeam && stateTeam.id !== teamId) {
+            if (jsonErrorMode) {
+              throw new UsageError(
+                `Workflow state ${state.name} does not belong to team ${teamCheck.name}`
+              );
+            }
             console.error(`❌ Error: Team-state compatibility validation failed\n`);
             console.error(`   State "${state.name}" belongs to team "${stateTeam.name}"`);
             console.error(`   but you're moving issue to team "${teamCheck.name}"`);
@@ -509,6 +550,7 @@ async function updateIssueNonInteractive(
         // If NOT changing state, check current state compatibility
         const currentIssue = await getFullIssueById(issueId);
         if (!currentIssue) {
+          if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
           console.error(`❌ Error: Could not fetch current issue`);
           process.exit(1);
         }
@@ -517,6 +559,11 @@ async function updateIssueNonInteractive(
         const currentStateTeamId = currentIssue.team.id; // State's team is the issue's team
 
         if (currentStateTeamId !== teamId) {
+          if (jsonErrorMode) {
+            throw new UsageError(
+              `Cannot move issue to team ${teamCheck.name} without changing its state`
+            );
+          }
           console.error(`❌ Error: Cannot move to team "${teamCheck.name}"\n`);
           console.error(
             `   Current state "${currentState.name}" belongs to team "${currentIssue.team.name}"`
@@ -566,6 +613,7 @@ async function updateIssueNonInteractive(
 
         // If still not found, error
         if (!project) {
+          if (jsonErrorMode) throw new NotFoundError(`Project not found: ${options.project}`);
           const { formatEntityNotFoundError } = await import('../../lib/validators.js');
           console.error(formatEntityNotFoundError('project', options.project, 'project list'));
           process.exit(1);
@@ -574,6 +622,7 @@ async function updateIssueNonInteractive(
         console.log(`   ✓ Project: ${project.name}`);
         updates.projectId = projectId;
       } catch (error) {
+        if (jsonErrorMode) throw error;
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('project', options.project, 'project list'));
         process.exit(1);
@@ -599,6 +648,7 @@ async function updateIssueNonInteractive(
       // Validate format: must be UUID
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(resolvedCycle)) {
+        if (jsonErrorMode) throw new UsageError(`Invalid cycle format: ${options.cycle}`);
         console.error(`❌ Error: Invalid cycle format: "${options.cycle}"`);
         console.error(`   Cycle must be a valid UUID or alias that resolves to a UUID`);
         console.error(`   Example: --cycle 550e8400-e29b-41d4-a716-446655440000\n`);
@@ -627,11 +677,20 @@ async function updateIssueNonInteractive(
           updates.parentId = resolved;
           console.log(`   ✓ Parent issue found`);
         } else {
+          if (jsonErrorMode) throw new NotFoundError(`Parent issue not found: ${options.parent}`);
           console.error(`❌ Error: Parent issue not found: "${options.parent}"`);
           console.error(`   Expected format: ENG-123 or UUID\n`);
           process.exit(1);
         }
       } catch (error) {
+        if (jsonErrorMode) {
+          if (isAuthenticationError(error)) throw error;
+          throw error instanceof CliError
+            ? error
+            : new UsageError(`Invalid parent issue identifier: ${options.parent}`, {
+                cause: error,
+              });
+        }
         console.error(`❌ Error: Invalid parent issue identifier: "${options.parent}"`);
         console.error(`   ${error instanceof Error ? error.message : 'Unknown error'}`);
         console.error(`   Expected format: ENG-123 or UUID\n`);
@@ -674,6 +733,7 @@ async function updateIssueNonInteractive(
       console.log(`🔍 Fetching current labels...`);
       const currentIssue = await getFullIssueById(issueId);
       if (!currentIssue) {
+        if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
         console.error(`❌ Error: Could not fetch current issue`);
         process.exit(1);
       }
@@ -743,6 +803,7 @@ async function updateIssueNonInteractive(
           const member = await resolveMemberIdentifier(identifier, resolveAlias);
 
           if (!member) {
+            if (jsonErrorMode) throw new NotFoundError(`Subscriber not found: ${identifier}`);
             const { formatEntityNotFoundError } = await import('../../lib/validators.js');
             console.error(formatEntityNotFoundError('subscriber', identifier, 'members list'));
             console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -770,6 +831,7 @@ async function updateIssueNonInteractive(
       console.log(`🔍 Fetching current subscribers...`);
       const currentIssue = await getFullIssueById(issueId);
       if (!currentIssue) {
+        if (jsonErrorMode) throw new NotFoundError(`Issue not found: ${identifier}`);
         console.error(`❌ Error: Could not fetch current issue`);
         process.exit(1);
       }
@@ -788,6 +850,7 @@ async function updateIssueNonInteractive(
           const member = await resolveMemberIdentifier(identifier, resolveAlias);
 
           if (!member) {
+            if (jsonErrorMode) throw new NotFoundError(`Subscriber not found: ${identifier}`);
             const { formatEntityNotFoundError } = await import('../../lib/validators.js');
             console.error(formatEntityNotFoundError('subscriber', identifier, 'members list'));
             console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -821,6 +884,7 @@ async function updateIssueNonInteractive(
           const member = await resolveMemberIdentifier(identifier, resolveAlias);
 
           if (!member) {
+            if (jsonErrorMode) throw new NotFoundError(`Subscriber not found: ${identifier}`);
             const { formatEntityNotFoundError } = await import('../../lib/validators.js');
             console.error(formatEntityNotFoundError('subscriber', identifier, 'members list'));
             console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -863,8 +927,22 @@ async function updateIssueNonInteractive(
 
     // Dry-run mode: print payload and exit without updating
     if (options.dryRun) {
+      const workspace = resolveActiveWorkspace();
+      if (workspace.denied) {
+        throw new RuntimeError(workspace.denied.reason + ' — ' + workspace.denied.hint);
+      }
+      const plan = {
+        dryRun: true,
+        operation: 'issue.update',
+        workspace: workspaceForJson(workspace),
+        issue: { id: issueId, identifier: resolvedIdentifier },
+        updates,
+        ancillary: { openInBrowser: options.web === true },
+        validation: { localWrites: false, serverMutation: false },
+      };
       console.error('\n[dry-run] Would update issue with:');
-      console.log(JSON.stringify({ issueId, ...updates }, null, 2));
+      restoreLog();
+      console.log(JSON.stringify(plan, null, 2));
       return;
     }
 
@@ -911,7 +989,7 @@ async function updateIssueNonInteractive(
           2
         )
       );
-      process.exit(0);
+      return result;
     }
 
     // Display success message
@@ -938,15 +1016,24 @@ async function updateIssueNonInteractive(
     // success output above is suppressed by the caller under --json).
     return result;
   } catch (error) {
+    if (jsonErrorMode) throw error;
+    if (error instanceof CliError) throw error;
+    if (isAuthenticationError(error)) throw error;
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
+  } finally {
+    restoreLog();
   }
 }
 
 /**
  * Main entry point for issue update command
  */
-export async function updateIssueCommand(identifier: string, options: UpdateOptions) {
+async function updateIssueCommandInternal(identifier: string, options: UpdateOptions) {
+  if (options.json && options.bulk && options.dryRun) {
+    throw new UsageError('--bulk cannot be combined with --dry-run and --json');
+  }
+
   if (options.bulk) {
     // Bulk mode: apply same update to multiple issues sequentially
     // Note: errors in individual updates will halt the process (due to process.exit in handlers).
@@ -993,13 +1080,14 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
         const r = await updateIssueNonInteractive(
           raw.trim(),
           { ...options, bulk: undefined, web: undefined, json: undefined },
+          true,
           true
         );
         if (r) issues.push(r);
       }
       restore();
       console.log(JSON.stringify({ ok: true, workspace: workspaceForJson(ws), issues }, null, 2));
-      process.exit(0);
+      return;
     }
 
     console.log(`\n📦 Bulk update: ${identifiers.length} issue(s)\n`);
@@ -1018,4 +1106,10 @@ export async function updateIssueCommand(identifier: string, options: UpdateOpti
   } else {
     await updateIssueNonInteractive(identifier, options);
   }
+}
+
+export async function updateIssueCommand(identifier: string, options: UpdateOptions) {
+  return withCacheWritesSuppressed(options.dryRun === true, () =>
+    updateIssueCommandInternal(identifier, options)
+  );
 }

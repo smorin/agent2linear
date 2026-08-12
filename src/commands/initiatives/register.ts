@@ -10,10 +10,7 @@ export function registerInitiativesCommands(cli: Command): void {
   const initiatives = cli
     .command('initiatives')
     .alias('init')
-    .description('Manage Linear initiatives')
-    .action(() => {
-      initiatives.help();
-    });
+    .description('Manage Linear initiatives');
 
   initiatives
     .command('list')

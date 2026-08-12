@@ -21,10 +21,7 @@ Prompts are hand-authored markdown stored in a committable prompts.json:
 Each prompt is { description?, body? | bodyFile? } (exactly one of body/bodyFile).
 A top-level config \`defaultPrompt\` selects the general prompt; target a directory
 via the global -C/--cwd lever.
-`)
-    .action(() => {
-      prompt.help();
-    });
+`);
 
   prompt
     .command('get')

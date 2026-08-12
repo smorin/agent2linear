@@ -1,5 +1,13 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { withCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
+import {
+  CliError,
+  isAuthenticationError,
+  NotFoundError,
+  RuntimeError,
+  UsageError,
+} from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { readContentFile } from '../../lib/file-utils.js';
@@ -15,6 +23,7 @@ import { getLogLevel } from '../../lib/logger.js';
 import { silenceStdoutWhile } from '../../lib/output.js';
 import type { IssueCreateInput, WorkspaceResolution } from '../../lib/types.js';
 import { workspaceForJson } from '../../lib/workspace-banner.js';
+import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
 
 interface CreateOptions {
   // Required
@@ -56,13 +65,20 @@ interface CreateOptions {
   yes?: boolean; // Skip the auto-detected-workspace confirmation
 }
 
+function requireWorkspace(resolution: WorkspaceResolution): WorkspaceResolution {
+  if (resolution.denied) {
+    throw new RuntimeError(resolution.denied.reason + ' — ' + resolution.denied.hint);
+  }
+  return resolution;
+}
+
 /**
  * Create an issue non-interactively
  */
 async function createIssueNonInteractive(options: CreateOptions) {
   // Under --json, silence stdout progress so only the final JSON object lands on
-  // stdout (errors still go to stderr). --dry-run keeps its own payload output.
-  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
+  // stdout (errors still go to stderr), including dry-run payload construction.
+  const restoreLog = silenceStdoutWhile(!!options.json);
   try {
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 1: VALIDATION - Mutual Exclusivity & Required Fields
@@ -70,11 +86,11 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
     // Validate mutual exclusivity of --description and --description-file
     if (options.description && options.descriptionFile) {
-      console.error('❌ Error: Cannot use both --description and --description-file\n');
-      console.error('Choose one:');
-      console.error('  --description "markdown text"  (inline description)');
-      console.error('  --description-file path/to/file.md  (file description)\n');
-      process.exit(1);
+      throw new UsageError('Cannot use both --description and --description-file');
+    }
+
+    if (options.json && options.web) {
+      throw new UsageError('Cannot use --json and --web together');
     }
 
     // Read description from file if --description-file is provided
@@ -82,6 +98,9 @@ async function createIssueNonInteractive(options: CreateOptions) {
     if (options.descriptionFile) {
       const result = await readContentFile(options.descriptionFile);
       if (!result.success) {
+        if (options.json) {
+          throw new RuntimeError(`Error reading file: ${options.descriptionFile}: ${result.error}`);
+        }
         console.error(`❌ Error reading file: ${options.descriptionFile}\n`);
         console.error(`   ${result.error}\n`);
         process.exit(1);
@@ -110,22 +129,16 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
     // Validate required field: title
     if (!options.title) {
-      console.error('❌ Error: --title is required\n');
-      console.error('Provide the title:');
-      console.error('  agent2linear issue create --title "Fix bug"\n');
-      console.error('Or pipe from stdin:');
-      console.error('  echo "Fix login bug" | agent2linear issue create\n');
-      console.error('For all options, see:');
-      console.error('  agent2linear issue create --help\n');
-      process.exit(1);
+      throw new UsageError(
+        '--title is required; pass --title <text> or pipe a title on standard input'
+      );
     }
 
     const title = options.title.trim();
 
     // Validate title length
     if (title.length < 1) {
-      console.error('❌ Error: Title cannot be empty');
-      process.exit(1);
+      throw new UsageError('Title cannot be empty');
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -175,21 +188,16 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
     // Validate team is provided (REQUIRED)
     if (!teamId) {
-      console.error('❌ Error: Team is required for issue creation\n');
-      console.error('Please specify a team using one of these options:\n');
-      console.error('  1. Use --team flag:');
-      console.error(`     $ agent2linear issue create --title "${title}" --team team_xxx\n`);
-      console.error('  2. Set a default team:');
-      console.error('     $ agent2linear config set defaultTeam team_xxx\n');
-      console.error('  3. List available teams:');
-      console.error('     $ agent2linear teams list\n');
-      process.exit(1);
+      throw new UsageError(
+        'Team is required for issue creation; pass --team <id|alias> or configure defaultTeam'
+      );
     }
 
     // Validate team exists
     console.log(`🔍 Validating team: ${teamId}...`);
     const teamCheck = await validateTeamExists(teamId);
     if (!teamCheck.valid) {
+      if (options.json) throw new NotFoundError(teamCheck.error ?? `Team not found: ${teamId}`);
       console.error(`❌ ${teamCheck.error}`);
       process.exit(1);
     }
@@ -204,6 +212,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
       console.log(`🔍 Validating template: ${templateId}...`);
       const template = await getTemplateById(templateId);
       if (!template) {
+        if (options.json) throw new NotFoundError(`Template not found: ${templateId}`);
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('template', templateId, 'templates list issues'));
         process.exit(1);
@@ -230,6 +239,11 @@ async function createIssueNonInteractive(options: CreateOptions) {
         if (state) {
           const stateTeam = await state.team;
           if (stateTeam && stateTeam.id !== teamId) {
+            if (options.json) {
+              throw new UsageError(
+                `Workflow state ${state.name} does not belong to team ${teamCheck.name}`
+              );
+            }
             console.error(`❌ Error: State validation failed\n`);
             console.error(`   State "${state.name}" belongs to team "${stateTeam.name}"`);
             console.error(`   but issue team is "${teamCheck.name}"`);
@@ -238,6 +252,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
           }
         }
       } catch (error) {
+        if (options.json) throw error;
         console.error(`❌ ${error instanceof Error ? error.message : 'Unknown error'}`);
         process.exit(1);
       }
@@ -253,6 +268,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
       const { validatePriority } = await import('../../lib/validators.js');
       const priorityResult = validatePriority(options.priority);
       if (!priorityResult.valid) {
+        if (options.json) throw new UsageError(priorityResult.error ?? 'Invalid priority');
         console.error(`❌ ${priorityResult.error}`);
         process.exit(1);
       }
@@ -262,11 +278,11 @@ async function createIssueNonInteractive(options: CreateOptions) {
     // Validate and convert estimate to number
     let estimate: number | undefined;
     if (options.estimate !== undefined) {
-      const estimateValue = typeof options.estimate === 'string'
-        ? parseInt(options.estimate, 10)
-        : options.estimate;
+      const estimateValue =
+        typeof options.estimate === 'string' ? parseInt(options.estimate, 10) : options.estimate;
 
       if (isNaN(estimateValue) || estimateValue < 0) {
+        if (options.json) throw new UsageError('Estimate must be a non-negative number');
         console.error('❌ Error: Estimate must be a non-negative number');
         process.exit(1);
       }
@@ -282,6 +298,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
       const { validateISODate } = await import('../../lib/validators.js');
       const dateResult = validateISODate(options.dueDate);
       if (!dateResult.valid) {
+        if (options.json) throw new UsageError(dateResult.error ?? 'Invalid due date');
         console.error(`❌ ${dateResult.error}`);
         process.exit(1);
       }
@@ -301,6 +318,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
       const member = await resolveMemberIdentifier(options.assignee, resolveAlias);
 
       if (!member) {
+        if (options.json) throw new NotFoundError(`Member not found: ${options.assignee}`);
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('member', options.assignee, 'members list'));
         console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -329,10 +347,11 @@ async function createIssueNonInteractive(options: CreateOptions) {
         assigneeId = currentUser.id;
         console.log(`👤 Auto-assigning to: ${currentUser.name}`);
       } catch (error) {
-        console.warn(
-          `⚠️  Warning: Could not auto-assign: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-        console.warn('   Continuing without assignee assignment.');
+        const message = `Could not auto-assign: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        if (!options.json) {
+          console.warn(`⚠️  Warning: ${message}`);
+          console.warn('   Continuing without assignee assignment.');
+        }
         assigneeId = undefined;
       }
     }
@@ -353,6 +372,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
         const member = await resolveMemberIdentifier(identifier, resolveAlias);
 
         if (!member) {
+          if (options.json) throw new NotFoundError(`Subscriber not found: ${identifier}`);
           const { formatEntityNotFoundError } = await import('../../lib/validators.js');
           console.error(formatEntityNotFoundError('subscriber', identifier, 'members list'));
           console.error(`   Note: Tried alias lookup, ID lookup, email lookup, and name lookup`);
@@ -409,6 +429,8 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
         // If still not found, error
         if (!project) {
+          if (options.json)
+            throw new NotFoundError(`Project not found: ${options.project || projectId}`);
           const { formatEntityNotFoundError } = await import('../../lib/validators.js');
           const searchTerm = options.project || projectId || '';
           console.error(formatEntityNotFoundError('project', searchTerm, 'project list'));
@@ -418,9 +440,13 @@ async function createIssueNonInteractive(options: CreateOptions) {
         // Validate team compatibility
         const teams = await project.teams();
         const teamsList = await teams.nodes;
-        const teamBelongsToProject = teamsList && teamsList.some((t: { id: string }) => t.id === teamId);
+        const teamBelongsToProject =
+          teamsList && teamsList.some((t: { id: string }) => t.id === teamId);
 
         if (teamsList && teamsList.length > 0 && !teamBelongsToProject) {
+          if (options.json) {
+            throw new UsageError(`Project is not compatible with team ${teamCheck.name}`);
+          }
           const teamNames = teamsList.map((t: { name: string }) => `"${t.name}"`).join(', ');
           console.error(`❌ Error: Project-team compatibility validation failed\n`);
           console.error(`   Project "${project.name}" belongs to team(s): ${teamNames}`);
@@ -431,7 +457,9 @@ async function createIssueNonInteractive(options: CreateOptions) {
             console.error(`\n   This project came from your defaultProject config setting.`);
             console.error(`   To fix this, either:`);
             console.error(`     1. Use --project to specify a compatible project`);
-            console.error(`     2. Update config: agent2linear config set defaultProject <project-id>\n`);
+            console.error(
+              `     2. Update config: agent2linear config set defaultProject <project-id>\n`
+            );
           } else {
             console.error(`\n   Please choose a project from the "${teamCheck.name}" team\n`);
           }
@@ -440,6 +468,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
         console.log(`   ✓ Project: ${project.name}`);
       } catch (error) {
+        if (options.json) throw error;
         if (error instanceof Error && error.message.includes('compatibility')) {
           throw error; // Re-throw our validation errors
         }
@@ -465,6 +494,7 @@ async function createIssueNonInteractive(options: CreateOptions) {
       // Validate format: must be UUID
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(resolvedCycle)) {
+        if (options.json) throw new UsageError(`Invalid cycle format: ${options.cycle}`);
         console.error(`❌ Error: Invalid cycle format: "${options.cycle}"`);
         console.error(`   Cycle must be a valid UUID or alias that resolves to a UUID`);
         console.error(`   Example: --cycle 550e8400-e29b-41d4-a716-446655440000\n`);
@@ -487,11 +517,20 @@ async function createIssueNonInteractive(options: CreateOptions) {
           parentId = resolved;
           console.log(`   ✓ Parent issue found`);
         } else {
+          if (options.json) throw new NotFoundError(`Parent issue not found: ${options.parent}`);
           console.error(`❌ Error: Parent issue not found: "${options.parent}"`);
           console.error(`   Expected format: ENG-123 or UUID\n`);
           process.exit(1);
         }
       } catch (error) {
+        if (options.json) {
+          if (isAuthenticationError(error)) throw error;
+          throw error instanceof CliError
+            ? error
+            : new UsageError(`Invalid parent issue identifier: ${options.parent}`, {
+                cause: error,
+              });
+        }
         console.error(`❌ Error: Invalid parent issue identifier: "${options.parent}"`);
         console.error(`   ${error instanceof Error ? error.message : 'Unknown error'}`);
         console.error(`   Expected format: ENG-123 or UUID\n`);
@@ -541,8 +580,18 @@ async function createIssueNonInteractive(options: CreateOptions) {
 
     // Dry-run mode: print payload and exit without creating
     if (options.dryRun) {
+      const workspace = requireWorkspace(resolveActiveWorkspace());
+      const plan = {
+        dryRun: true,
+        operation: 'issue.create',
+        workspace: workspaceForJson(workspace),
+        issue: issueData,
+        ancillary: { openInBrowser: options.web === true },
+        validation: { localWrites: false, serverMutation: false },
+      };
       console.error('\n[dry-run] Would create issue with:');
-      console.log(JSON.stringify(issueData, null, 2));
+      restoreLog();
+      console.log(JSON.stringify(plan, null, 2));
       return;
     }
 
@@ -559,9 +608,13 @@ async function createIssueNonInteractive(options: CreateOptions) {
       restoreLog();
       const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
       console.log(
-        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), issue: result }, null, 2)
+        JSON.stringify(
+          { ok: true, workspace: workspaceForJson(ws, urlKey), issue: result },
+          null,
+          2
+        )
       );
-      process.exit(0);
+      return;
     }
 
     // Display success message
@@ -578,8 +631,13 @@ async function createIssueNonInteractive(options: CreateOptions) {
       process.exit(0);
     }
   } catch (error) {
+    if (options.json) throw error;
+    if (error instanceof CliError) throw error;
+    if (isAuthenticationError(error)) throw error;
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
+  } finally {
+    restoreLog();
   }
 }
 
@@ -615,5 +673,7 @@ function displaySuccess(
  */
 export async function createIssueCommand(options: CreateOptions = {}) {
   // Non-interactive mode (interactive mode comes in M15.6)
-  await createIssueNonInteractive(options);
+  await withCacheWritesSuppressed(options.dryRun === true, () =>
+    createIssueNonInteractive(options)
+  );
 }

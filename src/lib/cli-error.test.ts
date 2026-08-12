@@ -5,14 +5,24 @@ import {
   CliError,
   ConflictError,
   InvalidCursorError,
+  isAuthenticationError,
   normalizeCliError,
   NotFoundError,
   renderCliError,
   RuntimeError,
   UsageError,
 } from './cli-error.js';
+import {
+  configureDiagnostics,
+  configureDiagnosticsFromArgv,
+  logger,
+  resetDiagnostics,
+} from './logger.js';
+import { registerSecret, resetRegisteredSecrets } from './redaction.js';
 
 afterEach(() => {
+  resetDiagnostics();
+  resetRegisteredSecrets();
   vi.restoreAllMocks();
 });
 
@@ -33,6 +43,8 @@ describe('typed CLI errors', () => {
 
   it('[CPH-OUT-EXIT-4] represents an authentication or authorization failure', () => {
     expect(new AuthError('authentication required')).toMatchObject({ code: 'auth', exitCode: 4 });
+    expect(isAuthenticationError(new Error('Linear API key not found.'))).toBe(true);
+    expect(isAuthenticationError(new Error('request timed out'))).toBe(false);
   });
 
   it('[CPH-OUT-EXIT-5] represents conflict and invalid-cursor failures', () => {
@@ -148,5 +160,53 @@ describe('renderCliError', () => {
 
     expect(stderr).toHaveBeenCalledOnce();
     expect(stderr).toHaveBeenCalledWith('error: request failed\n');
+  });
+
+  it('adds sanitized bug context and stack only for explicit human debug', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    configureDiagnostics({ debug: true, quiet: true });
+    registerSecret('opaque-debug-secret');
+
+    renderCliError(new RuntimeError('failed with opaque-debug-secret'), 'table');
+
+    expect(stdout).not.toHaveBeenCalled();
+    expect(stderr).toHaveBeenCalledOnce();
+    const rendered = String(stderr.mock.calls[0][0]);
+    expect(rendered).toContain('debug: agent2linear');
+    expect(rendered).toContain('RuntimeError');
+    expect(rendered).toContain('[REDACTED]');
+    expect(rendered).not.toContain('opaque-debug-secret');
+  });
+
+  it('nests sanitized debug data inside the one JSON error document', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    configureDiagnostics({ debug: true });
+    registerSecret('opaque-json-secret');
+
+    renderCliError(new RuntimeError('failed with opaque-json-secret'), 'json');
+
+    expect(stderr).toHaveBeenCalledOnce();
+    const rendered = String(stderr.mock.calls[0][0]);
+    const parsed = JSON.parse(rendered);
+    expect(parsed.error.debug.context).toMatchObject({ cli: 'agent2linear' });
+    expect(parsed.error.debug.stack).toContain('[REDACTED]');
+    expect(rendered).not.toContain('opaque-json-secret');
+  });
+
+  it('retains requested verbose diagnostics inside one JSON failure document', () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    configureDiagnosticsFromArgv(['-v', '--json']);
+    logger.operation('attempted operation');
+
+    renderCliError(new RuntimeError('request failed'), 'json');
+
+    expect(stderr).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(stderr.mock.calls[0][0]))).toMatchObject({
+      error: {
+        code: 'runtime',
+        diagnostics: ['[verbose] attempted operation'],
+      },
+    });
   });
 });

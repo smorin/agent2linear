@@ -226,6 +226,30 @@ describe('runOverrideEdit', () => {
     expect(globalRules()[0].defaultTeam).toBe('frontend');
   });
 
+  it('[RLS-SAFE-DRYRUN] emits a self-identifying JSON plan without writing', () => {
+    seedGlobal([{ id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }]);
+    const log = vi.spyOn(console, 'log');
+    runOverrideEdit('t1', {
+      set: ['defaultTeam=mobile'],
+      global: true,
+      dryRun: true,
+      json: true,
+    });
+
+    expect(JSON.parse(String(log.mock.calls[0][0]))).toEqual({
+      dryRun: true,
+      operation: 'config.override.edit',
+      scope: 'global',
+      override: {
+        label: 't1',
+        index: 0,
+        rule: { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'mobile' },
+      },
+      validation: { localWrites: false },
+    });
+    expect(globalRules()[0].defaultTeam).toBe('frontend');
+  });
+
   it('--dry-run human output redacts hand-edited secret-named keys', () => {
     seedGlobal([
       {

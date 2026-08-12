@@ -9,8 +9,10 @@ import { join, resolve } from 'node:path';
 
 import { getLinearClient } from '../../src/lib/api/client.js';
 import { getApiKey } from '../../src/lib/config.js';
+import { assertLiveOrganizationIdentity } from './live-identity.js';
 
 const EXPECTED_ORGANIZATION = 'ConceptM';
+const EXPECTED_ORGANIZATION_URL_KEY = 'conceptm';
 const repo = resolve(process.cwd());
 const cli = join(repo, 'dist/index.js');
 const tempRoot = mkdtempSync(join(tmpdir(), 'a2l-m33-live-'));
@@ -74,6 +76,39 @@ function includesId(result: Record<string, any>, id: string): boolean {
   );
 }
 
+async function waitForLifecycleFiltering(
+  kind: 'issue' | 'project',
+  id: string,
+  activeArgs: string[],
+  includeRetiredArgs: string[]
+): Promise<void> {
+  const attempts = 5;
+  let activeContainsId = false;
+  let includeRetiredContainsId = false;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const activeLabels = runJson(activeArgs);
+    const allLabels = runJson(includeRetiredArgs);
+    activeContainsId = includesId(activeLabels, id);
+    includeRetiredContainsId = includesId(allLabels, id);
+    if (!activeContainsId && includeRetiredContainsId) return;
+    if (attempt < attempts) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  throw new Error(
+    kind +
+      '-label active/include-retired filtering failed after ' +
+      attempts +
+      ' attempts (active=' +
+      String(activeContainsId) +
+      ', includeRetired=' +
+      String(includeRetiredContainsId) +
+      ')'
+  );
+}
+
 function verifyLabelTraversal(
   kind: 'issue' | 'project',
   color: string,
@@ -88,7 +123,7 @@ function verifyLabelTraversal(
     color,
     '--include-retired',
   ];
-  const first = runJson([...base, '--limit', '1', '--format', 'json']);
+  const first = runJson([...base, '--limit', '1', '--json']);
   if (
     first.labels?.length !== 1 ||
     first.pageInfo?.hasNextPage !== true ||
@@ -107,19 +142,10 @@ function verifyLabelTraversal(
     '1',
     '--after',
     cursor,
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
-  const remaining = runJson([
-    ...base,
-    '--after',
-    cursor,
-    '--all',
-    '--format',
-    'json',
-    '--no-cursor-history',
-  ]);
+  const remaining = runJson([...base, '--after', cursor, '--all', '--json', '--no-cursor-history']);
   const traversedIds = [
     first.labels[0]?.id,
     ...(remaining.labels ?? []).map((label: { id: string }) => label.id),
@@ -183,17 +209,15 @@ const cleanupErrors: string[] = [];
 try {
   const organization = await client.organization;
   const identity = run(['whoami']);
-  if (
-    organization.name !== EXPECTED_ORGANIZATION ||
-    !identity.includes('Organization: ' + EXPECTED_ORGANIZATION) ||
-    !identity.includes('Active:       ' + EXPECTED_ORGANIZATION)
-  ) {
+  if (organization.name !== EXPECTED_ORGANIZATION) {
     throw new Error(
-      'Fail-closed: M33 live writes require the exact ' +
-        EXPECTED_ORGANIZATION +
-        ' organization and active workspace'
+      'Fail-closed: M33 live writes require the exact ' + EXPECTED_ORGANIZATION + ' organization'
     );
   }
+  assertLiveOrganizationIdentity(identity, {
+    organizationName: EXPECTED_ORGANIZATION,
+    organizationUrlKey: EXPECTED_ORGANIZATION_URL_KEY,
+  });
   process.stderr.write('M33 live: ConceptM identity confirmed\n');
 
   const teams = await client.teams({ first: 50 });
@@ -271,8 +295,7 @@ try {
     '--color',
     projectColor,
     '--all',
-    '--format',
-    'json',
+    '--json',
     '--no-cursor-history',
   ]);
   if (fixtureIds.projectLabels.some(id => !includesId(projectCatalog, id))) {
@@ -290,37 +313,33 @@ try {
   if (typeof retiredIssue.label?.retiredAt !== 'string' || retiredIssue.label.archivedAt !== null) {
     throw new Error('issue-label retire did not set retiredAt independently');
   }
-  const activeIssueLabels = runJson([
-    'issue-labels',
-    'list',
-    '--team',
-    team.id,
-    '--color',
-    issueColor,
-    '--all',
-    '--format',
-    'json',
-    '--no-cursor-history',
-  ]);
-  const allIssueLabels = runJson([
-    'issue-labels',
-    'list',
-    '--team',
-    team.id,
-    '--color',
-    issueColor,
-    '--include-retired',
-    '--all',
-    '--format',
-    'json',
-    '--no-cursor-history',
-  ]);
-  if (
-    includesId(activeIssueLabels, fixtureIds.issueLabels[0]) ||
-    !includesId(allIssueLabels, fixtureIds.issueLabels[0])
-  ) {
-    throw new Error('issue-label active/include-retired filtering failed');
-  }
+  await waitForLifecycleFiltering(
+    'issue',
+    fixtureIds.issueLabels[0],
+    [
+      'issue-labels',
+      'list',
+      '--team',
+      team.id,
+      '--color',
+      issueColor,
+      '--all',
+      '--json',
+      '--no-cursor-history',
+    ],
+    [
+      'issue-labels',
+      'list',
+      '--team',
+      team.id,
+      '--color',
+      issueColor,
+      '--include-retired',
+      '--all',
+      '--json',
+      '--no-cursor-history',
+    ]
+  );
   const restoredIssue = runJson([
     'issue-labels',
     'restore',
@@ -346,33 +365,21 @@ try {
   ) {
     throw new Error('project-label retire did not set retiredAt independently');
   }
-  const activeProjectLabels = runJson([
-    'project-labels',
-    'list',
-    '--color',
-    projectColor,
-    '--all',
-    '--format',
-    'json',
-    '--no-cursor-history',
-  ]);
-  const allProjectLabels = runJson([
-    'project-labels',
-    'list',
-    '--color',
-    projectColor,
-    '--include-retired',
-    '--all',
-    '--format',
-    'json',
-    '--no-cursor-history',
-  ]);
-  if (
-    includesId(activeProjectLabels, fixtureIds.projectLabels[0]) ||
-    !includesId(allProjectLabels, fixtureIds.projectLabels[0])
-  ) {
-    throw new Error('project-label active/include-retired filtering failed');
-  }
+  await waitForLifecycleFiltering(
+    'project',
+    fixtureIds.projectLabels[0],
+    ['project-labels', 'list', '--color', projectColor, '--all', '--json', '--no-cursor-history'],
+    [
+      'project-labels',
+      'list',
+      '--color',
+      projectColor,
+      '--include-retired',
+      '--all',
+      '--json',
+      '--no-cursor-history',
+    ]
+  );
   const restoredProject = runJson([
     'project-labels',
     'restore',

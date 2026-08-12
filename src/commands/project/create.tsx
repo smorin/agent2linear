@@ -1,12 +1,21 @@
 import { Box, render, Text } from 'ink';
-import React, { useEffect,useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { withCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
+import {
+  CliError,
+  isAuthenticationError,
+  NotFoundError,
+  RuntimeError,
+  UsageError,
+} from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { parseDateForCommand, validateResolutionOverride } from '../../lib/date-parser.js';
 import { readContentFile } from '../../lib/file-utils.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import {
   createExternalLink,
   createProject,
@@ -22,6 +31,7 @@ import {
 import { silenceStdoutWhile } from '../../lib/output.js';
 import type { WorkspaceResolution } from '../../lib/types.js';
 import { workspaceForJson } from '../../lib/workspace-banner.js';
+import { resolveActiveWorkspace } from '../../lib/workspace-resolver.js';
 import { ProjectForm } from '../../ui/components/ProjectForm.js';
 
 interface CreateOptions {
@@ -59,19 +69,29 @@ interface CreateOptions {
   yes?: boolean; // Skip the auto-detected-workspace confirmation
 }
 
+function requireWorkspace(resolution: WorkspaceResolution): WorkspaceResolution {
+  if (resolution.denied) {
+    throw new RuntimeError(resolution.denied.reason + ' — ' + resolution.denied.hint);
+  }
+  return resolution;
+}
+
 // Non-interactive mode
 async function createProjectNonInteractive(options: CreateOptions) {
   // Under --json, silence stdout progress so only the final JSON object lands on
-  // stdout (errors still go to stderr). --dry-run keeps its own payload output.
-  const restoreLog = silenceStdoutWhile(!!options.json && !options.dryRun);
+  // stdout. Restore immediately before either final JSON result.
+  const restoreLog = silenceStdoutWhile(!!options.json);
+  let stdoutRestored = false;
+  const restoreStdout = () => {
+    if (!stdoutRestored) {
+      restoreLog();
+      stdoutRestored = true;
+    }
+  };
   try {
     // Validate mutual exclusivity of --content and --content-file
     if (options.content && options.contentFile) {
-      console.error('❌ Error: Cannot use both --content and --content-file\n');
-      console.error('Choose one:');
-      console.error('  --content "markdown text"  (inline content)');
-      console.error('  --content-file path/to/file.md  (file content)\n');
-      process.exit(1);
+      throw new UsageError('Cannot use both --content and --content-file');
     }
 
     // Read content from file if --content-file is provided
@@ -79,6 +99,8 @@ async function createProjectNonInteractive(options: CreateOptions) {
     if (options.contentFile) {
       const fileResult = await readContentFile(options.contentFile);
       if (!fileResult.success) {
+        if (options.json)
+          throw new RuntimeError(fileResult.error ?? 'Could not read project content file');
         console.error(`❌ ${fileResult.error}`);
         process.exit(1);
       }
@@ -88,37 +110,35 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     // Validate required fields
     if (!options.title) {
-      console.error('❌ Error: --title is required\n');
-      console.error('Provide the title:');
-      console.error('  agent2linear proj create --title "My Project"\n');
-      console.error('Or use interactive mode:');
-      console.error('  agent2linear proj create --interactive\n');
-      console.error('For all options, see:');
-      console.error('  agent2linear project create --help\n');
-      process.exit(1);
+      throw new UsageError('--title is required; provide a title or use --interactive');
     }
 
     const title = options.title.trim();
 
     // Validate title length
     if (title.length < 3) {
-      console.error('❌ Error: Title must be at least 3 characters');
-      process.exit(1);
+      throw new UsageError('Title must be at least 3 characters');
     }
 
     // Get config for defaults
     const config = getConfig();
 
-    // Prewarm cache with all entities needed for validation (reduces API calls by 60-70%)
-    // Only if enabled in config (default: true)
+    let initiativeId = options.initiative || config.defaultInitiative;
+    let teamId = options.team || config.defaultTeam;
+    let templateId = options.template || config.defaultProjectTemplate;
+
+    if (!teamId) {
+      throw new UsageError(
+        'Team is required for project creation; pass --team <id|alias> or configure defaultTeam'
+      );
+    }
+
+    // Prewarm only after all required local input is present.
     if (config.prewarmCacheOnCreate !== false) {
       console.log('🔄 Loading workspace data...');
       const { prewarmProjectCreation } = await import('../../lib/batch-fetcher.js');
       await prewarmProjectCreation();
     }
-    let initiativeId = options.initiative || config.defaultInitiative;
-    let teamId = options.team || config.defaultTeam;
-    let templateId = options.template || config.defaultProjectTemplate;
 
     // Resolve aliases if provided
     if (initiativeId) {
@@ -151,12 +171,20 @@ async function createProjectNonInteractive(options: CreateOptions) {
       console.log(`🔍 Validating template: ${templateId}...`);
       const template = await getTemplateById(templateId);
       if (!template) {
+        if (options.json) throw new NotFoundError(`project template not found: ${templateId}`);
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('template', templateId, 'templates list projects'));
         process.exit(1);
       }
       if (template.type !== 'project') {
-        console.error(`❌ Template type mismatch: "${template.name}" is a ${template.type} template, not a project template`);
+        if (options.json) {
+          throw new UsageError(
+            `Template type mismatch: "${template.name}" is a ${template.type} template, not a project template`
+          );
+        }
+        console.error(
+          `❌ Template type mismatch: "${template.name}" is a ${template.type} template, not a project template`
+        );
         process.exit(1);
       }
       console.log(`   ✓ Template found: ${template.name}`);
@@ -169,25 +197,13 @@ async function createProjectNonInteractive(options: CreateOptions) {
       statusId = await resolveStatusOrThrow(statusId, 'project-status');
     }
 
-    // Validate team is provided (REQUIRED) - check this before doing expensive API calls
-    if (!teamId) {
-      console.error('❌ Error: Team is required for project creation\n');
-      console.error('Please specify a team using one of these options:\n');
-      console.error('  1. Use --team flag:');
-      console.error(`     $ agent2linear proj new --title "${title}" --team team_xxx\n`);
-      console.error('  2. Set a default team:');
-      console.error('     $ agent2linear teams select');
-      console.error('     $ agent2linear config set defaultTeam team_xxx\n');
-      console.error('  3. List available teams:');
-      console.error('     $ agent2linear teams list\n');
-      process.exit(1);
-    }
-
     // Validate initiative if provided
     if (initiativeId) {
       console.log(`🔍 Validating initiative: ${initiativeId}...`);
       const initiativeCheck = await validateInitiativeExists(initiativeId);
       if (!initiativeCheck.valid) {
+        if (options.json)
+          throw new RuntimeError(initiativeCheck.error ?? 'Initiative validation failed');
         console.error(`❌ ${initiativeCheck.error}`);
         process.exit(1);
       }
@@ -198,6 +214,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
     console.log(`🔍 Validating team: ${teamId}...`);
     const teamCheck = await validateTeamExists(teamId);
     if (!teamCheck.valid) {
+      if (options.json) throw new RuntimeError(teamCheck.error ?? 'Team validation failed');
       console.error(`❌ ${teamCheck.error}`);
       process.exit(1);
     }
@@ -208,6 +225,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
     // Check for duplicates
     const exists = await getProjectByName(title);
     if (exists) {
+      if (options.json) throw new RuntimeError(`A project named "${title}" already exists`);
       console.error(`❌ Error: A project named "${title}" already exists`);
       console.error('   Please choose a different name');
       process.exit(1);
@@ -238,6 +256,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
       const { validateAndNormalizeColor } = await import('../../lib/validators.js');
       const colorResult = validateAndNormalizeColor(options.color);
       if (!colorResult.valid) {
+        if (options.json) throw new UsageError(colorResult.error ?? 'Invalid project color');
         console.error(colorResult.error);
         process.exit(1);
       }
@@ -277,6 +296,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
         const member = await resolveMemberIdentifier(identifier, resolveAlias);
 
         if (!member) {
+          if (options.json) throw new NotFoundError(`project member not found: ${identifier}`);
           const { formatEntityNotFoundError } = await import('../../lib/validators.js');
           console.error(formatEntityNotFoundError('member', identifier, 'members list'));
           console.error(`   Note: Tried alias lookup, ID lookup, and email lookup`);
@@ -308,6 +328,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
       const member = await resolveMemberIdentifier(options.lead, resolveAlias);
 
       if (!member) {
+        if (options.json) throw new NotFoundError(`lead member not found: ${options.lead}`);
         const { formatEntityNotFoundError } = await import('../../lib/validators.js');
         console.error(formatEntityNotFoundError('lead member', options.lead, 'members list'));
         console.error(`   Note: Tried alias lookup, ID lookup, and email lookup`);
@@ -330,14 +351,18 @@ async function createProjectNonInteractive(options: CreateOptions) {
       leadId = undefined;
     } else {
       // Check config setting for auto-assign
-      if (config.defaultAutoAssignLead !== false) {  // Default is true
+      if (config.defaultAutoAssignLead !== false) {
+        // Default is true
         try {
           const currentUser = await getCurrentUser();
           leadId = currentUser.id;
           console.log(`👤 Auto-assigning lead to: ${currentUser.name}`);
         } catch (error) {
-          console.warn(`⚠️  Warning: Could not auto-assign lead: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          console.warn('   Continuing without lead assignment.');
+          const message = `Could not auto-assign lead: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          if (!options.json) {
+            console.warn(`⚠️  Warning: ${message}`);
+            console.warn('   Continuing without lead assignment.');
+          }
           leadId = undefined;
         }
       }
@@ -349,13 +374,15 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     if (options.startDate) {
       startDateParsed = parseDateForCommand(options.startDate, 'start date');
-      console.log(`📅 Start date: ${startDateParsed.displayText} (${startDateParsed.date}${startDateParsed.resolution ? `, resolution: ${startDateParsed.resolution}` : ''})`);
+      console.log(
+        `📅 Start date: ${startDateParsed.displayText} (${startDateParsed.date}${startDateParsed.resolution ? `, resolution: ${startDateParsed.resolution}` : ''})`
+      );
 
       // Validate resolution override (M22.1)
       const startValidation = validateResolutionOverride(
         options.startDate,
         startDateParsed.resolution,
-        options.startDateResolution,
+        options.startDateResolution
       );
       if (startValidation.warning) {
         console.log(`⚠️  ${startValidation.warning}`);
@@ -366,13 +393,15 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     if (options.targetDate) {
       targetDateParsed = parseDateForCommand(options.targetDate, 'target date');
-      console.log(`📅 Target date: ${targetDateParsed.displayText} (${targetDateParsed.date}${targetDateParsed.resolution ? `, resolution: ${targetDateParsed.resolution}` : ''})`);
+      console.log(
+        `📅 Target date: ${targetDateParsed.displayText} (${targetDateParsed.date}${targetDateParsed.resolution ? `, resolution: ${targetDateParsed.resolution}` : ''})`
+      );
 
       // Validate resolution override (M22.1)
       const targetValidation = validateResolutionOverride(
         options.targetDate,
         targetDateParsed.resolution,
-        options.targetDateResolution,
+        options.targetDateResolution
       );
       if (targetValidation.warning) {
         console.log(`⚠️  ${targetValidation.warning}`);
@@ -406,8 +435,28 @@ async function createProjectNonInteractive(options: CreateOptions) {
 
     // Dry-run mode: print payload and exit without creating
     if (options.dryRun) {
+      const workspace = requireWorkspace(resolveActiveWorkspace());
+      const plan = {
+        dryRun: true,
+        operation: 'project.create',
+        workspace: workspaceForJson(workspace),
+        project: projectData,
+        ancillary: {
+          links:
+            options.link === undefined
+              ? []
+              : Array.isArray(options.link)
+                ? options.link
+                : [options.link],
+          dependsOn: options.dependsOn ?? null,
+          blocks: options.blocks ?? null,
+          dependencies: options.dependency ?? [],
+        },
+        validation: { localWrites: false, serverMutation: false },
+      };
       console.error('\n[dry-run] Would create project with:');
-      console.log(JSON.stringify(projectData, null, 2));
+      restoreStdout();
+      console.log(JSON.stringify(plan, null, 2));
       return;
     }
 
@@ -427,7 +476,7 @@ async function createProjectNonInteractive(options: CreateOptions) {
         const parsedLinks = parsePipeDelimitedArray(linkArgs);
         const linksToCreate = parsedLinks.map(({ key, value }) => ({
           url: key,
-          label: value || ''
+          label: value || '',
         }));
 
         console.log(`\n🔗 Creating ${linksToCreate.length} external link(s)...`);
@@ -441,16 +490,24 @@ async function createProjectNonInteractive(options: CreateOptions) {
             });
             console.log(`   ✓ Link created: ${label || url}`);
           } catch (error) {
-            console.error(`   ✗ Failed to create link "${url}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(
+              `   ✗ Failed to create link "${url}": ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
           }
         }
       }
     }
 
     // M23: Create project dependencies if provided
-    if (options.dependsOn || options.blocks || (options.dependency && options.dependency.length > 0)) {
+    if (
+      options.dependsOn ||
+      options.blocks ||
+      (options.dependency && options.dependency.length > 0)
+    ) {
       const { getLinearClient, createProjectRelation } = await import('../../lib/linear-client.js');
-      const { resolveDependencyProjects, parseAdvancedDependency } = await import('../../lib/parsers.js');
+      const { resolveDependencyProjects, parseAdvancedDependency } = await import(
+        '../../lib/parsers.js'
+      );
       const client = getLinearClient();
 
       const dependenciesToCreate: Array<{
@@ -468,7 +525,9 @@ async function createProjectNonInteractive(options: CreateOptions) {
           for (const projectId of projectIds) {
             // Validate not self-referential
             if (projectId === result.id) {
-              console.error(`\n⚠️  Warning: Skipping self-referential dependency (project cannot depend on itself)`);
+              console.error(
+                `\n⚠️  Warning: Skipping self-referential dependency (project cannot depend on itself)`
+              );
               continue;
             }
             dependenciesToCreate.push({
@@ -479,7 +538,9 @@ async function createProjectNonInteractive(options: CreateOptions) {
             });
           }
         } catch (error) {
-          console.error(`\n❌ Error parsing --depends-on: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.error(
+            `\n❌ Error parsing --depends-on: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
         }
       }
 
@@ -490,7 +551,9 @@ async function createProjectNonInteractive(options: CreateOptions) {
           for (const projectId of projectIds) {
             // Validate not self-referential
             if (projectId === result.id) {
-              console.error(`\n⚠️  Warning: Skipping self-referential dependency (project cannot block itself)`);
+              console.error(
+                `\n⚠️  Warning: Skipping self-referential dependency (project cannot block itself)`
+              );
               continue;
             }
             // For "blocks", create a dependency where the OTHER project depends on THIS project
@@ -503,7 +566,9 @@ async function createProjectNonInteractive(options: CreateOptions) {
             });
           }
         } catch (error) {
-          console.error(`\n❌ Error parsing --blocks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          console.error(
+            `\n❌ Error parsing --blocks: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
         }
       }
 
@@ -524,14 +589,18 @@ async function createProjectNonInteractive(options: CreateOptions) {
               type: 'advanced',
             });
           } catch (error) {
-            console.error(`\n❌ Error parsing --dependency "${depSpec}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(
+              `\n❌ Error parsing --dependency "${depSpec}": ${error instanceof Error ? error.message : 'Unknown error'}`
+            );
           }
         }
       }
 
       // Create all dependencies
       if (dependenciesToCreate.length > 0) {
-        console.log(`\n🔗 Creating ${dependenciesToCreate.length} project dependenc${dependenciesToCreate.length === 1 ? 'y' : 'ies'}...`);
+        console.log(
+          `\n🔗 Creating ${dependenciesToCreate.length} project dependenc${dependenciesToCreate.length === 1 ? 'y' : 'ies'}...`
+        );
 
         const successfulDeps: string[] = [];
         const failedDeps: Array<{ project: string; error: string }> = [];
@@ -546,9 +615,12 @@ async function createProjectNonInteractive(options: CreateOptions) {
               relatedAnchorType: dep.relatedAnchorType,
             });
 
-            const typeLabel = dep.type === 'depends-on' ? 'depends on' :
-                             dep.type === 'blocks' ? 'blocks' :
-                             `${dep.anchorType}→${dep.relatedAnchorType}`;
+            const typeLabel =
+              dep.type === 'depends-on'
+                ? 'depends on'
+                : dep.type === 'blocks'
+                  ? 'blocks'
+                  : `${dep.anchorType}→${dep.relatedAnchorType}`;
             console.log(`   ✓ Dependency created: ${typeLabel} ${relation.relatedProject.name}`);
             successfulDeps.push(relation.relatedProject.name);
           } catch (error) {
@@ -562,34 +634,52 @@ async function createProjectNonInteractive(options: CreateOptions) {
             if (errorMsg.includes('Relation exists') || errorMsg.includes('already exists')) {
               console.log(`   ⚠️  Dependency already exists with ${dep.relatedProjectId}`);
             } else {
-              console.error(`   ✗ Failed to create dependency with ${dep.relatedProjectId}: ${errorMsg}`);
+              console.error(
+                `   ✗ Failed to create dependency with ${dep.relatedProjectId}: ${errorMsg}`
+              );
             }
           }
         }
 
         // Summary
         if (failedDeps.length > 0) {
-          console.log(`\n✅ Created ${successfulDeps.length} of ${dependenciesToCreate.length} dependencies`);
-          if (failedDeps.some(f => !f.error.includes('Relation exists') && !f.error.includes('already exists'))) {
+          console.log(
+            `\n✅ Created ${successfulDeps.length} of ${dependenciesToCreate.length} dependencies`
+          );
+          if (
+            failedDeps.some(
+              f => !f.error.includes('Relation exists') && !f.error.includes('already exists')
+            )
+          ) {
             console.log(`\n💡 Tip: Fix failed dependencies with:`);
-            console.log(`   agent2linear project dependencies add ${result.id} --depends-on <project-id>`);
+            console.log(
+              `   agent2linear project dependencies add ${result.id} --depends-on <project-id>`
+            );
           }
         }
       }
     }
 
     if (options.json) {
-      restoreLog();
+      restoreStdout();
       const urlKey = result.url.split('linear.app/')[1]?.split('/')[0];
       console.log(
-        JSON.stringify({ ok: true, workspace: workspaceForJson(ws, urlKey), project: result }, null, 2)
+        JSON.stringify(
+          { ok: true, workspace: workspaceForJson(ws, urlKey), project: result },
+          null,
+          2
+        )
       );
-      process.exit(0);
+      return;
     }
 
     // Display success message
     displaySuccess(result, ws);
   } catch (error) {
+    restoreStdout();
+    if (options.json) throw error;
+    if (error instanceof CliError) throw error;
+    if (isAuthenticationError(error)) throw error;
     console.error(`\n❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }
@@ -623,7 +713,9 @@ function App({ options: _options }: { options: CreateOptions }) {
         // Check for duplicates
         const exists = await getProjectByName(projectData.name);
         if (exists) {
-          setError(`A project named "${projectData.name}" already exists. Please choose a different name.`);
+          setError(
+            `A project named "${projectData.name}" already exists. Please choose a different name.`
+          );
           setChecking(false);
           process.exit(1);
           return;
@@ -676,27 +768,29 @@ function App({ options: _options }: { options: CreateOptions }) {
   if (result) {
     return (
       <Box flexDirection="column">
-        <Text color="green" bold>✅ Project created successfully!</Text>
+        <Text color="green" bold>
+          ✅ Project created successfully!
+        </Text>
         <Box marginTop={1}>
-          <Text>   Name: {result.name}</Text>
+          <Text> Name: {result.name}</Text>
         </Box>
         <Box>
-          <Text>   ID: {result.id}</Text>
+          <Text> ID: {result.id}</Text>
         </Box>
         <Box>
-          <Text>   URL: {result.url}</Text>
+          <Text> URL: {result.url}</Text>
         </Box>
         <Box>
-          <Text>   State: {result.state}</Text>
+          <Text> State: {result.state}</Text>
         </Box>
         {result.initiative && (
           <Box>
-            <Text>   Initiative: {result.initiative.name}</Text>
+            <Text> Initiative: {result.initiative.name}</Text>
           </Box>
         )}
         {result.team && (
           <Box>
-            <Text>   Team: {result.team.name}</Text>
+            <Text> Team: {result.team.name}</Text>
           </Box>
         )}
       </Box>
@@ -733,7 +827,20 @@ function displaySuccess(result: ProjectResult, ws?: WorkspaceResolution) {
   console.log('');
 }
 
-export async function createProjectCommand(options: CreateOptions = {}) {
+async function createProjectCommandInternal(options: CreateOptions = {}) {
+  if (options.dryRun && options.web) {
+    throw new UsageError('--web cannot be combined with --dry-run');
+  }
+  if (options.dryRun && options.interactive) {
+    throw new UsageError('--interactive cannot be combined with --dry-run');
+  }
+  if (options.json && options.web) {
+    throw new UsageError('--web cannot be combined with JSON output');
+  }
+  if (options.json && options.interactive) {
+    throw new UsageError('--interactive cannot be combined with JSON output');
+  }
+
   // Handle --web flag: open Linear in browser
   if (options.web) {
     try {
@@ -742,7 +849,10 @@ export async function createProjectCommand(options: CreateOptions = {}) {
       console.log('✓ Browser opened. Create your project in Linear.');
       process.exit(0);
     } catch (error) {
-      console.error('❌ Error opening browser:', error instanceof Error ? error.message : 'Unknown error');
+      console.error(
+        '❌ Error opening browser:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
       console.error('   Please visit https://linear.app/ manually.');
       process.exit(1);
     }
@@ -753,10 +863,17 @@ export async function createProjectCommand(options: CreateOptions = {}) {
   const isInteractive = options.interactive === true;
 
   if (isInteractive) {
+    requireInteractiveInput('project create');
     // Interactive mode with Ink
     render(<App options={options} />);
   } else {
     // Non-interactive mode (default)
     await createProjectNonInteractive(options);
   }
+}
+
+export async function createProjectCommand(options: CreateOptions = {}) {
+  return withCacheWritesSuppressed(options.dryRun === true, () =>
+    createProjectCommandInternal(options)
+  );
 }

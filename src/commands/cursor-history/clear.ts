@@ -1,4 +1,5 @@
 import { UsageError } from '../../lib/cli-error.js';
+import { noInputRequested } from '../../lib/interaction-policy.js';
 import {
   commandOutputMode,
   type CursorHistoryCommandDependencies,
@@ -26,7 +27,10 @@ export async function runCursorHistoryClear(
   }
 
   if (!options.yes) {
-    if (options.noInput || mode === 'json' || !dependencies.isInteractive()) {
+    if (noInputRequested(options.noInput)) {
+      throw new UsageError('cursor-history clear requires --yes when --no-input is set');
+    }
+    if (mode === 'json' || !dependencies.isInteractive()) {
       throw new UsageError('cursor-history clear requires --yes in non-interactive or JSON mode');
     }
     const confirmed = await dependencies.confirm(

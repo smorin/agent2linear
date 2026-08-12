@@ -1,3 +1,7 @@
+import { getDiagnosticState, takeDiagnosticBuffer } from './logger.js';
+import { redactText, redactValue } from './redaction.js';
+import { CLI_VERSION } from './version.js';
+
 export type CliErrorCode =
   | 'runtime'
   | 'usage'
@@ -68,11 +72,14 @@ export class CliError extends Error {
   readonly exitCode: CliExitCode;
 
   constructor(message: string, definition: CliErrorDefinition, options: CliErrorOptions = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    super(redactText(message), options.cause === undefined ? undefined : { cause: options.cause });
     this.name = new.target.name;
     this.code = definition.code;
     this.exitCode = definition.exitCode;
-    this.details = options.details === undefined ? undefined : toSafeJson(options.details);
+    this.details =
+      options.details === undefined
+        ? undefined
+        : (redactValue(toSafeJson(options.details)) as JsonValue);
   }
 }
 
@@ -175,6 +182,10 @@ function classifyProviderError(error: unknown): CliError | null {
   return null;
 }
 
+export function isAuthenticationError(error: unknown): boolean {
+  return error instanceof AuthError || classifyProviderError(error)?.code === 'auth';
+}
+
 export function normalizeCliError(error: unknown): CliError {
   if (error instanceof CliError) {
     return error;
@@ -216,10 +227,31 @@ export type ErrorOutputMode = 'table' | 'json' | 'tsv';
 
 export function renderCliError(error: unknown, mode: ErrorOutputMode): CliError {
   const normalized = normalizeCliError(error);
+  const bufferedDiagnostics = takeDiagnosticBuffer();
+  const debug = getDiagnosticState().debug
+    ? {
+        stack: redactText(
+          (error instanceof Error ? error.stack : undefined) ?? normalized.stack ?? normalized.message
+        ),
+        context: {
+          cli: 'agent2linear',
+          version: CLI_VERSION,
+          node: process.version,
+          platform: process.platform,
+          arch: process.arch,
+        },
+      }
+    : undefined;
 
   if (mode === 'json') {
     const envelope: {
-      error: { code: CliErrorCode; details?: JsonValue; message: string };
+      error: {
+        code: CliErrorCode;
+        debug?: JsonValue;
+        details?: JsonValue;
+        diagnostics?: JsonValue;
+        message: string;
+      };
     } = {
       error: {
         code: normalized.code,
@@ -229,9 +261,19 @@ export function renderCliError(error: unknown, mode: ErrorOutputMode): CliError 
     if (normalized.details !== undefined) {
       envelope.error.details = normalized.details;
     }
+    if (bufferedDiagnostics.length > 0) {
+      envelope.error.diagnostics = bufferedDiagnostics;
+    }
+    if (debug !== undefined) {
+      envelope.error.debug = redactValue(debug) as JsonValue;
+    }
     process.stderr.write(`${JSON.stringify(envelope)}\n`);
   } else {
-    process.stderr.write(`error: ${normalized.message}\n`);
+    const debugText =
+      debug === undefined
+        ? ''
+        : `debug: agent2linear ${CLI_VERSION} · ${process.version} · ${process.platform}/${process.arch}\n${debug.stack}\n`;
+    process.stderr.write(`error: ${normalized.message}\n${debugText}`);
   }
 
   return normalized;

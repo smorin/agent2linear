@@ -78,7 +78,11 @@ export function overrideSelector(location: ConfigLocation): string {
 /** Human-readable provenance label for a resolved field. */
 export function sourceLabel(location: ConfigLocation): string {
   if (location.type === 'override') {
-    const scopeLabel = location.scope === 'project' ? 'repo' : 'global';
+    const scopeLabel = location.path
+      ? `explicit config ${location.path}`
+      : location.scope === 'project'
+        ? 'repo'
+        : 'global';
     return `${scopeLabel} override ${overrideSelector(location)} (when ${JSON.stringify(location.when)})`;
   }
   if (location.type === 'project') {
@@ -86,6 +90,9 @@ export function sourceLabel(location: ConfigLocation): string {
   }
   if (location.type === 'profile') {
     return 'profile';
+  }
+  if (location.type === 'explicit') {
+    return `explicit config ${location.path}`;
   }
   if (location.type === 'global') {
     return 'global config';
@@ -235,6 +242,7 @@ export function buildExplainJson(data: ExplainData): Record<string, unknown> {
         {
           value: field.value ?? null,
           source: field.location.type,
+          ...(field.location.path !== undefined ? { path: field.location.path } : {}),
           ...(field.location.type === 'override'
             ? {
                 scope: field.location.scope,

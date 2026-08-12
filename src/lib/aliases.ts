@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 
+import { isAuthenticationError } from './cli-error.js';
 import { getInvocationContext } from './invocation-context.js';
 import {
   getCycleById,
@@ -522,6 +523,7 @@ async function validateEntity(
         return { valid: false, error: 'Invalid entity type' };
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return {
       valid: false,
       error: error instanceof Error ? error.message : 'Unknown validation error',

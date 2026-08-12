@@ -50,7 +50,11 @@ describe('runOverrideAdd', () => {
     });
     const rules = readConfigForScope('project').overrides ?? [];
     expect(rules).toEqual([
-      { id: 'web-aliases', when: { repo: 'acme/web' }, aliases: { teams: { frontend: 'team_123' } } },
+      {
+        id: 'web-aliases',
+        when: { repo: 'acme/web' },
+        aliases: { teams: { frontend: 'team_123' } },
+      },
     ]);
   });
 
@@ -59,7 +63,7 @@ describe('runOverrideAdd', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
     runOverrideAdd('t1', { whenRepo: 'acme/mobile', set: ['defaultTeam=mobile'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(5);
     expect(err.mock.calls.flat().join(' ')).toMatch(/already exists/);
     // The first rule is untouched (no second rule appended).
     expect(readConfigForScope('global').overrides).toHaveLength(1);
@@ -70,12 +74,16 @@ describe('runOverrideAdd', () => {
     mkdirSync(cfgDir, { recursive: true });
     writeFileSync(
       join(cfgDir, 'config.json'),
-      JSON.stringify({ overrides: [null, { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }] }, null, 2)
+      JSON.stringify(
+        { overrides: [null, { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' }] },
+        null,
+        2
+      )
     );
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
     runOverrideAdd('t1', { whenRepo: 'acme/mobile', set: ['defaultTeam=mobile'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(5);
     expect(err.mock.calls.flat().join(' ')).toMatch(/already exists/);
     expect(readConfigForScope('global').overrides).toHaveLength(2);
   });
@@ -84,7 +92,7 @@ describe('runOverrideAdd', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
     runOverrideAdd('t1', { whenRepo: 'acme/web', set: ['apiKey=lin_api_x'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/cannot set "apiKey"/);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });
@@ -93,7 +101,7 @@ describe('runOverrideAdd', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
     runOverrideAdd('t1', { set: ['defaultTeam=frontend'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/at least one match criterion/);
   });
 
@@ -101,14 +109,14 @@ describe('runOverrideAdd', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
     runOverrideAdd('t1', { whenRepo: 'acme/web', global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/at least one value/);
   });
 
   it('rejects a label starting with "#"', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     runOverrideAdd('#0', { whenRepo: 'acme/web', set: ['defaultTeam=frontend'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
   });
 
   it('--dry-run writes nothing', () => {
@@ -121,6 +129,30 @@ describe('runOverrideAdd', () => {
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });
 
+  it('[RLS-SAFE-DRYRUN] emits a self-identifying JSON plan without writing', () => {
+    const log = vi.spyOn(console, 'log');
+    runOverrideAdd('t1', {
+      whenRepo: 'acme/web',
+      set: ['defaultTeam=frontend'],
+      global: true,
+      dryRun: true,
+      json: true,
+    });
+
+    expect(JSON.parse(String(log.mock.calls[0][0]))).toEqual({
+      dryRun: true,
+      operation: 'config.override.add',
+      scope: 'global',
+      override: {
+        label: 't1',
+        index: 0,
+        rule: { id: 't1', when: { repo: 'acme/web' }, defaultTeam: 'frontend' },
+      },
+      validation: { localWrites: false },
+    });
+    expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
+  });
+
   it('--json emits a rule record on write as a bare object (single-fetch convention)', () => {
     const log = vi.spyOn(console, 'log');
     runOverrideAdd('t1', {
@@ -129,7 +161,7 @@ describe('runOverrideAdd', () => {
       global: true,
       json: true,
     });
-    const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+    const out = log.mock.calls.map(c => String(c[0])).join('\n');
     const parsed = JSON.parse(out);
     expect(parsed).toEqual({
       label: 't1',
@@ -143,7 +175,11 @@ describe('runOverrideAdd', () => {
     mkdirSync(cfgDir, { recursive: true });
     writeFileSync(
       join(cfgDir, 'config.json'),
-      JSON.stringify({ overrides: [{ when: { path: 'cli/**' }, defaultTeam: 'cli-team' }] }, null, 2)
+      JSON.stringify(
+        { overrides: [{ when: { path: 'cli/**' }, defaultTeam: 'cli-team' }] },
+        null,
+        2
+      )
     );
     runOverrideAdd('t1', { whenRepo: 'acme/web', set: ['defaultTeam=frontend'], global: true });
     const rules = readConfigForScope('global').overrides ?? [];
@@ -207,7 +243,7 @@ describe('runOverrideAdd', () => {
       set: ['defaultTeam=frontend'],
       global: true,
     });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/--when-json cannot be combined/);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });
@@ -215,7 +251,7 @@ describe('runOverrideAdd', () => {
   it('rejects flag-only add with no match criterion but allows --when-json {}', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     runOverrideAdd('x', { set: ['defaultTeam=frontend'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
     // --when-json {} is the sanctioned catch-all and is NOT rejected.
     runOverrideAdd('ca', { whenJson: '{}', set: ['defaultTeam=frontend'], global: true });
@@ -225,8 +261,12 @@ describe('runOverrideAdd', () => {
   it('rejects an unknown --when-json key before writing', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const err = vi.spyOn(console, 'error');
-    runOverrideAdd('x', { whenJson: '{"team":"eng"}', set: ['defaultTeam=frontend'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    runOverrideAdd('x', {
+      whenJson: '{"team":"eng"}',
+      set: ['defaultTeam=frontend'],
+      global: true,
+    });
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/unsupported `when` key "team"/);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });
@@ -234,7 +274,7 @@ describe('runOverrideAdd', () => {
   it('rejects an empty glob before writing', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     runOverrideAdd('x', { whenPath: '', set: ['defaultTeam=frontend'], global: true });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });
 
@@ -247,7 +287,7 @@ describe('runOverrideAdd', () => {
       set: ['defaultTeam=frontend'],
       global: true,
     });
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(exit).toHaveBeenCalledWith(2);
     expect(err.mock.calls.flat().join(' ')).toMatch(/use --when-json/);
     expect(readConfigForScope('global').overrides ?? []).toHaveLength(0);
   });

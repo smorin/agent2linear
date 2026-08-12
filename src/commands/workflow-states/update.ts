@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { CliError, isAuthenticationError, UsageError } from '../../lib/cli-error.js';
 import { getWorkflowStateById, updateWorkflowState } from '../../lib/linear-client.js';
 
 export function updateWorkflowStateCommand(program: Command) {
@@ -16,10 +17,7 @@ export function updateWorkflowStateCommand(program: Command) {
       try {
         // Check if any update field is provided
         if (!options.name && !options.type && !options.color && !options.description && !options.position) {
-          console.error('❌ Error: At least one field to update is required');
-          console.log('');
-          console.log('Available options: --name, --type, --color, --description, --position');
-          process.exit(1);
+          throw new UsageError('At least one workflow-state update field is required');
         }
 
         // Resolve alias
@@ -90,6 +88,8 @@ export function updateWorkflowStateCommand(program: Command) {
         if (options.position !== undefined) console.log(`   Position: ${currentState.position} → ${updatedState.position}`);
         console.log('');
       } catch (error) {
+        if (error instanceof CliError) throw error;
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

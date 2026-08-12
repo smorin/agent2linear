@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 
 import { getAliasesForId } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllTeams, type Team } from '../../lib/linear-client.js';
 import { formatListJSON,formatListTSV } from '../../lib/output.js';
 
@@ -111,6 +113,7 @@ export async function listTeams(options: ListOptions = {}) {
   }
 
   if (options.interactive) {
+    requireInteractiveInput('teams list');
     // Interactive mode: display with Ink
     render(<App options={options} />);
   } else {
@@ -148,6 +151,7 @@ export async function listTeams(options: ListOptions = {}) {
         console.log('\n💡 Tip: Use "agent2linear teams select" to save a default team');
       }
     } catch (error) {
+      if (isAuthenticationError(error)) throw error;
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch teams'}`);
       process.exit(1);
     }

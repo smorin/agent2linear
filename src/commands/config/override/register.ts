@@ -24,10 +24,7 @@ export function registerOverrideCommands(configCmd: Command): void {
   const override = configCmd
     .command('override')
     .alias('ov')
-    .description('Manage context-aware override rules (M29 overrides[])')
-    .action(() => {
-      override.help();
-    });
+    .description('Manage context-aware override rules (M29 overrides[])');
 
   override
     .command('add <label>')

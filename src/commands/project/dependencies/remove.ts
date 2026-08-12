@@ -5,6 +5,7 @@
  */
 
 import { resolveAlias } from '../../../lib/aliases.js';
+import { isAuthenticationError } from '../../../lib/cli-error.js';
 import { deleteProjectRelation,getLinearClient, getProjectRelations } from '../../../lib/linear-client.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { getRelationDirection,resolveDependencyProjects } from '../../../lib/parsers.js';
@@ -158,6 +159,7 @@ export async function removeProjectDependencies(
     }
 
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError('Error', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

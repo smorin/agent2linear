@@ -2,6 +2,8 @@ import { Command } from 'commander';
 import * as readline from 'readline';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { CliError, isAuthenticationError } from '../../lib/cli-error.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { deleteWorkflowState,getWorkflowStateById } from '../../lib/linear-client.js';
 
 async function confirm(message: string): Promise<boolean> {
@@ -25,6 +27,8 @@ export function deleteWorkflowStateCommand(program: Command) {
     .option('-y, --yes', 'Skip confirmation prompt')
     .action(async (id: string, options) => {
       try {
+        if (!options.yes) requireInteractiveInput('workflow-states delete');
+
         // Resolve alias
         const resolvedId = resolveAlias('workflow-state', id);
         if (resolvedId !== id) {
@@ -75,6 +79,8 @@ export function deleteWorkflowStateCommand(program: Command) {
           process.exit(1);
         }
       } catch (error) {
+        if (error instanceof CliError) throw error;
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

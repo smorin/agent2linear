@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { areCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
 import { confirmDestructiveAction } from '../../lib/confirm-destructive.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
 import { createExternalLink, updateProject } from '../../lib/linear-client.js';
@@ -22,7 +23,12 @@ vi.mock('../../lib/linear-client.js', async () => {
   const actual = await vi.importActual<typeof import('../../lib/linear-client.js')>(
     '../../lib/linear-client.js'
   );
-  return { ...actual, createExternalLink: vi.fn(), updateProject: vi.fn() };
+  return {
+    ...actual,
+    createExternalLink: vi.fn(),
+    getLinearClient: vi.fn(() => ({})),
+    updateProject: vi.fn(),
+  };
 });
 vi.mock('../../lib/project-resolver.js', () => ({
   resolveProject: vi.fn(),
@@ -92,6 +98,7 @@ describe('M33 project lifecycle runner', () => {
     });
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     return stdout;
   }
 
@@ -145,6 +152,10 @@ describe('M33 project lifecycle runner', () => {
 
   it('[LPL-OPT-PROJ-DRYRUN][LPL-OPT-PROJ-JSON] emits a complete JSON plan without prompting or mutating', async () => {
     const stdout = arrange();
+    vi.mocked(resolveProject).mockImplementation(async () => {
+      expect(areCacheWritesSuppressed()).toBe(true);
+      return resolution;
+    });
 
     await updateProjectCommand('project-1', {
       trash: true,
@@ -170,6 +181,27 @@ describe('M33 project lifecycle runner', () => {
     });
   });
 
+  it('[RLS-OUT-PROJECT-UPDATE] makes --json and explicit --output json byte-equivalent', async () => {
+    const stdout = arrange();
+    const options = {
+      trash: true,
+      dryRun: true,
+      link: ['https://example.com|Example'],
+    };
+
+    await updateProjectCommand('project-1', { ...options, json: true });
+    const shorthand = stdout.join('');
+    stdout.length = 0;
+
+    await updateProjectCommand('project-1', {
+      ...options,
+      output: 'json',
+      outputSource: 'explicit',
+    });
+
+    expect(stdout.join('')).toBe(shorthand);
+  });
+
   it('[PR17-R5] rejects a partial JSON result when an ancillary link mutation fails', async () => {
     const stdout = arrange();
     vi.mocked(createExternalLink).mockRejectedValue(new Error('invalid link'));
@@ -183,6 +215,24 @@ describe('M33 project lifecycle runner', () => {
     ).rejects.toMatchObject({ code: 'runtime', exitCode: 1 });
 
     expect(updateProject).toHaveBeenCalledWith('project-1', {});
+    expect(stdout).toEqual([]);
+  });
+
+  it('[RLS-OUT-JSON-ERROR] emits no prose before a combined ancillary failure', async () => {
+    const stdout = arrange();
+    vi.mocked(createExternalLink).mockRejectedValue(new Error('invalid link'));
+
+    await expect(
+      updateProjectCommand('project-1', {
+        link: ['not-a-url|Broken'],
+        dependsOn: 'project-1',
+        json: true,
+        yes: true,
+      })
+    ).rejects.toMatchObject({ code: 'runtime', exitCode: 1 });
+
+    expect(console.error).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
     expect(stdout).toEqual([]);
   });
 });

@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react';
 import { getAliasesForId } from '../../lib/aliases.js';
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getConfig } from '../../lib/config.js';
+import { requireInteractiveInput } from '../../lib/interaction-policy.js';
 import { getAllMembers, type Member } from '../../lib/linear-client.js';
 import { filterColumns,formatListJSON, formatListTSV } from '../../lib/output.js';
 
@@ -152,6 +154,7 @@ export async function listMembers(options: ListOptions = {}) {
   }
 
   if (options.interactive) {
+    requireInteractiveInput('members list');
     // Interactive mode: display with Ink
     render(<App options={options} />);
   } else {
@@ -243,6 +246,7 @@ export async function listMembers(options: ListOptions = {}) {
         console.log('\n💡 Tip: Use "agent2linear alias add member <alias> <id>" to create member aliases');
       }
     } catch (error) {
+      if (isAuthenticationError(error)) throw error;
       console.error(`❌ Error: ${error instanceof Error ? error.message : 'Failed to fetch members'}`);
       process.exit(1);
     }

@@ -21,10 +21,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24.x
           cache: npm
       - run: npm ci
       - run: npx tsup # build dist/index.js (the suites invoke it)
+      - name: Build locked TypeScript live suites
+        run: ./node_modules/.bin/tsup --config tsup.live.config.ts
       # Fast auth smoke: `whoami` exits non-zero on a bad/rotated key, so this fails in
       # ~2s before the heavy suite runs. (`doctor` exits 0 on bad auth, so it is NOT used.)
       - name: Auth smoke (whoami)
@@ -35,7 +37,7 @@ jobs:
       # selected a2l workspace are exactly ConceptM. It creates only unique TEST_M33_* fixtures
       # and retries cleanup in a finally block.
       - name: M33 label and project lifecycle
-        run: npx tsx tests/scripts/test-label-lifecycle-live.ts
+        run: node .tmp/m36-live/test-label-lifecycle-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
       # M34 is read-only and proves that raw cursor continuation reaches page two
@@ -47,12 +49,13 @@ jobs:
       # M35 creates disposable issue/project comments only after exact ConceptM
       # identity checks and removes its fixtures in a finally block.
       - name: M35 issue and project comments
-        run: npx tsx tests/scripts/test-comments-live.ts
+        run: node .tmp/m36-live/test-comments-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-      # Full live integration suite — creates real TEST_* entities in the throwaway
-      # workspace; exits non-zero if any test fails.
-      - name: Live integration suite
-        run: cd tests/scripts && bash run-all-tests.sh
+      # M36 proves built-CLI issue automation and always trashes its exact disposable issue.
+      - name: M36 issue automation
+        run: node .tmp/m36-live/test-m36-issue-automation-live.js
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      # The guarded M33-M36 harnesses above are the release-grade live suite: each
+      # validates ConceptM before writes and owns automatic disposable-fixture cleanup.

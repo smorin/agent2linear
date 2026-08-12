@@ -1,5 +1,6 @@
 import { resolveAlias } from '../../lib/aliases.js';
 import { openInBrowser } from '../../lib/browser.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getProjectStatusById } from '../../lib/linear-client.js';
 import { showEntityNotFound,showResolvedAlias } from '../../lib/output.js';
 import { resolveProjectStatusId } from '../../lib/status-cache.js';
@@ -64,6 +65,7 @@ export async function viewProjectStatus(nameOrId: string, options: { web?: boole
     console.log(`   $ agent2linear project update <project> --status "${status.name}"`);
     console.log(`   $ agent2linear project update <project> --status ${status.id}\n`);
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

@@ -4,6 +4,7 @@
  * Add dependency relations to a project
  */
 
+import { isAuthenticationError } from '../../../lib/cli-error.js';
 import { createProjectRelation,getLinearClient } from '../../../lib/linear-client.js';
 import { showError, showSuccess } from '../../../lib/output.js';
 import { parseAdvancedDependency,resolveDependencyProjects } from '../../../lib/parsers.js';
@@ -176,6 +177,7 @@ export async function addProjectDependencies(
     }
 
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     showError('Error', error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
   }

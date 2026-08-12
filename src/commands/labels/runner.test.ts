@@ -93,31 +93,94 @@ describe('M33 label mutation runners', () => {
     expect(deps.create).not.toHaveBeenCalled();
   });
 
-  it('[LPL-OPT-IL-CREATE-DRYRUN][LPL-OPT-IL-CREATE-JSON] emits a mutation-free JSON plan', async () => {
+  it.each([
+    ['issue', { name: 'New label', color: '#ABCDEF', teamId: 'eng' }],
+    ['project', { name: 'New label', color: '#ABCDEF' }],
+  ] as const)('[RLS-SAFE-DRYRUN] %s label create emits a mutation-free JSON plan', async (kind, expected) => {
     const { deps, stdout } = dependencies();
 
-    await runLabelCreate(
-      'issue',
-      {
-        name: 'New label',
-        color: 'abcdef',
-        team: 'eng',
-        dryRun: true,
-        json: true,
-      },
-      deps
-    );
+    await runLabelCreate(kind, {
+      name: 'New label',
+      color: 'abcdef',
+      ...(kind === 'issue' ? { team: 'eng' } : {}),
+      dryRun: true,
+      json: true,
+    }, deps);
 
-    expect(deps.resolveAlias).toHaveBeenCalledWith('team', 'eng');
+    if (kind === 'issue') expect(deps.resolveAlias).toHaveBeenCalledWith('team', 'eng');
     expect(deps.guardMutation).not.toHaveBeenCalled();
     expect(deps.create).not.toHaveBeenCalled();
     expect(JSON.parse(stdout.join(''))).toMatchObject({
       dryRun: true,
       operation: 'create',
       workspace: { name: 'ConceptM' },
-      label: { type: 'issue', name: 'New label', color: '#ABCDEF', teamId: 'eng' },
+      label: { type: kind, ...expected },
+      validation: { serverMutation: false },
     });
   });
+
+  it.each(['issue', 'project'] as const)(
+    '[RLS-SAFE-DRYRUN] %s label update emits a mutation-free JSON plan',
+    async kind => {
+      const { deps, stdout } = dependencies();
+      const label = kind === 'issue' ? issueLabel : projectLabel;
+
+      await runLabelUpdate(kind, label.id, { name: 'Renamed', dryRun: true, json: true }, deps);
+
+      expect(deps.guardMutation).not.toHaveBeenCalled();
+      expect(deps.update).not.toHaveBeenCalled();
+      expect(JSON.parse(stdout.join(''))).toMatchObject({
+        dryRun: true,
+        operation: 'update',
+        label: { type: kind, id: label.id, before: label, changes: { name: 'Renamed' } },
+        validation: { serverMutation: false },
+      });
+    }
+  );
+
+  it.each(['issue', 'project'] as const)(
+    '[RLS-SAFE-DRYRUN] %s label delete emits a mutation-free JSON plan',
+    async kind => {
+      const { deps, stdout } = dependencies();
+      const label = kind === 'issue' ? issueLabel : projectLabel;
+
+      await runLabelDelete(kind, label.id, { dryRun: true, json: true }, deps);
+
+      expect(deps.guardMutation).not.toHaveBeenCalled();
+      expect(deps.delete).not.toHaveBeenCalled();
+      expect(JSON.parse(stdout.join(''))).toMatchObject({
+        dryRun: true,
+        operation: 'delete',
+        label: { type: kind, id: label.id, name: label.name },
+        validation: { serverMutation: false },
+      });
+    }
+  );
+
+  it.each([
+    ['issue', 'retire'],
+    ['issue', 'restore'],
+    ['project', 'retire'],
+    ['project', 'restore'],
+  ] as const)(
+    '[RLS-SAFE-DRYRUN] %s label %s emits a mutation-free JSON plan',
+    async (kind, operation) => {
+      const { deps, stdout } = dependencies();
+      const label = kind === 'issue' ? issueLabel : projectLabel;
+
+      await runLabelLifecycle(kind, operation, label.id, { dryRun: true, json: true }, deps);
+
+      expect(deps.guardMutation).not.toHaveBeenCalled();
+      expect(deps.confirmDestructive).not.toHaveBeenCalled();
+      expect(deps.lifecycle).not.toHaveBeenCalled();
+      expect(JSON.parse(stdout.join(''))).toMatchObject({
+        dryRun: true,
+        operation,
+        label: { type: kind, id: label.id, name: label.name },
+        validation: { serverMutation: false },
+      });
+    }
+  );
 
   it('[LPL-OPT-PL-UPDATE-DESCRIPTION][LPL-ARG-PL-UPDATE-ID] preserves an explicit empty description', async () => {
     const { deps } = dependencies();
@@ -227,7 +290,8 @@ describe('M33 label list and view runners', () => {
         all: true,
         includeRetired: true,
         cursorHistory: false,
-        format: 'json',
+        output: 'json',
+        outputSource: 'explicit',
       },
       deps
     );
@@ -275,7 +339,7 @@ describe('M33 label list and view runners', () => {
       entryId: 'history-1',
     });
 
-    await runLabelList('project', { format: 'json' }, deps);
+    await runLabelList('project', { output: 'json', outputSource: 'explicit' }, deps);
 
     const result = JSON.parse(stdout.join(''));
     expect(result).toMatchObject({
@@ -313,14 +377,72 @@ describe('M33 label list and view runners', () => {
     expect(stdout.join('')).toContain('history-1');
   });
 
-  it('[LPL-OPT-PL-LIST-FORMAT][LPL-OUT-PAGE-MACHINE] keeps TSV row-only', async () => {
-    const { deps, stdout } = dependencies();
+  it('[RLS-OUT-ISSUE-LABELS-LIST][RLS-OUT-PROJECT-LABELS-LIST] makes --json exactly equivalent to --output json', async () => {
+    for (const kind of ['issue', 'project'] as const) {
+      const shorthand = dependencies();
+      const explicit = dependencies();
 
-    await runLabelList('project', { format: 'tsv' }, deps);
+      await runLabelList(kind, { json: true }, shorthand.deps);
+      await runLabelList(
+        kind,
+        { output: 'json', outputSource: 'explicit' },
+        explicit.deps
+      );
+
+      expect(explicit.stdout.join('')).toBe(shorthand.stdout.join(''));
+    }
+  });
+
+  it('[RLS-OUT-ISSUE-LABELS-LIST][RLS-OUT-PROJECT-LABELS-LIST] rejects a conflicting explicit output before listing', async () => {
+    for (const kind of ['issue', 'project'] as const) {
+      const { deps } = dependencies();
+
+      await expect(
+        runLabelList(kind, { output: 'table', outputSource: 'explicit', json: true }, deps)
+      ).rejects.toMatchObject({ code: 'usage', exitCode: 2 });
+      expect(deps.list).not.toHaveBeenCalled();
+    }
+  });
+
+  it('[RLS-OUT-ISSUE-LABELS-LIST] preserves canonical JSON output in cursor continuations', async () => {
+    const { deps } = dependencies();
+    vi.mocked(deps.list).mockResolvedValue({
+      items: [issueLabel],
+      pageInfo: {
+        returnedCount: 1,
+        hasNextPage: true,
+        endCursor: 'next raw',
+        fetchedAll: false,
+      },
+    });
+
+    await runLabelList('issue', { json: true, limit: '1' }, deps);
+
+    const record = vi.mocked(deps.recordHistory).mock.calls[0]?.[0];
+    expect(record?.entry.commands.nextCommand).toContain("--output 'json'");
+    expect(record?.entry.commands.nextCommand).not.toContain('--format');
+  });
+
+  it('[RLS-OUT-PROJECT-LABELS-LIST][LPL-OUT-PAGE-MACHINE] keeps TSV row-only', async () => {
+    const { deps, stdout } = dependencies();
+    vi.mocked(deps.list).mockResolvedValue({
+      items: [projectLabel],
+      pageInfo: {
+        returnedCount: 1,
+        hasNextPage: true,
+        endCursor: 'next raw',
+        fetchedAll: false,
+      },
+    });
+
+    await runLabelList('project', { output: 'tsv', outputSource: 'explicit' }, deps);
 
     expect(stdout.join('')).toContain('id\tname\tcolor');
     expect(stdout.join('')).not.toContain('Next page');
     expect(stdout.join('')).not.toContain('cursorHistory');
+    const record = vi.mocked(deps.recordHistory).mock.calls[0]?.[0];
+    expect(record?.entry.commands.nextCommand).toContain("--output 'tsv'");
+    expect(record?.entry.commands.nextCommand).not.toContain('--format');
   });
 
   it('[LPL-CMD-IL-VIEW][LPL-CMD-PL-VIEW] views active or retired labels by alias', async () => {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { withCacheWritesSuppressed } from '../../lib/cache-write-policy.js';
 import { NotFoundError, RuntimeError, UsageError } from '../../lib/cli-error.js';
 import { confirmDestructiveAction } from '../../lib/confirm-destructive.js';
 import { guardWorkspaceForMutation } from '../../lib/confirm-write.js';
@@ -74,7 +75,7 @@ function arrayValue(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-export async function updateProjectCommand(nameOrId: string, options: UpdateOptions) {
+async function updateProjectCommandInternal(nameOrId: string, options: UpdateOptions) {
   const resolvedMode =
     options.output === undefined
       ? resolveOutputMode({ allowedModes: ['table', 'json'], json: options.json })
@@ -94,8 +95,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
   }
 
   const log = (...values: unknown[]): void => {
-    if (mode === 'json') console.error(...values);
-    else console.log(...values);
+    if (mode === 'table') console.log(...values);
   };
   const ancillaryFailures: Array<{
     operation: string;
@@ -441,7 +441,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
         removeDependencies: options.removeDependency ?? [],
         openInBrowser: options.web === true,
       },
-      validation: { serverMutation: false },
+      validation: { localWrites: false, serverMutation: false },
     };
     if (mode === 'json') {
       process.stdout.write(JSON.stringify(plan, null, 2) + '\n');
@@ -542,7 +542,7 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
           recordAncillaryFailure('link.remove', url, error, `Failed to remove link "${url}"`);
         }
       } else {
-        console.warn(`   ⚠️  Link not found (skipped): ${url}`);
+        if (mode === 'table') console.warn(`   ⚠️  Link not found (skipped): ${url}`);
       }
     }
   }
@@ -572,7 +572,9 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
         const projectIds = resolveDependencyProjects(options.dependsOn);
         for (const relatedProjectId of projectIds) {
           if (relatedProjectId === projectId) {
-            console.error(`\n⚠️  Warning: Skipping self-referential dependency`);
+            if (mode === 'table') {
+              console.error(`\n⚠️  Warning: Skipping self-referential dependency`);
+            }
             continue;
           }
           dependenciesToCreate.push({
@@ -598,7 +600,9 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
         const projectIds = resolveDependencyProjects(options.blocks);
         for (const relatedProjectId of projectIds) {
           if (relatedProjectId === projectId) {
-            console.error(`\n⚠️  Warning: Skipping self-referential dependency`);
+            if (mode === 'table') {
+              console.error(`\n⚠️  Warning: Skipping self-referential dependency`);
+            }
             continue;
           }
           dependenciesToCreate.push({
@@ -624,7 +628,9 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
         try {
           const parsed = parseAdvancedDependency(depSpec);
           if (parsed.relatedProjectId === projectId) {
-            console.error(`\n⚠️  Warning: Skipping self-referential dependency in "${depSpec}"`);
+            if (mode === 'table') {
+              console.error(`\n⚠️  Warning: Skipping self-referential dependency in "${depSpec}"`);
+            }
             continue;
           }
           dependenciesToCreate.push({
@@ -850,4 +856,10 @@ export async function updateProjectCommand(nameOrId: string, options: UpdateOpti
       console.error(`   Please visit: ${result.url}`);
     }
   }
+}
+
+export async function updateProjectCommand(nameOrId: string, options: UpdateOptions) {
+  return withCacheWritesSuppressed(options.dryRun === true, () =>
+    updateProjectCommandInternal(nameOrId, options)
+  );
 }

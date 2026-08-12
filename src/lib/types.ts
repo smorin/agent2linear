@@ -92,7 +92,7 @@ export interface ConfigOverride extends OverridableConfig {
 }
 
 export interface ConfigLocation {
-  type: 'global' | 'project' | 'env' | 'profile' | 'override' | 'none';
+  type: 'global' | 'project' | 'explicit' | 'env' | 'profile' | 'override' | 'none';
   path?: string;
   // Set only when type === 'override' (M29): which scope/rule supplied the value.
   scope?: 'global' | 'project';

@@ -7,6 +7,7 @@ import {
   normalizeEntityType,
   validateAllAliases,
 } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { getApiKey } from '../../lib/config.js';
 import {
   getProjectById,
@@ -61,6 +62,7 @@ async function getEntityName(
         return { error: 'unknown type' };
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return { error: 'validation failed' };
   }
 }
@@ -141,6 +143,7 @@ export async function listAliasCommand(type?: string, options: ListAliasOptions 
       await displayAllAliases(aliases as ResolvedAliases, canValidate);
     }
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     console.error(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     process.exit(1);
   }

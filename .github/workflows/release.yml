@@ -4,21 +4,102 @@ on:
   push:
     tags: ['v*']
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  verify:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
+      checks: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-          registry-url: https://registry.npmjs.org
+          node-version: 24.x
+          cache: npm
       - run: npm ci
+      - name: Verify tag matches package version
+        run: |
+          RELEASE_PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${RELEASE_PACKAGE_VERSION}"
+      - name: Verify annotated tag and main ancestry
+        run: |
+          test "$(git cat-file -t "${GITHUB_REF_NAME}")" = "tag"
+          git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"
+      - name: Require ordinary CI on the exact candidate SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CHECK_RUNS="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")"
+          jq -e '[.check_runs[] | select(.name == "check (22.x)" and .conclusion == "success")] | length >= 1' <<<"${CHECK_RUNS}"
+          jq -e '[.check_runs[] | select(.name == "check (24.x)" and .conclusion == "success")] | length >= 1' <<<"${CHECK_RUNS}"
       - run: npx tsc --noEmit
+      - run: npx eslint src --ext .ts,.tsx
       - run: npx vitest run
       - run: npx tsup
-      - run: npm publish
+      - name: Build locked TypeScript live suites
+        run: ./node_modules/.bin/tsup --config tsup.live.config.ts
+      - run: npm audit --omit=dev --audit-level=high
+      - run: bash tests/scripts/test-config-override-cli.sh
+      - run: bash tests/scripts/test-cursor-history-cli.sh
+      - run: bash tests/scripts/test-comments-cli.sh
+      - run: bash tests/scripts/test-label-lifecycle-cli.sh
+      - run: node tests/scripts/test-m36-api-key-cli.js
+      - run: node tests/scripts/test-m36-config-cli.js
+      - run: node tests/scripts/test-m36-diagnostics-cli.js
+      - run: node tests/scripts/test-m36-output-cli.js
+      - run: node tests/scripts/test-m36-output-migrations-cli.js
+      - run: node tests/scripts/test-m36-parser-no-input-cli.js
+      - run: node tests/scripts/test-m36-signals-cli.js
+      - run: node tests/scripts/test-m36-tsv-cli.js
+      - run: node tests/scripts/test-m36-version-cli.js
+      - name: Auth smoke (whoami)
+        run: node dist/index.js whoami
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      - name: M33 label and project lifecycle
+        run: node .tmp/m36-live/test-label-lifecycle-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      - name: M34 raw-cursor pagination
+        run: node tests/scripts/test-pagination-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      - name: M35 issue and project comments
+        run: node .tmp/m36-live/test-comments-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+      - name: M36 issue automation
+        run: node .tmp/m36-live/test-m36-issue-automation-live.js
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - run: npm ci
+      - name: Verify npm supports trusted publishing
+        run: |
+          node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) process.exit(1)' "$(npm --version)"
+      - name: Verify tag matches package version
+        run: |
+          RELEASE_PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "v${RELEASE_PACKAGE_VERSION}"
+      - run: npm publish --provenance --access public

@@ -1,5 +1,7 @@
 import type { LinearClient as SDKClient } from '@linear/sdk';
 
+import { isAuthenticationError } from '../cli-error.js';
+import { logger } from '../logger.js';
 import {
   type ConnectionPage,
   type PageInput,
@@ -608,6 +610,7 @@ export async function findProjectByName(name: string): Promise<ProjectResult | n
       team,
     };
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }
@@ -641,10 +644,11 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
       ...(input.memberIds && input.memberIds.length > 0 && { memberIds: input.memberIds }),
     } as const;
 
-    // Debug: log what we're sending to the API
-    if (process.env.DEBUG) {
-      console.log('DEBUG: createInput =', JSON.stringify(createInput, null, 2));
-    }
+    logger.internal('project create request prepared', {
+      hasInitiative: input.initiativeId !== undefined,
+      hasTeam: input.teamId !== undefined,
+      hasTemplate: input.templateId !== undefined,
+    });
 
     // Create the project
     const projectPayload = await client.createProject(
@@ -657,25 +661,13 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
       throw new Error('Failed to create project: No project returned from API');
     }
 
-    // Debug: Check if template was applied
-    if (process.env.DEBUG && input.templateId) {
-      try {
-        const lastAppliedTemplate = await (
-          project as { lastAppliedTemplate?: { id: string; name: string } }
-        ).lastAppliedTemplate;
-        if (lastAppliedTemplate) {
-          console.log(
-            `DEBUG: Template applied - ID: ${lastAppliedTemplate.id}, Name: ${lastAppliedTemplate.name}`
-          );
-        } else {
-          console.log('DEBUG: No template was applied to the project');
-        }
-      } catch (err) {
-        console.log(
-          'DEBUG: Could not check lastAppliedTemplate:',
-          err instanceof Error ? err.message : err
-        );
-      }
+    // Scalar response metadata is safe to inspect; never touch the lazy template getter.
+    if (input.templateId) {
+      const appliedTemplateId = project.lastAppliedTemplateId;
+      logger.internal('project template application result', {
+        templateApplied: Boolean(appliedTemplateId),
+        requestedTemplateMatched: appliedTemplateId === input.templateId,
+      });
     }
 
     // Link project to initiative if specified
@@ -695,16 +687,9 @@ export async function createProject(input: ProjectCreateInput): Promise<ProjectR
           projectId: project.id,
         });
 
-        if (process.env.DEBUG) {
-          console.log(
-            `DEBUG: Successfully linked project ${project.id} to initiative ${input.initiativeId}`
-          );
-        }
-      } catch (err) {
-        // Initiative link failed - log in debug mode
-        if (process.env.DEBUG) {
-          console.log('DEBUG: Failed to link initiative:', err);
-        }
+        logger.internal('project linked to initiative');
+      } catch {
+        logger.internal('project initiative link failed');
         // Don't throw - project was still created successfully
       }
     }
@@ -1296,6 +1281,7 @@ export async function getProjectStatusById(statusId: string): Promise<ProjectSta
       position: status.position,
     };
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return null;
   }
 }
@@ -1322,6 +1308,7 @@ export async function validateProjectExists(
       name: project.name,
     };
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     return {
       valid: false,
       error: `Failed to validate project: ${error instanceof Error ? error.message : 'Unknown error'}`,

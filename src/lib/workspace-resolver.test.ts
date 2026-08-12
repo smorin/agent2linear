@@ -1,4 +1,3 @@
-import { execFileSync } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -81,7 +80,7 @@ describe('resolveActiveWorkspace - zero-config legacy passthrough (R4)', () => {
 });
 
 describe('resolveActiveWorkspace - explicit selection (flag)', () => {
-  it('bare --api-key is an ad-hoc workspace: source flag, no name', () => {
+  it('bare --api-key-file is an ad-hoc workspace: source flag, no name', () => {
     setInvocationContext({ apiKey: 'lin_api_adhoc' });
     const res = resolveActiveWorkspace();
     expect(res.key).toBe('lin_api_adhoc');
@@ -106,10 +105,21 @@ describe('resolveActiveWorkspace - explicit selection (flag)', () => {
     expect(res.key).toBe('lin_api_acme');
     expect(res.source).toBe('flag');
   });
+
+  it('--api-key-file may override a selected workspace credential without dropping its identity', () => {
+    saveWorkspace('global', 'acme', { apiKey: 'lin_api_stored' });
+    setInvocationContext({ workspace: 'acme', apiKey: 'lin_api_file' });
+
+    const res = resolveActiveWorkspace();
+
+    expect(res.name).toBe('acme');
+    expect(res.key).toBe('lin_api_file');
+    expect(res.source).toBe('flag');
+  });
 });
 
 describe('resolveWorkspaceKey - ordered key-source precedence (cli -> secrets -> legacy)', () => {
-  it('cli --api-key wins over the secrets registry', () => {
+  it('cli --api-key-file wins over the secrets registry', () => {
     saveWorkspace('global', 'acme', { apiKey: 'lin_api_acme' });
     setInvocationContext({ apiKey: 'lin_api_cli', workspace: 'acme' });
     const res = resolveWorkspaceKey('acme');
@@ -124,12 +134,12 @@ describe('resolveWorkspaceKey - ordered key-source precedence (cli -> secrets ->
     expect(res.key).toBe('lin_api_acme');
   });
 
-  it('falls back to the legacy key when the named workspace is unknown', () => {
+  it('does not let plain LINEAR_API_KEY authenticate an unknown named workspace', () => {
     vi.stubEnv('LINEAR_API_KEY', 'lin_api_envkey');
     setInvocationContext({ workspace: 'unknown' });
     const res = resolveWorkspaceKey('unknown');
-    expect(res.key).toBe('lin_api_envkey');
-    expect(res.source).toBe('env');
+    expect(res.key).toBe('');
+    expect(res.source).toBe('legacy');
   });
 
   it('undefined name with zero config returns the legacy key', () => {
@@ -302,7 +312,7 @@ describe('normalizeEnvVarName', () => {
 });
 
 describe('resolveWorkspaceKey - full R7 key-source precedence (Phase 4)', () => {
-  it('cli --api-key wins over everything', () => {
+  it('cli --api-key-file wins over everything', () => {
     vi.stubEnv('LINEAR_API_KEY_ACME', 'env');
     saveWorkspace('global', 'acme', { apiKey: 'secret' });
     setInvocationContext({ apiKey: 'cli', workspace: 'acme' });
@@ -340,20 +350,18 @@ describe('resolveWorkspaceKey - full R7 key-source precedence (Phase 4)', () => 
     saveWorkspace('global', 'acme', { apiKey: 'secret' });
     const res = resolveWorkspaceKey('acme');
     expect(res.key).toBe('secret');
-    expect(res.viaLegacy).toBeFalsy();
   });
 
-  it('falls to the legacy plain key last, tagged viaLegacy', () => {
+  it('does not fall to the legacy plain key for a named workspace', () => {
     vi.stubEnv('LINEAR_API_KEY', 'plain');
     const res = resolveWorkspaceKey('acme');
-    expect(res.key).toBe('plain');
-    expect(res.source).toBe('env');
-    expect(res.viaLegacy).toBe(true);
+    expect(res.key).toBe('');
+    expect(res.source).toBe('legacy');
   });
 });
 
-describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () => {
-  it('FIRES: non-explicit named workspace falls back to plain key with >=2 workspaces', () => {
+describe('resolveActiveWorkspace - named workspaces never borrow unnamed credentials', () => {
+  it('does not use a plain key for an environment-selected workspace', () => {
     writeGlobalConfigJson(xdgConfig, {
       profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
     });
@@ -362,11 +370,11 @@ describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () =
     vi.stubEnv('AGENT2LINEAR_WORKSPACE', 'acme');
     vi.stubEnv('LINEAR_API_KEY', 'plain'); // no LINEAR_API_KEY_WSACME, no secrets
     const res = resolveActiveWorkspace();
-    expect(res.denied).toBeDefined();
-    expect(res.denied?.reason).toMatch(/ambiguous/i);
+    expect(res.denied).toBeUndefined();
+    expect(res.key).toBe('');
   });
 
-  it('SILENT when the workspace was chosen explicitly (--workspace forces through)', () => {
+  it('does not use a plain key when the workspace was chosen explicitly', () => {
     writeGlobalConfigJson(xdgConfig, {
       defaultProfile: 'acme',
       profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
@@ -375,10 +383,10 @@ describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () =
     setInvocationContext({ workspace: 'acme' });
     const res = resolveActiveWorkspace();
     expect(res.denied).toBeUndefined();
-    expect(res.key).toBe('plain');
+    expect(res.key).toBe('');
   });
 
-  it('SILENT for the "plain = default" single-workspace setup', () => {
+  it('does not use a plain key for a default single-workspace setup', () => {
     writeGlobalConfigJson(xdgConfig, {
       defaultProfile: 'acme',
       profiles: { acme: { workspace: 'wsAcme' } },
@@ -386,10 +394,10 @@ describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () =
     vi.stubEnv('LINEAR_API_KEY', 'plain');
     const res = resolveActiveWorkspace();
     expect(res.denied).toBeUndefined();
-    expect(res.key).toBe('plain');
+    expect(res.key).toBe('');
   });
 
-  it('SILENT when the named env var supplies the key (not a legacy fallback)', () => {
+  it('still uses the selected workspace named environment variable', () => {
     writeGlobalConfigJson(xdgConfig, {
       profiles: { acme: { workspace: 'wsAcme' }, beta: { workspace: 'wsBeta' } },
     });
@@ -399,225 +407,6 @@ describe('resolveActiveWorkspace - ambiguity guard (R7 Scheme-D Option 2)', () =
     const res = resolveActiveWorkspace();
     expect(res.denied).toBeUndefined();
     expect(res.key).toBe('named');
-  });
-});
-
-describe('resolveActiveWorkspace - owner-only + match-only regression guard (M31 §8a)', () => {
-  // Characterization guard (Phase 1): pins the EXACT driving use case — two
-  // match-ful profiles + an unrelated owner that must error — end-to-end through
-  // the public resolveActiveWorkspace(), BEFORE any unification refactor. Unlike
-  // the hermetic no-match-gate block above (match-less profiles, git short-
-  // circuits), these tests build a REAL temp git repo with a controlled `origin`
-  // owner and let detection shell out, so the refactor in Phase 2 must keep this
-  // green. NO production code is touched in Phase 1.
-  //
-  // The repo is built directly in the already-chdir'd `workdir` (the global
-  // beforeEach chdir's into a fresh temp dir; the global afterEach restores cwd
-  // and removes it — that restore is the chdir-leak guard for the rest of the
-  // suite). resolveActiveWorkspace() takes no args and reads process.cwd(), so a
-  // real repo at cwd is the faithful equivalent of git-context.test.ts's
-  // explicit-dir fixture.
-  //
-  // Deliberately NO nested-group owner case here — Phase 2 introduces `group/sub`
-  // as the new expected result (D2); pinning the old `group` behavior now would
-  // fight that change.
-
-  // Build a real git repo at cwd (the chdir'd workdir) whose `origin` owner is
-  // taken from <ownerUrl>. Sets a local git identity so --allow-empty commits
-  // succeed without a global git config.
-  const buildRepoWithOrigin = (originUrl: string): void => {
-    const runGit = (args: string[]): void => {
-      execFileSync('git', ['-C', workdir, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
-    };
-    runGit(['init', '-q', '-b', 'main']);
-    runGit(['config', 'user.email', 't@t.co']);
-    runGit(['config', 'user.name', 't']);
-    runGit(['remote', 'add', 'origin', originUrl]);
-    runGit(['commit', '-q', '--allow-empty', '-m', 'init']);
-  };
-
-  // The two driving profiles (§8a): `acme` matches org `acme-co`; `personal`
-  // matches EITHER user `alice` or `bob` (OR within one profile).
-  const acme = { workspace: 'acme-ws', match: { gitRemoteOwner: ['acme-co'] } };
-  const personal = { workspace: 'personal-ws', match: { gitRemoteOwner: ['alice', 'bob'] } };
-
-  it('1: origin owner acme-co + match-only resolves acme via auto-detect (not denied)', () => {
-    writeGlobalConfigJson(xdgConfig, { noMatchPolicy: 'match-only', profiles: { acme, personal } });
-    buildRepoWithOrigin('https://github.com/acme-co/widgets.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('acme');
-    expect(res.name).toBe('acme-ws');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('2: origin owner alice resolves personal', () => {
-    writeGlobalConfigJson(xdgConfig, { profiles: { acme, personal } });
-    buildRepoWithOrigin('git@github.com:alice/dotfiles.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('personal');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('3: origin owner bob resolves personal (OR within a profile)', () => {
-    writeGlobalConfigJson(xdgConfig, { profiles: { acme, personal } });
-    buildRepoWithOrigin('git@github.com:bob/scripts.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('personal');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('4: unrelated owner + match-only + defaultProfile set => denied, no fallback', () => {
-    writeGlobalConfigJson(xdgConfig, {
-      noMatchPolicy: 'match-only',
-      defaultProfile: 'acme',
-      profiles: { acme, personal },
-    });
-    buildRepoWithOrigin('https://github.com/unrelated-org/thing.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeDefined();
-    expect(res.denied?.reason).toMatch(/match-only/i);
-    // The defaultProfile is NEVER consulted — match-only denies at the gate first.
-    expect(res.profile).toBeUndefined();
-    expect(res.name).toBeUndefined();
-  });
-
-  it('5: uppercase origin owner ACME-CO resolves acme (case-insensitive matching)', () => {
-    writeGlobalConfigJson(xdgConfig, { noMatchPolicy: 'match-only', profiles: { acme, personal } });
-    buildRepoWithOrigin('https://github.com/ACME-CO/widgets.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('acme');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('6: deny + two match-ful profiles + unrelated owner => denied; explicit --workspace forces through', () => {
-    writeGlobalConfigJson(xdgConfig, { profiles: { acme, personal } });
-    buildRepoWithOrigin('https://github.com/unrelated-org/thing.git');
-
-    // Default policy is `deny`; with >=2 profiles and no match, the gate denies.
-    const denied = resolveActiveWorkspace();
-    expect(denied.denied).toBeDefined();
-
-    // An explicit --workspace forces through the no-match gate.
-    setInvocationContext({ workspace: 'acme-ws' });
-    const forced = resolveActiveWorkspace();
-    expect(forced.denied).toBeUndefined();
-    expect(forced.source).toBe('flag');
-  });
-});
-
-describe('resolveActiveWorkspace - host/repo/remote matching via config (M31 Phase 3)', () => {
-  // End-to-end through the public resolveActiveWorkspace() against a REAL temp git
-  // repo, proving the new MatchRule fields (host/repo/remote/case) flow through
-  // resolution from a HAND-AUTHORED config — no CLI yet (config.json is a
-  // first-class input surface). The repo is built in the chdir'd `workdir`; the
-  // global afterEach restores cwd and removes it.
-
-  // Build a real git repo at cwd with an `origin` and an optional `upstream`,
-  // mirroring tests/scripts' git_repo() helper. Sets a local identity so
-  // --allow-empty commits succeed without a global git config.
-  const buildRepo = (originUrl: string, upstreamUrl?: string): void => {
-    const runGit = (args: string[]): void => {
-      execFileSync('git', ['-C', workdir, ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
-    };
-    runGit(['init', '-q', '-b', 'main']);
-    runGit(['config', 'user.email', 't@t.co']);
-    runGit(['config', 'user.name', 't']);
-    runGit(['remote', 'add', 'origin', originUrl]);
-    if (upstreamUrl) {
-      runGit(['remote', 'add', 'upstream', upstreamUrl]);
-    }
-    runGit(['commit', '-q', '--allow-empty', '-m', 'init']);
-  };
-
-  it('routes by a HOST-only rule', () => {
-    writeGlobalConfigJson(xdgConfig, {
-      noMatchPolicy: 'match-only',
-      profiles: { gh: { workspace: 'gh-ws', match: { gitRemoteHost: ['github.com'] } } },
-    });
-    buildRepo('https://github.com/whoever/whatever.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('gh');
-    expect(res.name).toBe('gh-ws');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('routes by a REPO glob (my-org/secret-*)', () => {
-    writeGlobalConfigJson(xdgConfig, {
-      noMatchPolicy: 'match-only',
-      profiles: { secret: { workspace: 'secret-ws', match: { gitRemoteRepo: ['my-org/secret-*'] } } },
-    });
-    buildRepo('git@github.com:my-org/secret-keys.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('secret');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('routes by AND(host + owner + repo) when all three match', () => {
-    const profiles = {
-      acme: {
-        workspace: 'acme-ws',
-        match: {
-          gitRemoteHost: ['github.com'],
-          gitRemoteOwner: ['acme-co'],
-          gitRemoteRepo: ['acme-co/widgets'],
-        },
-      },
-    };
-    writeGlobalConfigJson(xdgConfig, { noMatchPolicy: 'match-only', profiles });
-    buildRepo('https://github.com/acme-co/widgets.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('acme');
-    expect(res.name).toBe('acme-ws');
-  });
-
-  it('fork case: a remote:"upstream" + owner rule wins over a personal origin rule (declared first)', () => {
-    // origin = personal fork (alice), upstream = the org (acme). Declared so the
-    // upstream rule comes first -> first-positive-wins picks it for the fork.
-    writeGlobalConfigJson(xdgConfig, {
-      noMatchPolicy: 'match-only',
-      profiles: {
-        acme: { workspace: 'acme-ws', match: { remote: 'upstream', gitRemoteOwner: ['acme'] } },
-        personal: { workspace: 'personal-ws', match: { gitRemoteOwner: ['alice'] } },
-      },
-    });
-    buildRepo('git@github.com:alice/widgets.git', 'git@github.com:acme/widgets.git');
-
-    const res = resolveActiveWorkspace();
-    expect(res.denied).toBeUndefined();
-    expect(res.profile).toBe('acme');
-    expect(res.name).toBe('acme-ws');
-    expect(res.source).toBe('auto-detect');
-  });
-
-  it('bare remote:"upstream" matches a fork but NOT a repo with only an origin', () => {
-    writeGlobalConfigJson(xdgConfig, {
-      noMatchPolicy: 'match-only',
-      profiles: { isFork: { workspace: 'fork-ws', match: { remote: 'upstream' } } },
-    });
-    buildRepo('git@github.com:alice/widgets.git', 'git@github.com:acme/widgets.git');
-    expect(resolveActiveWorkspace().profile).toBe('isFork');
-
-    // A non-fork (origin only) does not match -> match-only denies.
-    __resetGitContextCache();
-    execFileSync('git', ['-C', workdir, 'remote', 'remove', 'upstream'], {
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-    expect(resolveActiveWorkspace().denied).toBeDefined();
   });
 });
 

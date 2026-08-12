@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveAlias } from '../../lib/aliases.js';
+import { isAuthenticationError } from '../../lib/cli-error.js';
 import { formatColorPreview } from '../../lib/colors.js';
 import { getWorkflowStateById } from '../../lib/linear-client.js';
 
@@ -41,6 +42,7 @@ export function viewWorkflowState(program: Command) {
         console.log(`   In issues: --state ${state.name}`);
         console.log('');
       } catch (error) {
+        if (isAuthenticationError(error)) throw error;
         console.error('❌ Error:', error instanceof Error ? error.message : 'Unknown error');
         process.exit(1);
       }

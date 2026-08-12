@@ -1,5 +1,6 @@
 import { Argument, Command } from 'commander';
 
+import { resolveOutputMode } from '../../lib/output-mode.js';
 import { runPromptGet } from '../prompt/get.js';
 import { registerIssueCommentCommands } from './comment/register.js';
 import { createIssueCommand } from './create.js';
@@ -7,17 +8,32 @@ import { registerIssueListCommand } from './list.js';
 import { updateIssueCommand } from './update.js';
 import { viewIssue } from './view.js';
 
+function withJsonResultMode<T extends { json?: boolean; output?: string }>(
+  options: T,
+  command: Command
+): T & { json: boolean } {
+  const mode =
+    options.output === undefined
+      ? resolveOutputMode({ allowedModes: ['table', 'json'], json: options.json })
+      : resolveOutputMode({
+          allowedModes: ['table', 'json'],
+          json: options.json,
+          output: options.output,
+          outputSource:
+            command.getOptionValueSource('output') === 'cli' ? 'explicit' : 'default',
+        });
+  return { ...options, json: mode === 'json' };
+}
+
 export function registerIssueCommands(cli: Command): void {
   const issue = cli
     .command('issue')
-    .description('Manage Linear issues')
-    .action(() => {
-      issue.help();
-    });
+    .description('Manage Linear issues');
 
   issue
     .command('view <identifier>')
     .description('View an issue by identifier (e.g., ENG-123) or UUID')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
     .option('--json', 'Output in JSON format')
     .option('-w, --web', 'Open issue in web browser')
     .option('--show-comments', 'Display up to 50 issue comments')
@@ -52,8 +68,8 @@ Use --show-comments to see up to 50 comments; use issue comment list for paginat
 Use --show-history to see the change history.
 `
     )
-    .action(async (identifier, options) => {
-      await viewIssue(identifier, options);
+    .action(async (identifier, options, command: Command) => {
+      await viewIssue(identifier, withJsonResultMode(options, command));
     });
 
   issue
@@ -83,6 +99,7 @@ Use --show-history to see the change history.
     .option('--template <id|alias>', 'Issue template ID or alias')
     .option('-w, --web', 'Open created issue in browser')
     .option('--dry-run', 'Preview the payload without creating the issue')
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
     .option('--json', 'Output the created issue + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .addHelpText(
@@ -161,8 +178,8 @@ Config Defaults:
     $ agent2linear config set defaultProject <project-id>
 `
     )
-    .action(async options => {
-      await createIssueCommand(options);
+    .action(async (options, command: Command) => {
+      await createIssueCommand(withJsonResultMode(options, command));
     });
 
   issue
@@ -207,6 +224,7 @@ Config Defaults:
       '--bulk <identifiers>',
       'Apply same update to multiple issues (comma-separated identifiers)'
     )
+    .option('-o, --output <table|json>', 'Output format: table or json', 'table')
     .option('--json', 'Output the updated issue + active workspace as JSON')
     .option('-y, --yes', 'Skip the auto-detected-workspace confirmation prompt')
     .option('--no-input', 'Never prompt; fail if explicit consent is required')
@@ -294,8 +312,8 @@ Member Resolution:
     • Display name: "John Doe"
 `
     )
-    .action(async (identifier, options) => {
-      await updateIssueCommand(identifier, options);
+    .action(async (identifier, options, command: Command) => {
+      await updateIssueCommand(identifier, withJsonResultMode(options, command));
     });
 
   // Register issue list command (M15.5 Phase 1)

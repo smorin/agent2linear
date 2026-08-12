@@ -45,7 +45,7 @@ LIMIT_STATUS=$?
 OUTPUT_STATUS=$?
 "${NODE_BIN}" "${CLI}" project comment add nowhere --body x --body-file note.md >"${TEST_ROOT}/xor.out" 2>"${TEST_ROOT}/xor.err"
 XOR_STATUS=$?
-printf '%s\n' "lin_api_fake" | "${NODE_BIN}" "${CLI}" --api-key - issue comment add ENG-123 >"${TEST_ROOT}/stdin-key.out" 2>"${TEST_ROOT}/stdin-key.err"
+printf '%s\n' "lin_api_fake" | "${NODE_BIN}" "${CLI}" --api-key-file - issue comment add ENG-123 >"${TEST_ROOT}/stdin-key.out" 2>"${TEST_ROOT}/stdin-key.err"
 STDIN_KEY_STATUS=$?
 printf '%s\n' "body" | "${NODE_BIN}" "${CLI}" issue comment add malformed >"${TEST_ROOT}/stdin-body.out" 2>"${TEST_ROOT}/stdin-body.err"
 STDIN_BODY_STATUS=$?
@@ -65,7 +65,7 @@ done
 
 grep -Fq "legacy comment syntax has been removed" "${TEST_ROOT}/legacy.err"
 grep -Fq "try: a2l issue comment add 'ENG-123' --body 'hello world'" "${TEST_ROOT}/legacy.err"
-grep -Fq "stdin cannot supply both --api-key - and a comment body" "${TEST_ROOT}/stdin-key.err"
+grep -Fq "stdin cannot supply both --api-key-file - and a comment body" "${TEST_ROOT}/stdin-key.err"
 grep -Fq "Invalid issue identifier format" "${TEST_ROOT}/stdin-body.err"
 grep -Fq "unknown option '--page'" "${TEST_ROOT}/page.err"
 grep -q "Usage: agent2linear project comment" "${TEST_ROOT}/group.err"

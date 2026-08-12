@@ -33,6 +33,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CLI_JS="$REPO_ROOT/dist/index.js"
+NODE_BIN="$(node -p 'process.execPath')"
 
 if [ ! -f "$CLI_JS" ]; then
   echo "FAIL: built CLI not found at $CLI_JS (run 'npm run build' first)"
@@ -51,7 +52,7 @@ unset AGENT2LINEAR_WORKSPACE 2>/dev/null || true
 
 # Convenience runner for the built CLI.
 run_cli() {
-  node "$CLI_JS" "$@"
+  "$NODE_BIN" "$CLI_JS" "$@"
 }
 
 fail() {
@@ -118,7 +119,7 @@ echo "$GET_OUTPUT" | grep -q "999" \
   || fail "nested 'config get' did not read project value; got: $GET_OUTPUT"
 
 # --- Step 5: workspace registry + offline resolution (multi-workspace P1) -
-# Register a project-scoped workspace by piping the key via stdin (--api-key -),
+# Register a project-scoped workspace by piping the key via stdin (--api-key-file -),
 # then confirm:
 #   a) the gitignored secrets file is written under .agent2linear/
 #   b) a .gitignore entry is added for the secrets file
@@ -129,7 +130,7 @@ mkdir -p "$WS_PROJ"
 
 (
   cd "$WS_PROJ"
-  echo "lin_api_acmekey" | run_cli workspace add acme --api-key - --project >/dev/null 2>&1
+  echo "lin_api_acmekey" | run_cli workspace add acme --api-key-file - --project >/dev/null 2>&1
 ) || fail "'workspace add' (project, stdin key) exited non-zero"
 
 WS_SECRETS_FILE="$WS_PROJ/.agent2linear/workspaces.local.json"

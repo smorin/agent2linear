@@ -186,17 +186,21 @@ describe('M33 label lifecycle API', () => {
   );
 
   it.each([
-    ['issue retire', retireIssueLabel, 'issueLabelRetire', 'issueLabels'],
-    ['issue restore', restoreIssueLabel, 'issueLabelRestore', 'issueLabels'],
-    ['project retire', retireProjectLabel, 'projectLabelRetire', 'projectLabels'],
-    ['project restore', restoreProjectLabel, 'projectLabelRestore', 'projectLabels'],
+    ['issue retire', retireIssueLabel, 'issueLabelRetire', 'issueLabels', true],
+    ['issue restore', restoreIssueLabel, 'issueLabelRestore', 'issueLabels', false],
+    ['project retire', retireProjectLabel, 'projectLabelRetire', 'projectLabels', true],
+    ['project restore', restoreProjectLabel, 'projectLabelRestore', 'projectLabels', false],
   ] as const)(
     '[LPL-API-LIFECYCLE] %s uses the pinned SDK mutation and raw post-read',
-    async (_name, operation, method, resource) => {
+    async (_name, operation, method, resource, expectedRetired) => {
       const mutation = vi.fn().mockResolvedValue({ success: true });
       const singularResource = resource === 'issueLabels' ? 'issueLabel' : 'projectLabel';
       const rawRequest = vi.fn().mockResolvedValue({
-        data: { [singularResource]: rawLabel('label-1') },
+        data: {
+          [singularResource]: rawLabel('label-1', {
+            retiredAt: expectedRetired ? '2026-07-27T00:00:00.000Z' : null,
+          }),
+        },
       });
       mockClient({ [method]: mutation, client: { rawRequest } });
 
@@ -207,4 +211,48 @@ describe('M33 label lifecycle API', () => {
       expect(rawRequest).toHaveBeenCalledOnce();
     }
   );
+
+  it.each([
+    ['issue retire', retireIssueLabel, 'issueLabelRetire', 'issueLabel', true],
+    ['issue restore', restoreIssueLabel, 'issueLabelRestore', 'issueLabel', false],
+    ['project retire', retireProjectLabel, 'projectLabelRetire', 'projectLabel', true],
+    ['project restore', restoreProjectLabel, 'projectLabelRestore', 'projectLabel', false],
+  ] as const)(
+    '[LPL-API-LIFECYCLE-CONSISTENCY] %s waits for the raw post-read to reflect the mutation',
+    async (_name, operation, method, resource, expectedRetired) => {
+      const mutation = vi.fn().mockResolvedValue({ success: true });
+      const staleRetiredAt = expectedRetired ? null : '2026-07-27T00:00:00.000Z';
+      const currentRetiredAt = expectedRetired ? '2026-07-27T00:01:00.000Z' : null;
+      const rawRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: { [resource]: rawLabel('label-1', { retiredAt: staleRetiredAt }) },
+        })
+        .mockResolvedValueOnce({
+          data: { [resource]: rawLabel('label-1', { retiredAt: currentRetiredAt }) },
+        });
+      mockClient({ [method]: mutation, client: { rawRequest } });
+
+      const result = await operation('label-1');
+
+      expect(mutation).toHaveBeenCalledWith('label-1');
+      expect(mutation).toHaveBeenCalledTimes(1);
+      expect(rawRequest).toHaveBeenCalledTimes(2);
+      expect(result.retiredAt).toBe(currentRetiredAt);
+    }
+  );
+
+  it('[LPL-API-LIFECYCLE-CONSISTENCY] rejects a stale lifecycle result after the bounded reads', async () => {
+    const mutation = vi.fn().mockResolvedValue({ success: true });
+    const rawRequest = vi.fn().mockResolvedValue({
+      data: { issueLabel: rawLabel('label-1', { retiredAt: null }) },
+    });
+    mockClient({ issueLabelRetire: mutation, client: { rawRequest } });
+
+    await expect(retireIssueLabel('label-1')).rejects.toThrow(
+      'Linear did not return the retired state for issue label label-1 after 3 reads'
+    );
+    expect(mutation).toHaveBeenCalledTimes(1);
+    expect(rawRequest).toHaveBeenCalledTimes(3);
+  });
 });

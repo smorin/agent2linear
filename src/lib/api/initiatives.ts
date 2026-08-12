@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '../cli-error.js';
 import { getLinearClient, LinearClientError } from './client.js';
 
 /**
@@ -34,6 +35,7 @@ export async function validateInitiativeExists(
       name: initiative.name,
     };
   } catch (error) {
+    if (isAuthenticationError(error)) throw error;
     if (error instanceof LinearClientError) {
       return {
         valid: false,

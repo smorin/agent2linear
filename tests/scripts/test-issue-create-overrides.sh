@@ -74,7 +74,7 @@ TEAMS_JSON="$(node "$CLI_JS" teams list --format json 2>/dev/null || echo '[]')"
 TEAM_ID="$(printf '%s' "$TEAMS_JSON" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(t[0]?.id||"")')"
 TEAM_KEY="$(printf '%s' "$TEAMS_JSON" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(t[0]?.key||"")')"
 [ -n "$TEAM_ID" ] || { echo "ERROR: no team found in workspace"; exit 1; }
-LABELS_JSON="$(node "$CLI_JS" issue-labels list --team "$TEAM_ID" --format json 2>/dev/null || echo '[]')"
+LABELS_JSON="$(node "$CLI_JS" issue-labels list --team "$TEAM_ID" --json 2>/dev/null || echo '[]')"
 LABEL_ID="$(printf '%s' "$LABELS_JSON" | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write((l[0]?.id)||"")')"
 echo "Workspace team: $TEAM_KEY ($TEAM_ID); sample label: ${LABEL_ID:-<none>}"
 echo "Issue prefix:   $PREFIX"

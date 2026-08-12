@@ -21,15 +21,21 @@ export async function getConfigValue(key: ConfigKey, dir?: string) {
     } else if (location.type === 'override') {
       // M31: name the winning rule by its label (`ruleId`), else `#<ruleIndex>`.
       const selector = location.ruleId ?? (location.ruleIndex !== undefined ? `#${location.ruleIndex}` : undefined);
-      const scopeWord = location.scope === 'project' ? 'repo' : 'global';
+      const scopeWord = location.path
+        ? `explicit config ${location.path}`
+        : location.scope === 'project'
+          ? 'repo'
+          : 'global';
       locationStr = selector
         ? ` (from ${scopeWord} override ${selector})`
         : ` (from ${scopeWord} override)`;
     } else if (location.type === 'project') {
       locationStr = ' (from project config)';
     } else if (location.type === 'profile') {
-      const profileName = resolveActiveProfile();
+      const profileName = resolveActiveProfile(dir);
       locationStr = profileName ? ` (from profile '${profileName}')` : ' (from profile)';
+    } else if (location.type === 'explicit') {
+      locationStr = ` (from explicit config ${location.path})`;
     } else if (location.type === 'global') {
       locationStr = ' (from global config)';
     }
