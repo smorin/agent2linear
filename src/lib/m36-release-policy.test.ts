@@ -68,8 +68,12 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
     const release = readText('.github/workflows/release.yml');
     expect(release).toContain('RELEASE_TAG_REF="refs/release-tags/${GITHUB_REF_NAME}"');
     expect(release).toContain('"refs/tags/${GITHUB_REF_NAME}:${RELEASE_TAG_REF}"');
-    expect(release).toContain('git cat-file -t "${RELEASE_TAG_REF}"');
-    expect(release).toContain('git rev-parse "${RELEASE_TAG_REF}^{}"');
+    expect(release).toContain(
+      'test "$(git cat-file -t "${RELEASE_TAG_REF}")" = "tag"'
+    );
+    expect(release).toContain(
+      'test "$(git rev-parse "${RELEASE_TAG_REF}^{}")" = "${GITHUB_SHA}"'
+    );
   });
 
   it('keeps the ordinary live workflow exercising M36 automation', () => {
