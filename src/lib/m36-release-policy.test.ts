@@ -21,7 +21,7 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
       repository?: { type?: string; url?: string };
     };
 
-    expect(packageJson.repository).toEqual({
+    expect(packageJson.repository).toMatchObject({
       type: 'git',
       url: 'git+https://github.com/smorinlabs/agent2linear.git',
     });

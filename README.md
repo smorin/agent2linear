@@ -234,7 +234,7 @@ npx agent2linear issue list
 ### For Development
 
 ```bash
-git clone https://github.com/smorin/agent2linear.git
+git clone https://github.com/smorinlabs/agent2linear.git
 cd agent2linear
 npm install
 npm run build
