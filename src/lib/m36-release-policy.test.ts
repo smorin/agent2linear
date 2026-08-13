@@ -64,6 +64,14 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
     expect(release).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/);
   });
 
+  it('verifies the remote annotated tag outside the checkout-managed tag ref', () => {
+    const release = readText('.github/workflows/release.yml');
+    expect(release).toContain('RELEASE_TAG_REF="refs/release-tags/${GITHUB_REF_NAME}"');
+    expect(release).toContain('"refs/tags/${GITHUB_REF_NAME}:${RELEASE_TAG_REF}"');
+    expect(release).toContain('git cat-file -t "${RELEASE_TAG_REF}"');
+    expect(release).toContain('git rev-parse "${RELEASE_TAG_REF}^{}"');
+  });
+
   it('keeps the ordinary live workflow exercising M36 automation', () => {
     const live = readText('.github/workflows/live.yml');
     expect(live).toContain('./node_modules/.bin/tsup --config tsup.live.config.ts');
