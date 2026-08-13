@@ -14,6 +14,23 @@ const guardedLiveCommands = [
 ];
 
 describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
+  it('publishes canonical repository metadata required by npm trusted publishing', () => {
+    const packageJson = JSON.parse(readText('package.json')) as {
+      bugs?: { url?: string };
+      homepage?: string;
+      repository?: { type?: string; url?: string };
+    };
+
+    expect(packageJson.repository).toMatchObject({
+      type: 'git',
+      url: 'git+https://github.com/smorinlabs/agent2linear.git',
+    });
+    expect(packageJson.homepage).toBe('https://github.com/smorinlabs/agent2linear#readme');
+    expect(packageJson.bugs?.url).toBe(
+      'https://github.com/smorinlabs/agent2linear/issues'
+    );
+  });
+
   it('[RLS-DOC-README][RLS-DOC-CHANGELOG][RLS-PKG-PACK] keeps packaged release docs timeless', () => {
     const packageJson = JSON.parse(readText('package.json')) as {
       files?: string[];

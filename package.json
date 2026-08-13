@@ -46,11 +46,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/smorin/agent2linear.git"
+    "url": "git+https://github.com/smorinlabs/agent2linear.git"
   },
-  "homepage": "https://github.com/smorin/agent2linear#readme",
+  "homepage": "https://github.com/smorinlabs/agent2linear#readme",
   "bugs": {
-    "url": "https://github.com/smorin/agent2linear/issues"
+    "url": "https://github.com/smorinlabs/agent2linear/issues"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
