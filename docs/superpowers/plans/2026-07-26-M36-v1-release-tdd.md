@@ -1,7 +1,8 @@
 # M36 Coordinated v1.0.0 Release — Audited-v1 TDD Project Plan
 
-> **Plan status:** Republished and approved on 2026-07-26; execution began in the dedicated M36
-> worktree on 2026-07-26. No version bump, tag, publication, or release has occurred.
+> **Plan status:** Complete on 2026-08-14. The annotated `v1.0.0` tag, GitHub Release, and
+> provenance-backed npm publication all identify exact candidate
+> `56f15fee7d5b505cc67d74b2febe501322e73ecd`; all 76 tracked IDs are closed.
 >
 > **Milestone:** M36 — Coordinated v1.0.0 Release and Publishable-Tier Audit.
 >
@@ -173,27 +174,27 @@ project/setup behavior remains within the R8 audit.
 
 ## 6. Workstream 5 — Version and user documentation (7)
 
-| ID                      | Kind | Atomic contract                                                                                                                  | I    | T     | V       |
-| ----------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- | ---- | ----- | ------- |
-| `RLS-VER-ALIGN`         | GATE | `package.json`, lockfile, and CLI share `1.0.0`; Node floor is `>=22`; CI covers Node 22/24                                      | DONE | GREEN | PASS    |
-| `RLS-VER-TAG`           | GATE | annotated `v1.0.0` points to the exact verified release commit                                                                   | TODO | N/A   | PENDING |
-| `RLS-DOC-CHANGELOG`     | DOC  | move Unreleased into dated 1.0.0 with complete post-0.24.1 added/changed/fixed/security entries                                  | DONE | N/A   | PASS    |
-| `RLS-DOC-MIGRATION`     | DOC  | exact replacements for removed comment, list-format, label-scope, argv API-key, alias-clear consent, and Node-support interfaces | DONE | N/A   | PASS    |
-| `RLS-DOC-README`        | DOC  | README/help/error reference documents install, Node, auth, output, exits, pagination, safety, examples, and accepted exceptions  | DONE | N/A   | PASS    |
-| `RLS-DOC-MILESTONES`    | DOC  | milestone ledger closes prerequisites and M36 only from recorded evidence                                                        | DONE | N/A   | PASS    |
-| `RLS-DOC-RELEASE-NOTES` | DOC  | GitHub release body names features, breaking changes, migration, security, exceptions, and verification SHA                      | DONE | N/A   | PENDING |
+| ID                      | Kind | Atomic contract                                                                                                                  | I    | T     | V    |
+| ----------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- | ---- | ----- | ---- |
+| `RLS-VER-ALIGN`         | GATE | `package.json`, lockfile, and CLI share `1.0.0`; Node floor is `>=22`; CI covers Node 22/24                                      | DONE | GREEN | PASS |
+| `RLS-VER-TAG`           | GATE | annotated `v1.0.0` points to the exact verified release commit                                                                   | DONE | N/A   | PASS |
+| `RLS-DOC-CHANGELOG`     | DOC  | move Unreleased into dated 1.0.0 with complete post-0.24.1 added/changed/fixed/security entries                                  | DONE | N/A   | PASS |
+| `RLS-DOC-MIGRATION`     | DOC  | exact replacements for removed comment, list-format, label-scope, argv API-key, alias-clear consent, and Node-support interfaces | DONE | N/A   | PASS |
+| `RLS-DOC-README`        | DOC  | README/help/error reference documents install, Node, auth, output, exits, pagination, safety, examples, and accepted exceptions  | DONE | N/A   | PASS |
+| `RLS-DOC-MILESTONES`    | DOC  | milestone ledger closes prerequisites and M36 only from recorded evidence                                                        | DONE | N/A   | PASS |
+| `RLS-DOC-RELEASE-NOTES` | DOC  | GitHub release body names features, breaking changes, migration, security, exceptions, and verification SHA                      | DONE | N/A   | PASS |
 
 ## 7. Workstream 6 — Candidate, package, publication, and rollback (7)
 
-| ID                      | Kind | Release contract                                                                                                                     | I    | T     | V       |
-| ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------ | ---- | ----- | ------- |
-| `RLS-PKG-CANDIDATE`     | GATE | fresh checkout passes install, build, typecheck, lint, unit/integration, offline suites, and supported Node matrix                   | DONE | N/A   | PASS    |
-| `RLS-PKG-PACK`          | GATE | `npm pack --dry-run` contains only allowlisted artifacts and no credentials, config, state, worktree files, or source-only test data | DONE | N/A   | PASS    |
-| `RLS-PKG-INSTALL`       | GATE | install the exact tarball into a fresh prefix; both `a2l` and `agent2linear` help/version and smoke behavior work                    | DONE | N/A   | PASS    |
-| `RLS-CI-RELEASE-GATES`  | GATE | tag/version equality and green ordinary CI, security, offline, and ConceptM live evidence are required on the candidate SHA          | DONE | GREEN | PENDING |
-| `RLS-CI-SINGLE-PUBLISH` | GATE | tag workflow publishes once with provenance/trusted-publisher controls; local `np` cannot publish                                    | DONE | GREEN | PENDING |
-| `RLS-REG-PUBLISH`       | GATE | create the GitHub release, verify npm `latest=1.0.0`, install from the registry, and prove npm/GitHub SHA/integrity agreement        | TODO | N/A   | PENDING |
-| `RLS-REG-ROLLBACK`      | GATE | document and assign bad-tag, failed-publish, npm deprecation, rollback, and forward-fix responses                                    | DONE | N/A   | PASS    |
+| ID                      | Kind | Release contract                                                                                                                     | I    | T     | V    |
+| ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------ | ---- | ----- | ---- |
+| `RLS-PKG-CANDIDATE`     | GATE | fresh checkout passes install, build, typecheck, lint, unit/integration, offline suites, and supported Node matrix                   | DONE | N/A   | PASS |
+| `RLS-PKG-PACK`          | GATE | `npm pack --dry-run` contains only allowlisted artifacts and no credentials, config, state, worktree files, or source-only test data | DONE | N/A   | PASS |
+| `RLS-PKG-INSTALL`       | GATE | install the exact tarball into a fresh prefix; both `a2l` and `agent2linear` help/version and smoke behavior work                    | DONE | N/A   | PASS |
+| `RLS-CI-RELEASE-GATES`  | GATE | tag/version equality and green ordinary CI, security, offline, and ConceptM live evidence are required on the candidate SHA          | DONE | GREEN | PASS |
+| `RLS-CI-SINGLE-PUBLISH` | GATE | tag workflow publishes once with provenance/trusted-publisher controls; local `np` cannot publish                                    | DONE | GREEN | PASS |
+| `RLS-REG-PUBLISH`       | GATE | create the GitHub release, verify npm `latest=1.0.0`, install from the registry, and prove npm/GitHub SHA/integrity agreement        | DONE | N/A   | PASS |
+| `RLS-REG-ROLLBACK`      | GATE | document and assign bad-tag, failed-publish, npm deprecation, rollback, and forward-fix responses                                    | DONE | N/A   | PASS |
 
 ## 8. Execution evidence to date
 
@@ -352,6 +353,21 @@ clear` now uses `-y/--yes`; its former force-as-consent spelling is removed beca
   then passed; M33/M35 cleaned every disposable fixture, M34 made zero writes, and M36 trashed its
   disposable issue. Merged-candidate CI, tag, release-note SHA, single publication, and registry
   verification remain PENDING.
+- FINAL RELEASE: merged candidate `56f15fee7d5b505cc67d74b2febe501322e73ecd` passed ordinary
+  Node 22/24 CI in [run 31865724525](https://github.com/smorinlabs/agent2linear/actions/runs/31865724525)
+  and the guarded ConceptM M33-M36 live suite in
+  [run 31865724531](https://github.com/smorinlabs/agent2linear/actions/runs/31865724531). Annotated tag
+  object `b038c9b81d072135d6af0d771631bbc5b2f91803` peels to that exact candidate.
+  [Release run 31866141282](https://github.com/smorinlabs/agent2linear/actions/runs/31866141282)
+  passed tag/version, ancestry, exact-SHA CI, static, unit, offline, production-audit, and live gates
+  before its sole `npm publish --provenance` job published
+  [`agent2linear@1.0.0`](https://www.npmjs.com/package/agent2linear/v/1.0.0) through the GitHub `npm`
+  environment. npm reports `latest=1.0.0`, SHA-512 integrity
+  `W/ekNJQgbJn73r8VfEQRDJ8ruzumrxpKQsWoiqDNH9xw2dwNb+mHU5QOyJHhawqjVaAMsFCPzSUXGZCGbjHCGQ==`,
+  and SLSA provenance. A fresh public-registry install verified both binaries and npm verified 60
+  registry signatures plus 4 attestations. The published
+  [GitHub Release](https://github.com/smorinlabs/agent2linear/releases/tag/v1.0.0) records the
+  candidate, migration, security, exceptions, CI/live evidence, integrity, and provenance.
 
 ## 9. Ordered TDD execution slices
 

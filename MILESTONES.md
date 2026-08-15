@@ -15,15 +15,12 @@
 
 ---
 
-## [-] Milestone M36: Coordinated v1.0.0 Release and Publishable-Tier Audit
+## [x] Milestone M36: Coordinated v1.0.0 Release and Publishable-Tier Audit
 
-> **Status:** Execution is in progress under the authoritative 76-ID plan. The implementation,
-> audited-v1 exception record, permanent fixtures, and version/Node alignment are recorded as
-> complete; the production audit, rollback runbook/ownership, exact local candidate/package proof,
-> and guarded candidate live suite are recorded. M36 remains open for exact merged-candidate CI,
-> final release-note SHA, tag, publication, and registry gates. This is an audited release with
-> explicit exceptions, not a claim of complete CLI Standard conformance. No merged-candidate CI,
-> tag, or publication is claimed here.
+> **Status:** Complete on 2026-08-14. All 76 authoritative IDs are closed. Annotated `v1.0.0`,
+> the GitHub Release, and provenance-backed `agent2linear@1.0.0` publication identify exact
+> candidate `56f15fee7d5b505cc67d74b2febe501322e73ecd`. This remains an audited release with explicit
+> exceptions, not a claim of complete CLI Standard conformance.
 >
 > **Authoritative ID-level TDD plan:**
 > [docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md](docs/superpowers/plans/2026-07-26-M36-v1-release-tdd.md)
@@ -35,24 +32,24 @@
 breaking-interface, security, package, live ConceptM, documentation, publication, and rollback gate
 has independent evidence, and every retained Standard exception is explicit.
 
-### Current release blockers
+### Completion evidence
 
 - Scope and owner decisions are complete: M25 is excluded, M26 is transferred, the tag workflow is
   the sole publisher, the v1 Node 22/24 policy and `>=22` floor are aligned, and accepted
   conformance exceptions/waivers are recorded.
-- The M33-M35 traceability/feature gate and the hermetic read-only M34 live blocker are complete.
-  Exact local candidate `670cd69` passed the guarded auth/M33-M36 ConceptM set with cleanup;
-  ordinary CI and the guarded set must still be green on the exact merged candidate before tag. The
-  obsolete manual-cleanup `run-all-tests.sh` aggregate is not a release gate.
+- The M33-M35 traceability/feature gate and hermetic read-only M34 live blocker are complete.
+  Exact merged candidate `56f15fee` passed ordinary Node 22/24 CI and the guarded auth/M33-M36
+  ConceptM set with cleanup before tag publication. The obsolete manual-cleanup
+  `run-all-tests.sh` aggregate is not a release gate.
 - The known `ink -> ws` path is patched. The authorized production audit reports zero
   vulnerabilities across 71 production dependencies, including zero high or critical findings.
 - The global config/debug/verbosity, safe credential input, output/stream, error/exit, signal,
   prompt-safety, dry-run, and named automation corrections are complete and audited. The audited-v1
   record retains approved exceptions instead of claiming a repository-wide interface rewrite.
 - The reviewed changelog, migration guide, README, milestone ledger, and rollback/forward-fix
-  ownership are complete. Candidate `670cd69` passed fresh checkout, package, tarball, and install
-  proof. Exact merged-SHA release-note evidence, tag/version and single-publisher gates, and registry
-  verification remain required.
+  ownership are complete. The release workflow passed every exact-candidate gate, then its sole
+  environment-bound OIDC job published with provenance. npm `latest`, integrity, registry install,
+  both binary aliases, and the GitHub Release were independently verified.
 
 ### Tasks
 
@@ -65,24 +62,24 @@ has independent evidence, and every retained Standard exception is explicit.
       dry-run, and named automation corrections through per-ID RED -> IMPLEMENT -> GREEN -> VERIFY
 - [x] [M36-T04] Complete the publishable-tier audit, explicit exception record, and permanent
       selected core/regression fixtures
-- [ ] [M36-T05] Complete the documentation IDs and reconcile the version/package release materials
+- [x] [M36-T05] Complete the documentation IDs and reconcile the version/package release materials
       through recorded evidence
-- [ ] [M36-T06] Prove tag/version equality and tag-workflow-only publication on the candidate
+- [x] [M36-T06] Prove tag/version equality and tag-workflow-only publication on the candidate
 - [x] [M36-T07] Prove fresh candidate install, full gates, offline suites, tarball contents, and
       packed-binary smoke
-- [ ] [M36-T08] Require green ordinary CI and the guarded auth/M33-M36 ConceptM harness set on the
+- [x] [M36-T08] Require green ordinary CI and the guarded auth/M33-M36 ConceptM harness set on the
       exact merged candidate before tag
-- [ ] [M36-T09] Publish once, verify registry/GitHub state, and record rollback/forward-fix ownership
+- [x] [M36-T09] Publish once, verify registry/GitHub state, and record rollback/forward-fix ownership
 - [x] [M36-TS01] Reconcile exact 76-ID `RLS-*` plan/traceability status and reject missing I/T/V
       evidence
-- [ ] [M36-TS02] Run final independent audited-v1, package, registry, migration, and rollback
+- [x] [M36-TS02] Run final independent audited-v1, package, registry, migration, and rollback
       verification
 
 ### Release rule
 
-M36 remains open until every required `RLS-*` item in the authoritative plan is complete. Accepted
-Standard exceptions must remain explicit; an unreviewed MUST failure, green feature suite alone, or
-full-conformance claim cannot authorize a tag or publication.
+M36 closed only after every required `RLS-*` item in the authoritative plan had recorded evidence.
+Accepted Standard exceptions remain explicit; the release does not claim complete CLI Standard
+conformance.
 
 ---
 
