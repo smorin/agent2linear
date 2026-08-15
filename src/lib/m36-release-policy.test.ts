@@ -93,6 +93,13 @@ describe('[RLS-CI-SINGLE-PUBLISH] v1 release policy', () => {
     );
   });
 
+  it('binds the npm publisher to the npm deployment environment', () => {
+    const release = readText('.github/workflows/release.yml');
+    expect(release).toContain(
+      'publish:\n    needs: verify\n    runs-on: ubuntu-latest\n    environment: npm'
+    );
+  });
+
   it('keeps the ordinary live workflow exercising M36 automation', () => {
     const live = readText('.github/workflows/live.yml');
     expect(live).toContain('./node_modules/.bin/tsup --config tsup.live.config.ts');
