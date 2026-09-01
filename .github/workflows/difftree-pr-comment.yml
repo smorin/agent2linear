@@ -1,14 +1,14 @@
 # Canonical consumer workflow for smorinlabs/difftree-action.
 #
 # Copy this file into your repository at:
-#   .github/workflows/pr-diff-tree.yml
+#   .github/workflows/difftree-pr-comment.yml
 #
 # It posts an ASCII diff-tree of a pull request's changes as a single,
 # self-updating PR comment (rendered by `difftree --pr`). This file is the
 # single source of truth for the recommended setup: the README links to it and
 # the `difftree-action-setup` skill scaffolds from it. This is the canonical
 # template: copy it verbatim into your repo. difftree-action's own CI lints it.
-name: PR Diff Tree
+name: Difftree PR Comment
 
 on:
   pull_request:
@@ -23,7 +23,7 @@ permissions:
   pull-requests: write # REQUIRED — the action posts/updates the PR comment.
 
 jobs:
-  diff-tree:
+  difftree-pr-comment:
     # Re-render only when the base branch changed. GitHub reports a PR
     # retarget as `edited`; other edits (title, body, labels) also fire
     # `edited` but don't change what's diffed, so this skips those.
